@@ -1,0 +1,136 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ============================================================
+        Helpers
+    ============================================================ */
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    function isFalseOrMissing(field) {
+      return !(field in request.resource.data)
+        || request.resource.data[field] == false;
+    }
+
+    /* ============================================================
+        Properties (العقارات)
+    ============================================================ */
+
+    match /properties/{propertyId} {
+
+      // 👀 القراءة:
+      // - أي مستخدم يشوف العقار إذا approved = true
+      // - صاحب الإعلان يشوف إعلانه
+      // - الأدمن يشوف الكل
+      allow read: if
+        resource.data.approved == true
+        ||
+        (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        ||
+        isAdmin();
+
+      // ➕ الإنشاء:
+      // - أي مستخدم مسجّل
+      // - ممنوع تمرير approved=true
+      // - ممنوع تمرير imagesApproved=true
+      allow create: if isSignedIn()
+        && isFalseOrMissing('approved')
+        && isFalseOrMissing('imagesApproved');
+
+      // ✏️ التعديل:
+      // - الأدمن
+      // - أو صاحب الإعلان فقط
+      allow update: if
+        isAdmin()
+        ||
+        (
+          isSignedIn()
+          && resource.data.ownerId == request.auth.uid
+        );
+
+      // ❌ الحذف:
+      // - الأدمن
+      // - أو صاحب الإعلان فقط
+      allow delete: if
+        isAdmin()
+        ||
+        (
+          isSignedIn()
+          && resource.data.ownerId == request.auth.uid
+        );
+    }
+
+    /* ============================================================
+        Wanted Requests (مطلوب)
+    ============================================================ */
+
+    match /wanted_requests/{docId} {
+
+      // 👀 القراءة:
+      allow read: if resource.data.approved == true || isAdmin();
+
+      // ➕ الإضافة:
+      allow create: if isSignedIn()
+        && isFalseOrMissing('approved');
+
+      // ✏️ / ❌:
+      allow update, delete: if isAdmin();
+    }
+
+    /* ============================================================
+        Valuations (التقييمات)
+    ============================================================ */
+
+    match /valuations/{docId} {
+
+      // ➕ إنشاء:
+      allow create: if isSignedIn();
+
+      // 👀 / ✏️ / ❌:
+      allow read, update, delete: if isAdmin();
+    }
+
+    /* ============================================================
+        Admin Inbox (تنبيهات الأدمن)
+    ============================================================ */
+
+    match /admin_inbox/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    /* ============================================================
+        Match Logs (سجلات الذكاء الاصطناعي)
+    ============================================================ */
+
+    match /match_logs/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    /* ============================================================
+        Interested Leads (تفاصيل المهتم — ضغط "أنا مهتم")
+    ============================================================ */
+
+    match /interested_leads/{docId} {
+
+      // ➕ أي شخص يضيف (حتى مجهول) عند الضغط "أنا مهتم"
+      allow create: if true;
+
+      // 👀 الأدمن فقط يقرأ قائمة المهتمين
+      allow read: if isAdmin();
+
+      // ✏️ لا تعديل
+      allow update: if false;
+
+      // ❌ الأدمن فقط يحذف بعد ما يخلص من التفاصيل
+      allow delete: if isAdmin();
+    }
+  }
+}

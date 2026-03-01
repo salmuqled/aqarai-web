@@ -1,0 +1,436 @@
+{
+  "@@locale": "en",
+
+  "welcomeMessage": "Welcome to Aqar Ai",
+  "@welcomeMessage": { "description": "Home welcome message" },
+
+  "searchResults": "Search Results",
+  "@searchResults": { "description": "Search results title" },
+
+  "enterAreaToSearch": "Enter area to search",
+  "@enterAreaToSearch": { "description": "Helper text for search" },
+
+  "selectArea": "Select Area",
+  "@selectArea": { "description": "Select area" },
+
+  "selectGovernorateAndArea": "Please select governorate and area first",
+  "@selectGovernorateAndArea": { "description": "Alert: select governorate first" },
+
+  "propertyType": "Property Type",
+  "@propertyType": { "description": "Type of property" },
+
+  "propertyType_apartment": "Apartment",
+  "@propertyType_apartment": { "description": "Apartment" },
+
+  "propertyType_house": "House",
+  "@propertyType_house": { "description": "House" },
+
+  "propertyType_building": "Building",
+  "@propertyType_building": { "description": "Building" },
+
+  "propertyType_land": "Land",
+  "@propertyType_land": { "description": "Land" },
+
+  "propertyType_industrialLand": "Industrial Land",
+  "@propertyType_industrialLand": { "description": "Industrial land" },
+
+  "propertyType_shop": "Shop",
+  "@propertyType_shop": { "description": "Shop" },
+
+  "propertyType_office": "Office",
+  "@propertyType_office": { "description": "Office" },
+
+  "propertyType_chalet": "Chalet",
+  "@propertyType_chalet": { "description": "Chalet" },
+
+  "forSale": "For Sale",
+  "@forSale": { "description": "For sale" },
+
+  "forRent": "For Rent",
+  "@forRent": { "description": "For rent" },
+
+  "forExchange": "Exchange",
+  "@forExchange": { "description": "Exchange" },
+
+  "search": "Search",
+  "@search": { "description": "Search button" },
+
+  "chalets": "Chalets",
+  "@chalets": { "description": "Chalets section" },
+
+  "wanted": "Wanted",
+  "@wanted": { "description": "Wanted section" },
+
+  "wantedList": "Wanted Requests",
+  "@wantedList": { "description": "Wanted list" },
+
+  "myWantedRequests": "My Wanted Requests",
+  "@myWantedRequests": { "description": "Section title for user's wanted requests in My Ads" },
+
+  "postWanted": "Post Request",
+  "@postWanted": { "description": "Add wanted request" },
+
+  "propertyDescription": "Request Description",
+  "@propertyDescription": { "description": "Request description" },
+
+  "errorMessagePlaceholder": "You must log in to continue",
+  "@errorMessagePlaceholder": { "description": "Login required" },
+
+  "valuation": "Property Valuation",
+  "@valuation": { "description": "Valuation page title" },
+
+  "valuation_subtitle": "Please fill out the following details to submit your request",
+  "@valuation_subtitle": { "description": "Valuation subtitle" },
+
+  "valuation_ownerName": "Owner Name",
+  "@valuation_ownerName": { "description": "Owner name" },
+
+  "valuation_phone": "Phone Number",
+  "@valuation_phone": { "description": "Phone number" },
+
+  "valuation_governorate": "Governorate",
+  "@valuation_governorate": { "description": "Governorate" },
+
+  "valuation_area": "Area",
+  "@valuation_area": { "description": "Area" },
+
+  "valuation_propertyType": "Property Type",
+  "@valuation_propertyType": { "description": "Type" },
+
+  "valuation_propertyArea": "Property Size (m²)",
+  "@valuation_propertyArea": { "description": "Size" },
+
+  "valuation_buildYear": "Build Year",
+  "@valuation_buildYear": { "description": "Build year" },
+
+  "valuation_condition": "Condition",
+  "@valuation_condition": { "description": "Condition" },
+
+  "valuation_condition_new": "New",
+  "@valuation_condition_new": { "description": "New" },
+
+  "valuation_condition_veryGood": "Very Good",
+  "@valuation_condition_veryGood": { "description": "Very good" },
+
+  "valuation_condition_good": "Good",
+  "@valuation_condition_good": { "description": "Good" },
+
+  "valuation_condition_needsWork": "Needs Renovation",
+  "@valuation_condition_needsWork": { "description": "Needs work" },
+
+  "valuation_purpose": "Purpose",
+  "@valuation_purpose": { "description": "Purpose" },
+
+  "valuation_purpose_sale": "For Sale",
+  "@valuation_purpose_sale": { "description": "Sale" },
+
+  "valuation_purpose_rent": "For Rent",
+  "@valuation_purpose_rent": { "description": "Rent" },
+
+  "valuation_purpose_mortgage": "Mortgage",
+  "@valuation_purpose_mortgage": { "description": "Mortgage" },
+
+  "valuation_purpose_market": "Market Evaluation",
+  "@valuation_purpose_market": { "description": "Market evaluation" },
+
+  "valuation_notes": "Additional Notes",
+  "@valuation_notes": { "description": "Notes" },
+
+  "valuation_submit": "Submit Valuation Request",
+  "@valuation_submit": { "description": "Submit button" },
+
+  "valuation_saved": "Valuation request submitted successfully",
+  "@valuation_saved": { "description": "Saved" },
+
+  "valuation_error": "An error occurred while submitting the request",
+  "@valuation_error": { "description": "Error" },
+
+  "valuation_required": "This field is required",
+  "@valuation_required": { "description": "Required field" },
+
+  "valuation_type_apartment": "Apartment",
+  "@valuation_type_apartment": { "description": "Apartment" },
+
+  "valuation_type_villa": "Villa",
+  "@valuation_type_villa": { "description": "Villa" },
+
+  "valuation_type_land": "Land",
+  "@valuation_type_land": { "description": "Land" },
+
+  "valuation_type_commercial": "Commercial",
+  "@valuation_type_commercial": { "description": "Commercial" },
+
+  "addProperty": "Add Property",
+  "@addProperty": { "description": "Add property button" },
+
+  "adminFollowup": "Ads Review",
+  "@adminFollowup": { "description": "Admin follow up" },
+
+  "approve": "Approve",
+  "@approve": { "description": "Approve button" },
+
+  "reject": "Reject",
+  "@reject": { "description": "Reject button" },
+
+  "propertyPrice": "Price",
+  "@propertyPrice": { "description": "Price" },
+
+  "propertySize": "Size (m²)",
+  "@propertySize": { "description": "Size" },
+
+  "choosePropertyImage": "Choose Property Image",
+  "@choosePropertyImage": { "description": "Choose image" },
+
+  "roomCount": "Rooms",
+  "@roomCount": { "description": "Number of rooms" },
+
+  "masterRoomCount": "Master Rooms",
+  "@masterRoomCount": { "description": "Master rooms" },
+
+  "bathroomCount": "Bathrooms",
+  "@bathroomCount": { "description": "Bathrooms" },
+
+  "parkingCount": "Parking Spots",
+  "@parkingCount": { "description": "Parking spots" },
+
+  "hasElevator": "Elevator",
+  "@hasElevator": { "description": "Elevator" },
+
+  "hasCentralAC": "Central AC",
+  "@hasCentralAC": { "description": "Central AC" },
+
+  "hasSplitAC": "Split AC",
+  "@hasSplitAC": { "description": "Split AC" },
+
+  "hasMaidRoom": "Maid Room",
+  "@hasMaidRoom": { "description": "Maid room" },
+
+  "hasDriverRoom": "Driver Room",
+  "@hasDriverRoom": { "description": "Driver room" },
+
+  "hasLaundryRoom": "Laundry Room",
+  "@hasLaundryRoom": { "description": "Laundry room" },
+
+  "hasGarden": "Garden",
+  "@hasGarden": { "description": "Garden" },
+
+  "description": "Description",
+  "@description": { "description": "Description" },
+
+  "publishProperty": "Publish Property",
+  "@publishProperty": { "description": "Publish button" },
+
+  "publishing": "Publishing...",
+  "@publishing": { "description": "Publishing" },
+
+  "noWantedItems": "No items found",
+  "@noWantedItems": { "description": "No items" },
+
+  "matches": "Matches",
+  "@matches": { "description": "Matches" },
+
+  "expired": "Expired",
+  "@expired": { "description": "Expired" },
+
+  "areaLabel": "Area",
+  "@areaLabel": { "description": "Area" },
+
+  "blockLabel": "Block",
+  "@blockLabel": { "description": "Block" },
+
+  "matched": "Matched On",
+  "@matched": { "description": "Matched date" },
+
+  "budget": "Budget",
+  "@budget": { "description": "Budget" },
+
+  "price": "Price",
+  "@price": { "description": "Price" },
+
+  "type": "Type",
+  "@type": { "description": "Type" },
+
+  "login": "Login",
+  "@login": { "description": "Login button" },
+
+  "post": "Post",
+  "@post": { "description": "Post" },
+
+  "retry": "Retry",
+  "@retry": { "description": "Retry" },
+
+  "minPrice": "Min Price",
+  "@minPrice": { "description": "Minimum price" },
+
+  "maxPrice": "Max Price",
+  "@maxPrice": { "description": "Maximum price" },
+
+  "requestSaved": "Saved successfully",
+  "@requestSaved": { "description": "Saved" },
+
+  "requestError": "An error occurred while saving request",
+  "@requestError": { "description": "Error" },
+
+  "propertiesInArea": "Properties in {area}",
+  "@propertiesInArea": {
+    "description": "Properties in area",
+    "placeholders": { "area": { "type": "String" } }
+  },
+
+  "searchResultsForArea": "Search results for {area}",
+  "@searchResultsForArea": {
+    "description": "Search results per area",
+    "placeholders": { "area": { "type": "String" } }
+  },
+
+  "myAds": "My Ads",
+  "all": "All",
+  "active": "Active",
+  "expiredAds": "Expired",
+  "featuredAds": "Featured",
+  "featuredWanted": "Featured Wanted",
+  "@featuredWanted": { "description": "Section title for featured wanted requests" },
+  "addedOn": "Added On",
+  "expiresOn": "Expires On",
+  "endsIn": "Ends In",
+  "days": "days",
+  "featuredUntil": "Featured Until",
+  "makeFeatured": "Make Featured",
+  "extendFeature": "Extend Feature",
+  "delete": "Delete",
+  "hardDeleteWarning": "This ad will be permanently deleted",
+  "cancel": "Cancel",
+  "confirm": "Confirm",
+
+  "logout": "Logout",
+  "@logout": { "description": "Logout" },
+
+  "logoutConfirm": "Are you sure you want to logout?",
+  "@logoutConfirm": { "description": "Logout confirmation" },
+
+  "logoutSuccess": "Logged out successfully",
+  "@logoutSuccess": { "description": "Logout success" },
+
+  "loginTitle": "Login",
+  "@loginTitle": { "description": "Login title" },
+
+  "email": "Email",
+  "@email": { "description": "Email" },
+
+  "password": "Password",
+  "@password": { "description": "Password" },
+
+  "forgotPassword": "Forgot password?",
+  "@forgotPassword": { "description": "Forgot password" },
+
+  "continueWithGoogle": "Continue with Google",
+  "@continueWithGoogle": { "description": "Google button" },
+
+  "continueWithApple": "Continue with Apple",
+  "@continueWithApple": { "description": "Apple button" },
+
+  "createAccount": "Create a new account",
+  "@createAccount": { "description": "Create account" },
+
+  "fullName": "Full Name",
+  "@fullName": { "description": "Full name" },
+
+  "or": "OR",
+
+  "noAccount": "Don't have an account?",
+
+  "signUpWithEmail": "Sign up with email",
+  "@signUpWithEmail": { "description": "Sign up with email button" },
+  "signInWithEmail": "Sign in with email",
+  "@signInWithEmail": { "description": "Sign in with email link" },
+  "haveAccount": "Already have an account?",
+  "@haveAccount": { "description": "Already have account" },
+
+  "passwordsDoNotMatch": "Passwords do not match",
+  "@passwordsDoNotMatch": { "description": "Password mismatch message" },
+
+  "confirmPassword": "Confirm Password",
+  "@confirmPassword": { "description": "Confirm password" },
+
+  "sendResetLink": "Send reset link",
+  "@sendResetLink": { "description": "Send reset link" },
+
+  "resetPasswordDesc": "Enter your email and we will send you a reset link",
+  "@resetPasswordDesc": { "description": "Reset password description" },
+
+  "propertyDetails": "Property Details",
+  "@propertyDetails": { "description": "Property details page title" },
+
+  "ownerInfo": "Owner Information",
+  "@ownerInfo": { "description": "Owner info section" },
+
+  "ownerOnlyAdmin": "Owner Info (Admin Only)",
+  "@ownerOnlyAdmin": { "description": "Visible only for admin" },
+
+  "typeLabel": "Property Type",
+  "@typeLabel": { "description": "Type label" },
+
+  "serviceTypeLabel": "Service Type",
+  "@serviceTypeLabel": { "description": "Service type label" },
+
+  "statusLabel": "Ad Status",
+  "@statusLabel": { "description": "Ad status" },
+
+  "features": "Features",
+  "@features": { "description": "Property features" },
+
+  "descriptionLabel": "Description",
+  "@descriptionLabel": { "description": "Property description" },
+
+  "noDescription": "No description available",
+  "@noDescription": { "description": "No description" },
+
+  "callOwner": "Call Owner",
+  "@callOwner": { "description": "Call owner button" },
+
+  "addedOnDate": "Added On:",
+  "@addedOnDate": { "description": "Added on date" },
+
+  "ownerNameLabel": "Owner Name",
+  "@ownerNameLabel": { "description": "Owner name" },
+
+  "ownerPhoneLabel": "Owner Phone",
+  "@ownerPhoneLabel": { "description": "Owner phone number" },
+
+  "adIdLabel": "Ad ID",
+  "@adIdLabel": { "description": "Ad identifier" },
+
+  "serviceType": "Service Type",
+  "@serviceType": { "description": "Service type in chalet search" },
+
+  "sale": "For Sale",
+  "@sale": { "description": "Service: sale" },
+
+  "rent": "For Rent",
+  "@rent": { "description": "Service: rent" },
+
+  "exchange": "Exchange",
+  "@exchange": { "description": "Service: exchange" },
+
+  "imInterested": "I'm interested",
+  "@imInterested": { "description": "Button: interested in property" },
+
+  "interestedDetails": "Interested",
+  "@interestedDetails": { "description": "Admin section for interested leads" },
+
+  "adLabel": "Ad",
+  "@adLabel": { "description": "Default ad title" },
+
+  "passwordResetSent": "Password reset link has been sent to your email",
+  "@passwordResetSent": { "description": "Message after sending reset link" },
+
+  "adFeaturedSevenDays": "Ad featured for 7 days",
+  "@adFeaturedSevenDays": { "description": "Message after featuring ad" },
+
+  "errorLabel": "Error",
+  "@errorLabel": { "description": "Error word for display with details" },
+
+  "propertySentForReview": "Property sent for review",
+  "@propertySentForReview": { "description": "Message after submitting property for review" }
+
+}

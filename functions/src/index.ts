@@ -1,0 +1,117 @@
+// functions/src/index.ts
+import * as admin from "firebase-admin";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { FieldValue } from "firebase-admin/firestore";
+
+admin.initializeApp();
+
+/* --------------------------------------------------------
+   Helper: تأكد إن المستخدم أدمن
+-------------------------------------------------------- */
+function assertAdmin(request: any) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  if (request.auth.token.admin !== true) {
+    throw new HttpsError("permission-denied", "Admin only");
+  }
+
+  return request.auth.uid;
+}
+
+/* --------------------------------------------------------
+   ✅ اعتماد إعلان
+-------------------------------------------------------- */
+export const approveListing = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    assertAdmin(request);
+
+    const propertyId = request.data?.propertyId;
+    if (!propertyId) {
+      throw new HttpsError("invalid-argument", "propertyId is required");
+    }
+
+    const ref = admin.firestore().collection("properties").doc(propertyId);
+    const snap = await ref.get();
+
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "Property not found");
+    }
+
+    await ref.update({
+      approved: true,
+      imagesApproved: true,
+      status: "active",
+      approvedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true };
+  }
+);
+
+/* --------------------------------------------------------
+   ❌ رفض إعلان
+-------------------------------------------------------- */
+export const rejectListing = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const adminUid = assertAdmin(request);
+
+    const propertyId = request.data?.propertyId;
+    const reason = request.data?.reason ?? "";
+
+    if (!propertyId) {
+      throw new HttpsError("invalid-argument", "propertyId is required");
+    }
+
+    const ref = admin.firestore().collection("properties").doc(propertyId);
+    const snap = await ref.get();
+
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "Property not found");
+    }
+
+    await ref.update({
+      approved: false,
+      imagesApproved: false,
+      status: "rejected",
+      rejected: true,
+      rejectedBy: adminUid,
+      rejectedReason: reason,
+      rejectedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true };
+  }
+);
+
+/* --------------------------------------------------------
+   🔐 تعيين صلاحية أدمن لمستخدم (مرة واحدة فقط)
+   استدعِها من التطبيق أو من سكربت مع: targetUid + secret
+-------------------------------------------------------- */
+const ADMIN_SETUP_SECRET = "aqarai_admin_setup_2025"; // غيّره أو اتركه ثم احذف الاستدعاء بعد الاستخدام
+
+export const setAdminClaim = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { targetUid, secret } = (request.data as any) || {};
+    if (!targetUid || typeof targetUid !== "string") {
+      throw new HttpsError("invalid-argument", "targetUid is required");
+    }
+    if (secret !== ADMIN_SETUP_SECRET) {
+      throw new HttpsError("permission-denied", "Invalid secret");
+    }
+
+    await admin.auth().setCustomUserClaims(targetUid, { admin: true });
+
+    return { ok: true, message: "Admin claim set for " + targetUid };
+  }
+);
+
+// ⛔️ هذا مكان استيراد أي فانكشن ثانية — خارج كل الفانكشنز
+export { approveListingV2 } from "./listing_approval";
+export { onPropertyUpdated, onWantedUpdated } from "./match_listings";

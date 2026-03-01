@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "834475197860",
+    "project_id": "aqarai-caf5d",
+    "storage_bucket": "aqarai-caf5d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:834475197860:android:8e2b070853b55e39e4ed31",
+        "android_client_info": {
+          "package_name": "com.example.aqarai_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMxc0jF8ClL0cPIrwkwsATV5bFrhVfUzM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:834475197860:android:193981b9a8fc80b6e4ed31",
+        "android_client_info": {
+          "package_name": "com.salmuqled.aqarai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMxc0jF8ClL0cPIrwkwsATV5bFrhVfUzM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

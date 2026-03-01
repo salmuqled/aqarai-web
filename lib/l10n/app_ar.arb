@@ -1,0 +1,436 @@
+{
+  "@@locale": "ar",
+
+  "welcomeMessage": "أهلاً بك في عقار Ai",
+  "@welcomeMessage": { "description": "رسالة الترحيب في الصفحة الرئيسية" },
+
+  "searchResults": "نتائج البحث",
+  "@searchResults": { "description": "عنوان نتائج البحث" },
+
+  "enterAreaToSearch": "اكتب المنطقة للبحث",
+  "@enterAreaToSearch": { "description": "نص مساعد لكتابة المنطقة" },
+
+  "selectArea": "اختر المنطقة",
+  "@selectArea": { "description": "اختر المنطقة" },
+
+  "selectGovernorateAndArea": "يرجى اختيار المحافظة والمنطقة أولاً",
+  "@selectGovernorateAndArea": { "description": "تنبيه اختيار المحافظة والمنطقة أولاً" },
+
+  "propertyType": "نوع العقار",
+  "@propertyType": { "description": "نوع العقار" },
+
+  "propertyType_apartment": "شقة",
+  "@propertyType_apartment": { "description": "نوع العقار: شقة" },
+
+  "propertyType_house": "بيت",
+  "@propertyType_house": { "description": "نوع العقار: بيت" },
+
+  "propertyType_building": "عمارة",
+  "@propertyType_building": { "description": "نوع العقار: عمارة" },
+
+  "propertyType_land": "أرض",
+  "@propertyType_land": { "description": "نوع العقار: أرض" },
+
+  "propertyType_industrialLand": "أرض صناعية",
+  "@propertyType_industrialLand": { "description": "نوع العقار: أرض صناعية" },
+
+  "propertyType_shop": "محل",
+  "@propertyType_shop": { "description": "نوع العقار: محل" },
+
+  "propertyType_office": "مكتب",
+  "@propertyType_office": { "description": "نوع العقار: مكتب" },
+
+  "propertyType_chalet": "شاليه",
+  "@propertyType_chalet": { "description": "نوع العقار: شاليه" },
+
+  "forSale": "للبيع",
+  "@forSale": { "description": "للبيع" },
+
+  "forRent": "للإيجار",
+  "@forRent": { "description": "للإيجار" },
+
+  "forExchange": "البدل",
+  "@forExchange": { "description": "البدل" },
+
+  "search": "بحث",
+  "@search": { "description": "زر البحث" },
+
+  "chalets": "الشاليهات",
+  "@chalets": { "description": "قسم الشاليهات" },
+
+  "wanted": "مطلوب",
+  "@wanted": { "description": "قسم مطلوب" },
+
+  "wantedList": "طلبات المطلوب",
+  "@wantedList": { "description": "قائمة طلبات المطلوب" },
+
+  "myWantedRequests": "طلباتي المطلوبة",
+  "@myWantedRequests": { "description": "عنوان قسم طلبات المطلوب في إعلاناتي" },
+
+  "postWanted": "أضف طلب",
+  "@postWanted": { "description": "زر إضافة طلب مطلوب" },
+
+  "propertyDescription": "وصف الطلب",
+  "@propertyDescription": { "description": "وصف الطلب" },
+
+  "errorMessagePlaceholder": "يجب تسجيل الدخول للاستمرار",
+  "@errorMessagePlaceholder": { "description": "رسالة خطأ تسجيل الدخول" },
+
+  "valuation": "التقييم العقاري",
+  "@valuation": { "description": "عنوان التقييم العقاري" },
+
+  "valuation_subtitle": "يرجى تعبئة البيانات التالية لإرسال طلب التقييم",
+  "@valuation_subtitle": { "description": "وصف صفحة التقييم" },
+
+  "valuation_ownerName": "اسم المالك",
+  "@valuation_ownerName": { "description": "اسم المالك" },
+
+  "valuation_phone": "رقم الهاتف",
+  "@valuation_phone": { "description": "رقم الهاتف" },
+
+  "valuation_governorate": "المحافظة",
+  "@valuation_governorate": { "description": "المحافظة" },
+
+  "valuation_area": "المنطقة",
+  "@valuation_area": { "description": "المنطقة" },
+
+  "valuation_propertyType": "نوع العقار",
+  "@valuation_propertyType": { "description": "نوع العقار" },
+
+  "valuation_propertyArea": "مساحة العقار (م²)",
+  "@valuation_propertyArea": { "description": "مساحة العقار" },
+
+  "valuation_buildYear": "سنة البناء",
+  "@valuation_buildYear": { "description": "سنة البناء" },
+
+  "valuation_condition": "حالة العقار",
+  "@valuation_condition": { "description": "حالة العقار" },
+
+  "valuation_condition_new": "جديد",
+  "@valuation_condition_new": { "description": "حالة جديد" },
+
+  "valuation_condition_veryGood": "جيد جداً",
+  "@valuation_condition_veryGood": { "description": "حالة جيد جداً" },
+
+  "valuation_condition_good": "جيد",
+  "@valuation_condition_good": { "description": "حالة جيد" },
+
+  "valuation_condition_needsWork": "يحتاج ترميم",
+  "@valuation_condition_needsWork": { "description": "حالة يحتاج ترميم" },
+
+  "valuation_purpose": "الغرض من التقييم",
+  "@valuation_purpose": { "description": "الغرض من التقييم" },
+
+  "valuation_purpose_sale": "للبيع",
+  "@valuation_purpose_sale": { "description": "الغرض: للبيع" },
+
+  "valuation_purpose_rent": "للإيجار",
+  "@valuation_purpose_rent": { "description": "الغرض: للإيجار" },
+
+  "valuation_purpose_mortgage": "رهن",
+  "@valuation_purpose_mortgage": { "description": "الغرض: رهن" },
+
+  "valuation_purpose_market": "تقييم السوق",
+  "@valuation_purpose_market": { "description": "الغرض: تقييم السوق" },
+
+  "valuation_notes": "ملاحظات إضافية",
+  "@valuation_notes": { "description": "ملاحظات إضافية" },
+
+  "valuation_submit": "إرسال طلب التقييم",
+  "@valuation_submit": { "description": "زر إرسال الطلب" },
+
+  "valuation_saved": "تم إرسال طلب التقييم بنجاح",
+  "@valuation_saved": { "description": "نجاح إرسال الطلب" },
+
+  "valuation_error": "حدث خطأ أثناء إرسال الطلب",
+  "@valuation_error": { "description": "خطأ أثناء إرسال الطلب" },
+
+  "valuation_required": "هذا الحقل مطلوب",
+  "@valuation_required": { "description": "رسالة حقل مطلوب" },
+
+  "valuation_type_apartment": "شقة",
+  "@valuation_type_apartment": { "description": "تقييم: شقة" },
+
+  "valuation_type_villa": "فيلا",
+  "@valuation_type_villa": { "description": "تقييم: فيلا" },
+
+  "valuation_type_land": "أرض",
+  "@valuation_type_land": { "description": "تقييم: أرض" },
+
+  "valuation_type_commercial": "تجاري",
+  "@valuation_type_commercial": { "description": "تجاري" },
+
+  "addProperty": "أضف عقار",
+  "@addProperty": { "description": "زر إضافة عقار" },
+
+  "adminFollowup": "متابعة الإعلانات",
+  "@adminFollowup": { "description": "صفحة متابعة الإعلانات" },
+
+  "approve": "اعتماد",
+  "@approve": { "description": "زر اعتماد الإعلان" },
+
+  "reject": "رفض",
+  "@reject": { "description": "زر رفض الإعلان" },
+
+  "propertyPrice": "السعر",
+  "@propertyPrice": { "description": "سعر العقار" },
+
+  "propertySize": "المساحة (م²)",
+  "@propertySize": { "description": "مساحة العقار" },
+
+  "choosePropertyImage": "اختر صورة العقار",
+  "@choosePropertyImage": { "description": "زر اختيار الصورة" },
+
+  "roomCount": "عدد الغرف",
+  "@roomCount": { "description": "عدد الغرف" },
+
+  "masterRoomCount": "عدد غرف الماستر",
+  "@masterRoomCount": { "description": "عدد غرف الماستر" },
+
+  "bathroomCount": "عدد الحمامات",
+  "@bathroomCount": { "description": "عدد الحمامات" },
+
+  "parkingCount": "عدد المواقف",
+  "@parkingCount": { "description": "عدد المواقف" },
+
+  "hasElevator": "أصانصير",
+  "@hasElevator": { "description": "الأسانسير" },
+
+  "hasCentralAC": "تكييف مركزي",
+  "@hasCentralAC": { "description": "تكييف مركزي" },
+
+  "hasSplitAC": "تكييف وحدات",
+  "@hasSplitAC": { "description": "تكييف وحدات" },
+
+  "hasMaidRoom": "غرفة خادمة",
+  "@hasMaidRoom": { "description": "غرفة خادمة" },
+
+  "hasDriverRoom": "غرفة سائق",
+  "@hasDriverRoom": { "description": "غرفة سائق" },
+
+  "hasLaundryRoom": "غرفة غسيل وكوي",
+  "@hasLaundryRoom": { "description": "غرفة غسيل" },
+
+  "hasGarden": "حديقة",
+  "@hasGarden": { "description": "حديقة" },
+
+  "description": "الوصف",
+  "@description": { "description": "الوصف" },
+
+  "publishProperty": "نشر العقار",
+  "@publishProperty": { "description": "زر نشر" },
+
+  "publishing": "جاري النشر...",
+  "@publishing": { "description": "الحالة: نشر" },
+
+  "noWantedItems": "لا توجد طلبات",
+  "@noWantedItems": { "description": "لا توجد طلبات" },
+
+  "matches": "المتطابق",
+  "@matches": { "description": "المتطابق" },
+
+  "expired": "منتهي",
+  "@expired": { "description": "منتهي" },
+
+  "areaLabel": "المنطقة",
+  "@areaLabel": { "description": "اسم المنطقة" },
+
+  "blockLabel": "القطعة",
+  "@blockLabel": { "description": "رقم القطعة" },
+
+  "matched": "تاريخ التطابق",
+  "@matched": { "description": "تاريخ التطابق" },
+
+  "budget": "الميزانية",
+  "@budget": { "description": "الميزانية" },
+
+  "price": "السعر",
+  "@price": { "description": "السعر" },
+
+  "type": "النوع",
+  "@type": { "description": "النوع" },
+
+  "login": "تسجيل الدخول",
+  "@login": { "description": "تسجيل الدخول" },
+
+  "post": "نشر",
+  "@post": { "description": "نشر" },
+
+  "retry": "إعادة المحاولة",
+  "@retry": { "description": "إعادة المحاولة" },
+
+  "minPrice": "أقل سعر",
+  "@minPrice": { "description": "أقل سعر" },
+
+  "maxPrice": "أعلى سعر",
+  "@maxPrice": { "description": "أعلى سعر" },
+
+  "requestSaved": "تم حفظ الطلب بنجاح",
+  "@requestSaved": { "description": "نجاح" },
+
+  "requestError": "حدث خطأ أثناء حفظ الطلب",
+  "@requestError": { "description": "خطأ" },
+
+  "propertiesInArea": "عقارات {area}",
+  "@propertiesInArea": {
+    "description": "عقارات في منطقة",
+    "placeholders": { "area": { "type": "String" } }
+  },
+
+  "searchResultsForArea": "نتائج البحث لمنطقة {area}",
+  "@searchResultsForArea": {
+    "description": "نتائج منطقة",
+    "placeholders": { "area": { "type": "String" } }
+  },
+
+  "myAds": "إعلاناتي",
+  "all": "الكل",
+  "active": "فعّالة",
+  "expiredAds": "منتهية",
+  "featuredAds": "مميزة",
+  "featuredWanted": "مطلوب مميز",
+  "@featuredWanted": { "description": "عنوان قسم طلبات المطلوب المميزة" },
+  "addedOn": "أُضيف",
+  "expiresOn": "ينتهي في",
+  "endsIn": "ينتهي خلال",
+  "days": "يوم",
+  "featuredUntil": "مميز حتى",
+  "makeFeatured": "اجعله مميزًا",
+  "extendFeature": "مدّد التمييز",
+  "delete": "حذف",
+  "hardDeleteWarning": "سيتم حذف الإعلان نهائيًا ولا يمكن التراجع",
+  "cancel": "إلغاء",
+  "confirm": "تأكيد",
+
+  "logout": "تسجيل الخروج",
+  "@logout": { "description": "تسجيل الخروج" },
+
+  "logoutConfirm": "هل أنت متأكد من تسجيل الخروج؟",
+  "@logoutConfirm": { "description": "تأكيد تسجيل الخروج" },
+
+  "logoutSuccess": "تم تسجيل الخروج بنجاح",
+  "@logoutSuccess": { "description": "نجاح تسجيل الخروج" },
+
+  "loginTitle": "تسجيل الدخول",
+  "@loginTitle": { "description": "عنوان صفحة تسجيل الدخول" },
+
+  "email": "البريد الإلكتروني",
+  "@email": { "description": "البريد الإلكتروني" },
+
+  "password": "كلمة المرور",
+  "@password": { "description": "كلمة المرور" },
+
+  "forgotPassword": "نسيت كلمة المرور؟",
+  "@forgotPassword": { "description": "نسيت كلمة المرور" },
+
+  "continueWithGoogle": "تابع باستخدام Google",
+  "@continueWithGoogle": { "description": "زر Google" },
+
+  "continueWithApple": "تابع باستخدام Apple",
+  "@continueWithApple": { "description": "زر Apple" },
+
+  "createAccount": "إنشاء حساب جديد",
+  "@createAccount": { "description": "زر إنشاء حساب" },
+
+  "fullName": "الاسم الكامل",
+  "@fullName": { "description": "الاسم الكامل" },
+
+  "or": "أو",
+
+  "noAccount": "ما عندك حساب؟",
+
+  "signUpWithEmail": "التسجيل بالبريد الإلكتروني",
+  "@signUpWithEmail": { "description": "زر التسجيل بالبريد" },
+  "signInWithEmail": "تسجيل الدخول بالبريد",
+  "@signInWithEmail": { "description": "رابط تسجيل الدخول بالبريد" },
+  "haveAccount": "لديك حساب؟",
+  "@haveAccount": { "description": "لديك حساب بالفعل" },
+
+  "passwordsDoNotMatch": "كلمتا المرور غير متطابقتين",
+  "@passwordsDoNotMatch": { "description": "Password mismatch message" },
+
+  "confirmPassword": "تأكيد كلمة المرور",
+  "@confirmPassword": { "description": "تأكيد كلمة المرور" },
+
+  "sendResetLink": "إرسال رابط إعادة التعيين",
+  "@sendResetLink": { "description": "زر إرسال رابط إعادة التعيين" },
+
+  "resetPasswordDesc": "أدخل بريدك وسنرسل لك رابطًا لإعادة تعيين كلمة المرور",
+  "@resetPasswordDesc": { "description": "وصف صفحة نسيت كلمة المرور" },
+
+  "propertyDetails": "تفاصيل العقار",
+  "@propertyDetails": { "description": "عنوان صفحة تفاصيل العقار" },
+
+  "ownerInfo": "بيانات المالك",
+  "@ownerInfo": { "description": "قسم بيانات مالك العقار" },
+
+  "ownerOnlyAdmin": "بيانات المالك (أدمن فقط)",
+  "@ownerOnlyAdmin": { "description": "شرح أن القسم يظهر فقط للأدمن" },
+
+  "typeLabel": "نوع العقار",
+  "@typeLabel": { "description": "نوع العقار في التفاصيل" },
+
+  "serviceTypeLabel": "نوع الخدمة",
+  "@serviceTypeLabel": { "description": "نوع الخدمة في التفاصيل" },
+
+  "statusLabel": "حالة الإعلان",
+  "@statusLabel": { "description": "حالة الإعلان في التفاصيل" },
+
+  "features": "المميزات",
+  "@features": { "description": "قسم المميزات" },
+
+  "descriptionLabel": "الوصف",
+  "@descriptionLabel": { "description": "وصف العقار" },
+
+  "noDescription": "لا يوجد وصف",
+  "@noDescription": { "description": "لا يوجد وصف مضاف" },
+
+  "callOwner": "اتصال بالمالك",
+  "@callOwner": { "description": "زر اتصال بالمالك" },
+
+  "addedOnDate": "تمت الإضافة بتاريخ:",
+  "@addedOnDate": { "description": "تاريخ نشر العقار" },
+
+  "ownerNameLabel": "اسم المالك",
+  "@ownerNameLabel": { "description": "اسم مالك العقار" },
+
+  "ownerPhoneLabel": "رقم المالك",
+  "@ownerPhoneLabel": { "description": "رقم هاتف مالك العقار" },
+
+  "adIdLabel": "رقم الإعلان",
+  "@adIdLabel": { "description": "رقم معرف الإعلان" },
+
+  "serviceType": "نوع الخدمة",
+  "@serviceType": { "description": "نوع الخدمة في محرك البحث" },
+
+  "sale": "للبيع",
+  "@sale": { "description": "نوع الخدمة: للبيع" },
+
+  "rent": "للإيجار",
+  "@rent": { "description": "نوع الخدمة: للإيجار" },
+
+  "exchange": "البدل",
+  "@exchange": { "description": "نوع الخدمة: البدل" },
+
+  "imInterested": "أنا مهتم",
+  "@imInterested": { "description": "زر اهتمام بالعقار" },
+
+  "interestedDetails": "تفاصيل المهتم",
+  "@interestedDetails": { "description": "قسم المهتمين في لوحة الأدمن" },
+
+  "adLabel": "إعلان",
+  "@adLabel": { "description": "عنوان افتراضي للإعلان" },
+
+  "passwordResetSent": "تم إرسال رابط إعادة تعيين كلمة المرور",
+  "@passwordResetSent": { "description": "رسالة بعد إرسال رابط إعادة التعيين" },
+
+  "adFeaturedSevenDays": "تم تمييز الإعلان لمدة 7 أيام",
+  "@adFeaturedSevenDays": { "description": "رسالة بعد تمييز الإعلان" },
+
+  "errorLabel": "خطأ",
+  "@errorLabel": { "description": "كلمة خطأ للعرض مع التفاصيل" },
+
+  "propertySentForReview": "تم إرسال العقار للمراجعة",
+  "@propertySentForReview": { "description": "رسالة بعد إرسال عقار للمراجعة" }
+
+}
