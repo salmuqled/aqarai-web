@@ -1,6 +1,6 @@
-# aqarai_app
+# AqarAi Web App
 
-A new Flutter project.
+A Flutter project for AqarAi real estate app.
 
 ## Getting Started
 
