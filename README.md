@@ -2,6 +2,15 @@
 
 A Flutter project for AqarAi real estate app.
 
+## Firebase Setup
+
+`lib/firebase_options.dart` is not in the repo (contains API keys). After cloning, run:
+
+```bash
+flutter pub get
+dart run flutterfire_cli:flutterfire configure
+```
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

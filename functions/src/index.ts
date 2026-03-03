@@ -115,3 +115,4 @@ export const setAdminClaim = onCall(
 // ⛔️ هذا مكان استيراد أي فانكشن ثانية — خارج كل الفانكشنز
 export { approveListingV2 } from "./listing_approval";
 export { onPropertyUpdated, onWantedUpdated } from "./match_listings";
+export { aqaraiAssistant } from "./assistant";

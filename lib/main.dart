@@ -3,8 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:aqarai_app/firebase_options.dart';
-import 'package:aqarai_app/home_page.dart';
 import 'package:aqarai_app/auth/login_page.dart';
+import 'package:aqarai_app/pages/assistant_page.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -77,7 +77,7 @@ class AuthGate extends StatelessWidget {
           return const LoginPage();
         }
 
-        return const HomePage();
+        return const AssistantPage();
       },
     );
   }

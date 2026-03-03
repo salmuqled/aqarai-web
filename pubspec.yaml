@@ -36,6 +36,8 @@ dependencies:
   # 🔥 لتحميل الصور بسرعة + كاش + منع التعليق
   cached_network_image: ^3.3.1
 
+  http: ^1.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
