@@ -27,7 +27,7 @@ class SearchResultsChaletPage extends StatelessWidget {
       q = q.where('serviceType', isEqualTo: serviceType);
     }
 
-    return q.orderBy('createdAt', descending: true);
+    return q.orderBy('createdAt', descending: true).limit(100);
   }
 
   @override

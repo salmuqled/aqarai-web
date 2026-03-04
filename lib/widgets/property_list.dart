@@ -63,7 +63,7 @@ class PropertyList extends StatelessWidget {
       query = query.where('serviceType', isEqualTo: serviceType);
     }
 
-    query = query.orderBy('createdAt', descending: true);
+    query = query.orderBy('createdAt', descending: true).limit(100);
 
     return Scaffold(
       appBar: AppBar(title: Text(loc.propertiesInArea(areaLabel))),

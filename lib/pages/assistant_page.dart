@@ -1,16 +1,10 @@
 // lib/pages/assistant_page.dart
 // شاشة المساعد الذكي — أول ما يفتح التطبيق، مع زر X للبحث التقليدي
-// استدعاء الدالة عبر HTTP لتجنب مشكلة GTMSessionFetcher على iOS
-
-import 'dart:convert';
+// Phase 1: البحث المحادثي عبر ConversationalSearchService + Firestore
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
 import 'package:aqarai_app/home_page.dart';
-
-const String _assistantUrl =
-    'https://us-central1-aqarai-caf5d.cloudfunctions.net/aqaraiAssistant';
+import 'package:aqarai_app/services/conversational_search_service.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({super.key});
@@ -73,43 +67,75 @@ class _AssistantPageState extends State<AssistantPage> {
     });
     _scrollToBottom();
 
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('unauthenticated');
-      }
-      final idToken = await user.getIdToken(true);
-      final locale = _isAr ? 'ar' : 'en';
-      final body = jsonEncode({
-        'data': {'message': text, 'locale': locale},
+    final searchService = ConversationalSearchService();
+    final result = searchService.parse(text);
+
+    if (!result.canRunQuery) {
+      final clarificationText = result.clarificationQuestions.isEmpty
+          ? (_isAr ? 'ما قدرت أحدد المنطقة. حدد المنطقة (مثل: القادسية، النزهة).' : 'Could not determine area. Please specify area (e.g. Qadisiya, Nuzha).')
+          : result.clarificationQuestions.join('\n');
+      if (!mounted) return;
+      setState(() {
+        _messages.add(ChatMessage(text: clarificationText, isUser: false, timestamp: DateTime.now()));
+        _isLoading = false;
       });
-      final response = await http
-          .post(
-            Uri.parse(_assistantUrl),
-            headers: <String, String>{
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $idToken',
-            },
-            body: body,
-          )
-          .timeout(const Duration(seconds: 60));
+      _scrollToBottom();
+      return;
+    }
+
+    try {
+      final query = searchService.buildQuery(result.filters);
+      final snapshot = await query.limit(5).get();
+      final docs = snapshot.docs;
+      final count = docs.length;
+      final areaLabel = docs.isNotEmpty
+          ? (docs.first.data()['areaAr'] ?? docs.first.data()['areaEn'] ?? result.filters.areaCode ?? '')
+              .toString()
+          : (result.filters.areaCode ?? '').toString();
 
       String reply;
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>?;
-        final result = json?['result'] as Map<String, dynamic>?;
-        reply = result?['reply'] as String? ??
-            (_isAr ? 'ما قدرت أفهم، جرب مرة ثانية.' : 'Could not get a reply. Try again.');
+      if (count == 0) {
+        reply = _isAr
+            ? 'ما لقيت عقارات تطابق بحثك في $areaLabel. جرب منطقة ثانية أو غيّر الفلاتر.'
+            : 'No properties found in $areaLabel. Try another area or change filters.';
       } else {
-        try {
-          final json = jsonDecode(response.body) as Map<String, dynamic>?;
-          final err = json?['error'] as Map<String, dynamic>?;
-          final msg = err?['message'] as String?;
-          reply = msg ?? (_isAr ? 'حصل خطأ. جرب مرة ثانية.' : 'Something went wrong. Try again.');
-        } catch (_) {
-          reply = _isAr ? 'حصل خطأ. جرب مرة ثانية.' : 'Something went wrong. Try again.';
+        final top3 = docs.take(3).toList();
+        final buffer = StringBuffer();
+        if (_isAr) {
+          buffer.writeln('لقيت لك $count عقارات في $areaLabel. هذه أفضل الخيارات:');
+          buffer.writeln();
+          for (var i = 0; i < top3.length; i++) {
+            final d = top3[i].data();
+            final type = (d['type'] ?? '').toString();
+            final typeLabel = _typeLabelAr(type);
+            final price = d['price'];
+            final priceStr = price != null ? _formatNum(price) : '-';
+            final size = d['size'];
+            final sizeStr = size != null ? '${_formatNum(size)}م' : '-';
+            final areaAr = (d['areaAr'] ?? d['areaEn'] ?? '').toString();
+            buffer.writeln('${i + 1}️⃣ $typeLabel – السعر: $priceStr – المساحة: $sizeStr${areaAr.isNotEmpty ? ' – $areaAr' : ''}');
+          }
+          buffer.writeln();
+          buffer.writeln('كم ميزانيتك تقريباً؟ وتفضل زاوية أو شارع واحد؟');
+        } else {
+          buffer.writeln('Found $count properties in $areaLabel. Top options:');
+          buffer.writeln();
+          for (var i = 0; i < top3.length; i++) {
+            final d = top3[i].data();
+            final type = (d['type'] ?? '').toString();
+            final price = d['price'];
+            final priceStr = price != null ? _formatNum(price) : '-';
+            final size = d['size'];
+            final sizeStr = size != null ? '${_formatNum(size)} m²' : '-';
+            final areaEn = (d['areaEn'] ?? d['areaAr'] ?? '').toString();
+            buffer.writeln('${i + 1}️⃣ $type – Price: $priceStr – Size: $sizeStr${areaEn.isNotEmpty ? ' – $areaEn' : ''}');
+          }
+          buffer.writeln();
+          buffer.writeln('What\'s your budget roughly? And do you prefer corner or single street?');
         }
+        reply = buffer.toString();
       }
+
       if (!mounted) return;
       setState(() {
         _messages.add(ChatMessage(text: reply, isUser: false, timestamp: DateTime.now()));
@@ -130,6 +156,29 @@ class _AssistantPageState extends State<AssistantPage> {
       });
       _scrollToBottom();
     }
+  }
+
+  static String _formatNum(dynamic value) {
+    if (value == null) return '-';
+    if (value is num) return value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
+    final n = num.tryParse(value.toString());
+    return n != null ? n.toStringAsFixed(n.truncateToDouble() == n ? 0 : 1) : value.toString();
+  }
+
+  static String _typeLabelAr(String type) {
+    const m = {
+      'house': 'بيت',
+      'apartment': 'شقة',
+      'villa': 'فيلا',
+      'chalet': 'شاليه',
+      'shop': 'محل',
+      'office': 'مكتب',
+      'land': 'أرض',
+      'warehouse': 'مخزن',
+      'farm': 'مزرعة',
+      'room': 'غرفة',
+    };
+    return m[type.toLowerCase()] ?? type;
   }
 
   void _closeToTraditionalSearch() {
