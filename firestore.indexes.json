@@ -24,6 +24,19 @@
       ]
     },
     {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "price", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "wanted_requests",
       "queryScope": "COLLECTION",
       "fields": [
