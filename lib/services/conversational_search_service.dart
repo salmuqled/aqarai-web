@@ -18,13 +18,14 @@ class ConversationalSearchResult {
   });
 }
 
-/// فلاتر مستخرجة من النص
+/// فلاتر مستخرجة من النص أو من خريطة الـ Agent
 class ParsedFilters {
   final String? areaCode;
   final String? governorateCode;
   final String? serviceType; // sale | rent
   final String? propertyType; // house, apartment, villa, chalet, ...
   final double? maxPrice;
+  final int? bedrooms; // roomCount في Firestore
 
   const ParsedFilters({
     this.areaCode,
@@ -32,6 +33,7 @@ class ParsedFilters {
     this.serviceType,
     this.propertyType,
     this.maxPrice,
+    this.bedrooms,
   });
 
   bool get hasArea => areaCode != null && areaCode!.isNotEmpty;
@@ -228,7 +230,28 @@ class ConversationalSearchService {
     if (filters.maxPrice != null && filters.maxPrice! > 0) {
       q = q.where('price', isLessThanOrEqualTo: filters.maxPrice);
     }
+    if (filters.bedrooms != null && filters.bedrooms! > 0) {
+      q = q.where('roomCount', isEqualTo: filters.bedrooms);
+    }
 
     return q.orderBy('createdAt', descending: true).limit(100);
+  }
+
+  /// يبني استعلام من خريطة فلاتر (من الـ Agent): areaCode, type, serviceType, budget, bedrooms
+  Query<Map<String, dynamic>> buildQueryFromMap(Map<String, dynamic> filters) {
+    final areaCode = filters['areaCode']?.toString().trim();
+    final type = filters['type']?.toString().trim();
+    final serviceType = filters['serviceType']?.toString().trim();
+    final budget = filters['budget'] is num ? (filters['budget'] as num).toDouble() : (filters['budget'] != null ? double.tryParse(filters['budget'].toString()) : null);
+    final bedrooms = filters['bedrooms'] is int ? filters['bedrooms'] as int : (filters['bedrooms'] != null ? int.tryParse(filters['bedrooms'].toString()) : null);
+    final governorateCode = filters['governorateCode']?.toString().trim();
+    return buildQuery(ParsedFilters(
+      areaCode: areaCode?.isNotEmpty == true ? areaCode : null,
+      governorateCode: governorateCode?.isNotEmpty == true ? governorateCode : null,
+      serviceType: serviceType?.isNotEmpty == true ? serviceType : null,
+      propertyType: type?.isNotEmpty == true ? type : null,
+      maxPrice: budget != null && budget > 0 ? budget : null,
+      bedrooms: bedrooms != null && bedrooms > 0 ? bedrooms : null,
+    ));
   }
 }

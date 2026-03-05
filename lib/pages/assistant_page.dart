@@ -1,9 +1,36 @@
 // lib/pages/assistant_page.dart
-// شاشة المساعد الذكي — أول ما يفتح التطبيق، مع زر X للبحث التقليدي
-// Phase 1: البحث المحادثي عبر ConversationalSearchService + Firestore
+//
+// =============================================================================
+// ARCHITECTURE: AI Real Estate Agent (logic only; no UI changes)
+// =============================================================================
+// State: _currentFilters (Map), _lastResults (List<QueryDocumentSnapshot>).
+//
+// Flow in _sendMessage():
+//   1) User message -> AiBrainService.analyze(message, last8Messages, _currentFilters, top3LastResults)
+//   2) If intent == greeting -> reply friendly, stop
+//   3) If reset_filters == true -> clear _currentFilters and _lastResults
+//   4) Merge params_patch into _currentFilters (only overwrite keys where value != null)
+//   5) If is_complete == false -> reply with clarifying_questions, stop
+//   6) If areaCode missing -> reply ask area, stop
+//   7) Run Firestore search: ConversationalSearchService.buildQueryFromMap(_currentFilters)
+//      (Maps: type->type, areaCode->areaCode, serviceType->serviceType, budget->price<=budget)
+//   8) Save results in _lastResults; keep _currentFilters
+//   9) Send top 3 results to AiBrainService.composeMarketingReply(...) -> marketing-style reply
+//  10) Append reply to _messages
+//
+// Step-by-step tests:
+//   a) "السلام عليكم" -> greeting reply, stop
+//   b) "ابي بيت للبيع بالقادسية" -> search, marketing reply with 1-3 options + one question
+//   c) "ابي أرخص" -> budget -10% or ask budget; then search or clarify
+//   d) "كم غرفة؟" -> clarifying_questions or params_patch.bedrooms
+//   e) "غير المنطقة للنزهة" -> reset_filters, areaCode=nuzha, search
+// =============================================================================
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:aqarai_app/home_page.dart';
+import 'package:aqarai_app/services/ai_brain_service.dart';
 import 'package:aqarai_app/services/conversational_search_service.dart';
 
 class AssistantPage extends StatefulWidget {
@@ -19,6 +46,12 @@ class _AssistantPageState extends State<AssistantPage> {
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
   bool _isAr = true;
+
+  /// فلاتر البحث الحالية (من الـ Agent)
+  Map<String, dynamic> _currentFilters = {};
+
+  /// نتائج آخر استعلام — للرد على المتابعة ولتأليف الرد التسويقي
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _lastResults = [];
 
   static const String _welcomeAr =
       'هلا وغلا! أنا مساعدك في عقار أي. تقدر تسألني عن أي عقار، أسعار الإيجار بالشاليهات، أو أسعار العقار في أي منطقة مثل القادسية. ولا تتردد، أي سؤال؟';
@@ -67,118 +100,128 @@ class _AssistantPageState extends State<AssistantPage> {
     });
     _scrollToBottom();
 
-    final searchService = ConversationalSearchService();
-    final result = searchService.parse(text);
-
-    if (!result.canRunQuery) {
-      final clarificationText = result.clarificationQuestions.isEmpty
-          ? (_isAr ? 'ما قدرت أحدد المنطقة. حدد المنطقة (مثل: القادسية، النزهة).' : 'Could not determine area. Please specify area (e.g. Qadisiya, Nuzha).')
-          : result.clarificationQuestions.join('\n');
-      if (!mounted) return;
-      setState(() {
-        _messages.add(ChatMessage(text: clarificationText, isUser: false, timestamp: DateTime.now()));
-        _isLoading = false;
-      });
-      _scrollToBottom();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _appendReply(_isAr ? 'سجّل دخول عشان أبحث لك.' : 'Sign in to search.');
       return;
     }
 
     try {
-      final query = searchService.buildQuery(result.filters);
-      final snapshot = await query.limit(5).get();
-      final docs = snapshot.docs;
-      final count = docs.length;
-      final areaLabel = docs.isNotEmpty
-          ? (docs.first.data()['areaAr'] ?? docs.first.data()['areaEn'] ?? result.filters.areaCode ?? '')
-              .toString()
-          : (result.filters.areaCode ?? '').toString();
+      final idToken = await user.getIdToken(true);
+      if (idToken == null || idToken.isEmpty) {
+        _appendReply(_isAr ? 'ما قدرت أتحقق من الدخول. جرّب مرة ثانية.' : 'Could not verify sign-in. Try again.');
+        return;
+      }
+      final aiBrain = AiBrainService();
+      final last8 = _last8Messages();
+      final top3ForContext = _top3ShortResults();
 
-      String reply;
-      if (count == 0) {
-        reply = _isAr
-            ? 'ما لقيت عقارات تطابق بحثك في $areaLabel. جرب منطقة ثانية أو غيّر الفلاتر.'
-            : 'No properties found in $areaLabel. Try another area or change filters.';
-      } else {
-        final top3 = docs.take(3).toList();
-        final buffer = StringBuffer();
-        if (_isAr) {
-          buffer.writeln('لقيت لك $count عقارات في $areaLabel. هذه أفضل الخيارات:');
-          buffer.writeln();
-          for (var i = 0; i < top3.length; i++) {
-            final d = top3[i].data();
-            final type = (d['type'] ?? '').toString();
-            final typeLabel = _typeLabelAr(type);
-            final price = d['price'];
-            final priceStr = price != null ? _formatNum(price) : '-';
-            final size = d['size'];
-            final sizeStr = size != null ? '${_formatNum(size)}م' : '-';
-            final areaAr = (d['areaAr'] ?? d['areaEn'] ?? '').toString();
-            buffer.writeln('${i + 1}️⃣ $typeLabel – السعر: $priceStr – المساحة: $sizeStr${areaAr.isNotEmpty ? ' – $areaAr' : ''}');
-          }
-          buffer.writeln();
-          buffer.writeln('كم ميزانيتك تقريباً؟ وتفضل زاوية أو شارع واحد؟');
-        } else {
-          buffer.writeln('Found $count properties in $areaLabel. Top options:');
-          buffer.writeln();
-          for (var i = 0; i < top3.length; i++) {
-            final d = top3[i].data();
-            final type = (d['type'] ?? '').toString();
-            final price = d['price'];
-            final priceStr = price != null ? _formatNum(price) : '-';
-            final size = d['size'];
-            final sizeStr = size != null ? '${_formatNum(size)} m²' : '-';
-            final areaEn = (d['areaEn'] ?? d['areaAr'] ?? '').toString();
-            buffer.writeln('${i + 1}️⃣ $type – Price: $priceStr – Size: $sizeStr${areaEn.isNotEmpty ? ' – $areaEn' : ''}');
-          }
-          buffer.writeln();
-          buffer.writeln('What\'s your budget roughly? And do you prefer corner or single street?');
-        }
-        reply = buffer.toString();
+      final analyzeResult = await aiBrain.analyze(
+        message: text,
+        last8Messages: last8,
+        currentFilters: Map<String, dynamic>.from(_currentFilters),
+        top3LastResults: top3ForContext,
+        idToken: idToken,
+      );
+
+      if (analyzeResult.intent == 'greeting') {
+        _appendReply(_isAr ? 'هلا وغلا! كيف أقدر أساعدك؟ اكتب المنطقة ونوع العقار (مثل: ابي بيت للبيع في القادسية).' : 'Hi! How can I help? Type area and property type (e.g. house for sale in Qadisiya).');
+        return;
       }
 
+      if (analyzeResult.resetFilters) {
+        setState(() {
+          _currentFilters = {};
+          _lastResults = [];
+        });
+      }
+
+      for (final e in analyzeResult.paramsPatch.entries) {
+        if (e.value != null) {
+          _currentFilters[e.key] = e.value;
+        }
+      }
+
+      if (!analyzeResult.isComplete) {
+        final msg = analyzeResult.clarifyingQuestions.isNotEmpty
+            ? analyzeResult.clarifyingQuestions.join('\n')
+            : (_isAr ? 'في أي منطقة تبحث؟' : 'Which area are you looking in?');
+        _appendReply(msg);
+        return;
+      }
+
+      if (_currentFilters['areaCode'] == null || _currentFilters['areaCode'].toString().trim().isEmpty) {
+        _appendReply(_isAr ? 'حدد المنطقة (مثل: القادسية، النزهة) عشان أبحث.' : 'Specify the area (e.g. Qadisiya, Nuzha) to search.');
+        return;
+      }
+
+      final searchService = ConversationalSearchService();
+      final query = searchService.buildQueryFromMap(_currentFilters);
+      final snapshot = await query.limit(10).get();
+      final docs = snapshot.docs;
       if (!mounted) return;
       setState(() {
-        _messages.add(ChatMessage(text: reply, isUser: false, timestamp: DateTime.now()));
-        _isLoading = false;
+        _lastResults = List.from(docs);
       });
-      _scrollToBottom();
+
+      final top3List = _lastResults.take(3).map((doc) {
+        final d = doc.data();
+        return <String, dynamic>{
+          'id': doc.id,
+          'areaAr': d['areaAr'],
+          'areaEn': d['areaEn'],
+          'type': d['type'],
+          'price': d['price'],
+          'size': d['size'],
+        };
+      }).toList();
+
+      String reply;
+      if (top3List.isEmpty) {
+        reply = _isAr ? 'ما لقيت عقارات تطابق الفلاتر. جرب منطقة أو ميزانية ثانية.' : 'No properties match. Try different area or budget.';
+      } else {
+        reply = await aiBrain.composeMarketingReply(top3Results: top3List, idToken: idToken, isAr: _isAr);
+      }
+      _appendReply(reply);
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _messages.add(ChatMessage(
-          text: _isAr
-              ? 'حصل خطأ بالاتصال. تأكد من النت وجرب مرة ثانية، أو اضغط X للبحث العادي.'
-              : 'Connection error. Check your network or tap X for traditional search.',
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
-        _isLoading = false;
-      });
-      _scrollToBottom();
+      _appendReply(_isAr ? 'حصل خطأ بالاتصال. تأكد من النت وجرب مرة ثانية، أو اضغط X للبحث العادي.' : 'Connection error. Check your network or tap X for traditional search.');
     }
   }
 
-  static String _formatNum(dynamic value) {
-    if (value == null) return '-';
-    if (value is num) return value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 1);
-    final n = num.tryParse(value.toString());
-    return n != null ? n.toStringAsFixed(n.truncateToDouble() == n ? 0 : 1) : value.toString();
+  void _appendReply(String text) {
+    if (!mounted) return;
+    setState(() {
+      _messages.add(ChatMessage(text: text, isUser: false, timestamp: DateTime.now()));
+      _isLoading = false;
+    });
+    _scrollToBottom();
   }
 
-  static String _typeLabelAr(String type) {
-    const m = {
-      'house': 'بيت',
-      'apartment': 'شقة',
-      'villa': 'فيلا',
-      'chalet': 'شاليه',
-      'shop': 'محل',
-      'office': 'مكتب',
-      'land': 'أرض',
-      'warehouse': 'مخزن',
-      'farm': 'مزرعة',
-      'room': 'غرفة',
-    };
-    return m[type.toLowerCase()] ?? type;
+  List<Map<String, String>> _last8Messages() {
+    final list = <Map<String, String>>[];
+    final start = _messages.length > 8 ? _messages.length - 8 : 0;
+    for (var i = start; i < _messages.length; i++) {
+      final m = _messages[i];
+      list.add({
+        'role': m.isUser ? 'user' : 'assistant',
+        'content': m.text,
+      });
+    }
+    return list;
+  }
+
+  List<Map<String, dynamic>> _top3ShortResults() {
+    return _lastResults.take(3).map((doc) {
+      final d = doc.data();
+      return <String, dynamic>{
+        'id': doc.id,
+        'areaAr': d['areaAr'],
+        'areaEn': d['areaEn'],
+        'type': d['type'],
+        'price': d['price'],
+        'size': d['size'],
+      };
+    }).toList();
   }
 
   void _closeToTraditionalSearch() {

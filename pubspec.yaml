@@ -17,8 +17,8 @@ dependencies:
     sdk: flutter
   intl: ^0.20.2
 
-  google_sign_in: ^6.2.1
-  sign_in_with_apple: ^6.1.0
+  google_sign_in: ^7.2.0
+  sign_in_with_apple: ^7.0.1
 
   firebase_core: ^4.3.0
   firebase_auth: ^6.1.3
@@ -31,7 +31,7 @@ dependencies:
 
   url_launcher: ^6.3.0
   device_info_plus: ^12.3.0
-  flutter_local_notifications: ^19.5.0
+  flutter_local_notifications: ^20.1.0
 
   # 🔥 لتحميل الصور بسرعة + كاش + منع التعليق
   cached_network_image: ^3.3.1

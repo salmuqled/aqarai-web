@@ -33,14 +33,11 @@ class _LoginPageState extends State<LoginPage> {
     if (_loading) return;
     setState(() => _loading = true);
     try {
-      final gUser = await GoogleSignIn().signIn();
-      if (gUser == null) {
-        setState(() => _loading = false);
-        return;
-      }
-      final gAuth = await gUser.authentication;
+      final signIn = GoogleSignIn.instance;
+      await signIn.initialize();
+      final gUser = await signIn.authenticate();
+      final gAuth = gUser.authentication;
       final credential = GoogleAuthProvider.credential(
-        accessToken: gAuth.accessToken,
         idToken: gAuth.idToken,
       );
       await FirebaseAuth.instance.signInWithCredential(credential);
