@@ -4,51 +4,19 @@
 // ARCHITECTURE: AI Real Estate Agent (From Bot to Agent)
 // =============================================================================
 //
-// Context policy (sent to OpenAI):
+// Context policy (sent to OpenAI via Cloud Function):
 //   - Last 8 chat messages (role + content only).
 //   - Compact currentFilters: areaCode, type, serviceType, budget, bedrooms.
 //   - Top 3 last results as short objects: id, areaAr, areaEn, type, price, size.
 //
-// Flow:
+// OPENAI_API_KEY: Stored in Firebase (backend only). See "Adding OPENAI_API_KEY"
+// section at the bottom of this file.
 //
-//   [User Message] --> AssistantPage._sendMessage()
-//          |
-//          v
-//   AiBrainService.analyze(message, last8Messages, _currentFilters, top3LastResults)
-//          |  HTTP POST --> aqaraiAgentAnalyze (GPT-4o mini)
-//          |  Output: STRICT JSON { intent, params_patch, reset_filters, is_complete, clarifying_questions }
-//          v
-//   AssistantPage:
-//     - intent == greeting  --> reply friendly, stop
-//     - reset_filters == true --> clear _currentFilters & _lastResults
-//     - merge params_patch into _currentFilters (only non-null keys)
-//     - is_complete == false --> reply with clarifying_questions, stop
-//     - is_complete == true + areaCode present --> run Firestore search
-//          |
-//          v
-//   ConversationalSearchService.buildQueryFromMap(_currentFilters)
-//     Maps: type->type, areaCode->areaCode, serviceType->serviceType, budget->price<=budget
-//   Save snapshot.docs to _lastResults; keep _currentFilters
-//          |
-//          v
-//   AiBrainService.composeMarketingReply(top3, idToken, isAr)
-//     HTTP POST --> aqaraiAgentCompose --> marketing reply (1-3 options, ONE next question)
-//          |
-//          v
-//   Append reply to _messages
-//
-// =============================================================================
-// Step-by-step tests (manual)
-// =============================================================================
-// a) "السلام عليكم"     --> intent=greeting, friendly reply, stop
-// b) "ابي بيت للبيع بالقادسية" --> params_patch { areaCode, type, serviceType }, is_complete=true, search, marketing reply
-// c) "ابي أرخص"        --> params_patch { budget: current*0.9 } or is_complete=false + ask budget
-// d) "كم غرفة؟"        --> clarifying or params_patch.bedrooms; or general reply
-// e) "غير المنطقة للنزهة" --> reset_filters=true, params_patch.areaCode=nuzha, then search
 // =============================================================================
 
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 const String _baseUrl = 'https://us-central1-aqarai-caf5d.cloudfunctions.net';
@@ -82,8 +50,49 @@ class AgentAnalyzeResult {
   }
 }
 
-/// Service that calls backend (GPT-4o mini) for intent analysis and marketing reply
+/// Service that calls backend (GPT-4o mini) for intent analysis and marketing reply.
+///
+/// Backend uses OpenAI gpt-4o-mini with a Kuwaiti real estate expert system prompt.
+/// Output is strict JSON: intent, params_patch, reset_filters, is_complete, clarifying_questions.
+/// If area is missing, backend returns is_complete: false and a question in clarifying_questions.
 class AiBrainService {
+  /// Analyzes the user message and returns structured JSON for the real estate assistant.
+  ///
+  /// Uses OpenAI gpt-4o-mini via Cloud Function. Converts Arabic/Kuwaiti terms to
+  /// search params (e.g. القادسية -> qadisiya, بيت -> house).
+  ///
+  /// Returns a map with: intent, params_patch, reset_filters, is_complete, clarifying_questions.
+  /// If area is missing, is_complete is false and clarifying_questions contains a question.
+  Future<Map<String, dynamic>> analyzeMessage({
+    required String message,
+    required List<Map<String, String>> chatHistory,
+    Map<String, dynamic>? currentFilters,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('User must be signed in to analyze messages');
+    }
+    final idToken = await user.getIdToken(true);
+    if (idToken == null || idToken.isEmpty) {
+      throw Exception('Could not get auth token');
+    }
+    final last8 = chatHistory.length > 8 ? chatHistory.sublist(chatHistory.length - 8) : chatHistory;
+    final result = await analyze(
+      message: message,
+      last8Messages: last8,
+      currentFilters: currentFilters ?? {},
+      top3LastResults: [],
+      idToken: idToken,
+    );
+    return <String, dynamic>{
+      'intent': result.intent,
+      'params_patch': result.paramsPatch,
+      'reset_filters': result.resetFilters,
+      'is_complete': result.isComplete,
+      'clarifying_questions': result.clarifyingQuestions,
+    };
+  }
+
   /// Analyze user message with context; returns structured result for Agent flow
   Future<AgentAnalyzeResult> analyze({
     required String message,
@@ -151,3 +160,22 @@ class AiBrainService {
     return reply.toString().trim();
   }
 }
+
+// =============================================================================
+// Adding OPENAI_API_KEY to environment (backend only)
+// =============================================================================
+//
+// The AI analysis runs in Firebase Cloud Functions (aqaraiAgentAnalyze), not in
+// the app. The API key must NEVER be stored in the Flutter app.
+//
+// 1) Firebase Functions (recommended)
+//    cd functions
+//    firebase functions:secrets:set OPENAI_API_KEY
+//    When prompted, paste your OpenAI API key (starts with sk-...).
+//
+// 2) Redeploy the function so it picks up the secret:
+//    npm run build && firebase deploy --only functions:aqaraiAgentAnalyze
+//
+// 3) Get an API key from https://platform.openai.com/api-keys
+//    Ensure the key has access to the gpt-4o-mini model and billing is enabled.
+// =============================================================================

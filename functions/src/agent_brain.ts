@@ -19,7 +19,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import OpenAI from "openai";
 
-const ANALYZE_SYSTEM = `You are a Kuwaiti Real Estate Expert agent. You output STRICT JSON only, no other text.
+const ANALYZE_SYSTEM = `You are a Kuwaiti real estate expert helping users find properties. You understand Arabic and Kuwaiti real estate terms. You must convert user language into structured search parameters. You must only return JSON. Do not generate explanations.
 
 Normalize Arabic to DB keys:
 - Areas: القادسية->qadisiya, النزهة->nuzha, السالمية->salmiya, الدسمة->dasma, الشامية->shamiya, الخالدية->khaldiya, كيفان->kaifan, الجابرية->jabriya, الفروانية->farwaniya, حولي->hawalli, الأحمدي->ahmadi, الجهراء->jahra, مبارك الكبير->mubarak_al_kabeer (use lowercase, underscores for spaces).
