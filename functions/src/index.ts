@@ -117,3 +117,5 @@ export { approveListingV2 } from "./listing_approval";
 export { onPropertyUpdated, onWantedUpdated } from "./match_listings";
 export { aqaraiAssistant } from "./assistant";
 export { aqaraiAgentAnalyze, aqaraiAgentCompose } from "./agent_brain";
+export { onPropertyCreatedBuyerRadar } from "./buyer_radar";
+export { onPropertyUpdatedBuyerNotify } from "./buyer_notifications";

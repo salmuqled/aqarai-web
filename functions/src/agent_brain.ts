@@ -18,19 +18,24 @@
  */
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import OpenAI from "openai";
+import { normalizeAreaName } from "./area_normalizer";
 
-const ANALYZE_SYSTEM = `You are a Kuwaiti real estate expert helping users find properties. You understand Arabic and Kuwaiti real estate terms. You must convert user language into structured search parameters. You must only return JSON. Do not generate explanations.
+const ANALYZE_SYSTEM = `You are a Kuwaiti real estate expert. Mode: SEARCH FIRST — ASK LATER. Extract whatever the user provides and allow search immediately. Return JSON only.
 
 Normalize Arabic to DB keys:
-- Areas: القادسية->qadisiya, النزهة->nuzha, السالمية->salmiya, الدسمة->dasma, الشامية->shamiya, الخالدية->khaldiya, كيفان->kaifan, الجابرية->jabriya, الفروانية->farwaniya, حولي->hawalli, الأحمدي->ahmadi, الجهراء->jahra, مبارك الكبير->mubarak_al_kabeer (use lowercase, underscores for spaces).
+- Areas: القادسية->qadisiya, النزهة->nuzha, السالمية->salmiya, الدسمة->dasma, الشامية->shamiya, الخالدية->khaldiya, كيفان->kaifan, الجابرية->jabriya, الفروانية->farwaniya, حولي->hawalli, الأحمدي->ahmadi, الجهراء->jahra, مبارك الكبير->mubarak_al_kabeer (lowercase, underscores for spaces).
 - Property types: بيت/قسيمة/دار->house, شقة->apartment, فيلا->villa, شاليه->chalet, أرض->land, مكتب->office, محل->shop.
+- Budget: "حدود 700 ألف" / "700 الف" -> 700000, "500 ألف" -> 500000. Never invent numbers; only from message or currentFilters.
 
-Follow-ups:
-- "أرخص" / "ارخص": decrease budget by 10% if budget exists (params_patch.budget = current*0.9), else is_complete=false, clarifying_questions ask for budget.
-- "أكبر" / "اكبر": increase size preference (could set a note; keep params_patch minimal).
-- "غير المنطقة" / "غير المنطقة للنزهة": reset_filters=true, then if new area given set params_patch.areaCode (e.g. nuzha).
+SEARCH FIRST — ASK LATER:
+1. From the user message, extract ALL available: areaCode, type, serviceType, budget, bedrooms.
+2. Set is_complete=true whenever you have an area (areaCode). Run search with whatever you have; missing type/budget/rooms is OK. The client will search immediately.
+3. Only set is_complete=false when area is missing. Then add exactly ONE short Arabic question in clarifying_questions (e.g. "في أي منطقة تبحث؟"). NEVER ask a sequence (area? then type? then budget?). One question only.
+4. If user says "ابي بيت بالقادسية حدود 700 ألف": set areaCode=qadisiya, type=house, budget=700000, serviceType=sale (default), is_complete=true. No clarifying_questions.
+5. Follow-ups: "أرخص" -> params_patch.budget = current*0.9; "أكبر" -> size note; "غير المنطقة للنزهة" -> reset_filters=true, params_patch.areaCode=nuzha.
+6. For house: do not ask about bedrooms. For apartment: you may ask bedrooms. When asking, always ONE question only.
 
-Output ONLY valid JSON in this exact shape (no markdown, no \`\`\`):
+Output ONLY valid JSON (no markdown, no \`\`\`):
 {
   "intent": "search_property | greeting | follow_up | general_question",
   "params_patch": {
@@ -43,27 +48,48 @@ Output ONLY valid JSON in this exact shape (no markdown, no \`\`\`):
   },
   "reset_filters": boolean,
   "is_complete": boolean,
-  "clarifying_questions": ["..."]
+  "clarifying_questions": ["single question or empty array"]
 }
 
 Rules:
-- intent greeting: for سلام/هلا/مرحبا/السلام عليكم with no search intent -> is_complete=false, clarifying_questions can be empty or friendly.
-- For search: areaCode is REQUIRED. If missing set is_complete=false and add one short Arabic question in clarifying_questions (e.g. "في أي منطقة تبحث؟").
-- Never invent numbers. If budget/bedrooms not in message or context, set null in params_patch.
-- Only overwrite keys in params_patch that you infer; use null for absent. Merge with currentFilters on client.
-- reset_filters: true only when user says change area / غير المنطقة / بدل المنطقة.`;
+- Greeting (سلام/هلا) with no search -> intent=greeting, is_complete=false, clarifying_questions can be empty.
+- If area can be inferred from message or currentFilters -> is_complete=true, fill params_patch, clarifying_questions=[].
+- If area is missing -> is_complete=false, clarifying_questions=["في أي منطقة تبحث؟"] (one question only).
+- Never invent numbers. Merge with currentFilters on client. reset_filters only for "غير المنطقة" / change area.`;
 
-const COMPOSE_SYSTEM_AR = `You are a Kuwaiti real estate agent. Given 1-3 property results, write a SHORT marketing reply in Arabic (Kuwaiti dialect).
-- Mention 1-3 best options briefly (type, area, price in د.ك).
-- Be natural, persuasive, friendly.
-- End with exactly ONE short follow-up question (e.g. "ميزانيتك كم؟" or "زاوية ولا شارع؟" or "تبي تزيد غرف؟").
-- No lists or bullet points; one short paragraph.`;
+const NO_RESULTS_AR = `حالياً ما لقيت عقار مطابق في هذه المنطقة.
+أقدر:
 
-const COMPOSE_SYSTEM_EN = `You are a Kuwaiti real estate agent. Given 1-3 property results, write a SHORT marketing reply in English.
-- Mention 1-3 best options briefly (type, area, price in KWD).
-- Be natural, persuasive, friendly.
-- End with exactly ONE short follow-up question (e.g. "What's your budget?" or "Corner or single street?").
-- One short paragraph.`;
+1. أبحث في مناطق قريبة
+2. أعرض كل العقارات المتوفرة
+3. أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.`;
+
+const NO_RESULTS_EN = `No matching property in this area right now.
+I can:
+
+1. Search nearby areas
+2. Show all available properties
+3. Register your interest and notify you when a new listing appears.`;
+
+const COMPOSE_SYSTEM_AR = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
+
+STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
+
+Format:
+1. Open with a short line that you found options (e.g. "لقيت لك 3 عقارات ممكن تناسبك في القادسية:").
+2. List each property from the results in one line with bullet (•): type, size if available, brief detail, price in د.ك (e.g. "• بيت 400م شارع واحد – السعر 680 ألف").
+3. End with exactly ONE short follow-up question. Examples: "تبي أشوف لك تفاصيل واحد منهم؟" or "ميزانيتك تقريباً كم؟" or "تفضل شارع واحد أو زاوية؟". For house: do NOT ask about bedrooms; ask budget, land size, age, or street type. For apartment: you may ask bedrooms or budget.
+Never ask more than one question. Be direct and broker-like.`;
+
+const COMPOSE_SYSTEM_EN = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
+
+STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
+
+Format:
+1. Open with a short line that you found options (e.g. "Found 3 properties that might work for you in Qadisiya:").
+2. List each property from the results in one line with bullet (•): type, size if available, brief detail, price in KWD.
+3. End with exactly ONE short follow-up question (e.g. "Want details on one of them?" or "What's your budget?" or "Corner or single street?"). For house: do not ask about bedrooms. For apartment: you may ask bedrooms or budget.
+Never ask more than one question. Be direct and broker-like.`;
 
 function extractJson(text: string): Record<string, unknown> {
   const trimmed = text.trim();
@@ -83,10 +109,11 @@ export const aqaraiAgentAnalyze = onCall(
       throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
     }
     const data = (request.data as Record<string, unknown>) || {};
-    const message = typeof data.message === "string" ? data.message.trim() : "";
+    let message = typeof data.message === "string" ? data.message.trim() : "";
     if (!message) {
       throw new HttpsError("invalid-argument", "message required");
     }
+    message = message.split(/\s+/).map((w) => normalizeAreaName(w)).join(" ");
     const last8Messages = Array.isArray(data.last8Messages) ? data.last8Messages : [];
     const currentFilters = (data.currentFilters && typeof data.currentFilters === "object") ? data.currentFilters as Record<string, unknown> : {};
     const top3LastResults = Array.isArray(data.top3LastResults) ? data.top3LastResults : [];
@@ -161,7 +188,7 @@ export const aqaraiAgentCompose = onCall(
       return { reply: locale === "ar" ? "المساعد مو متصل. جرب لاحقاً." : "Assistant unavailable. Try later." };
     }
     if (top3Results.length === 0) {
-      return { reply: locale === "ar" ? "ما لقيت عقارات تطابق البحث. جرب فلتر ثاني." : "No properties match. Try different filters." };
+      return { reply: locale === "ar" ? NO_RESULTS_AR : NO_RESULTS_EN };
     }
 
     try {

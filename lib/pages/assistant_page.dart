@@ -6,24 +6,22 @@
 // State: _currentFilters (Map), _lastResults (List<QueryDocumentSnapshot>).
 //
 // Flow in _sendMessage():
-//   1) User message -> AiBrainService.analyze(message, last8Messages, _currentFilters, top3LastResults)
-//   2) If intent == greeting -> reply friendly, stop
+//   1) AiBrainService.analyzeMessage(message: text, chatHistory: lastMessages, currentFilters: _currentFilters)
+//   2) If intent == greeting -> append friendly message, stop
 //   3) If reset_filters == true -> clear _currentFilters and _lastResults
-//   4) Merge params_patch into _currentFilters (only overwrite keys where value != null)
-//   5) If is_complete == false -> reply with clarifying_questions, stop
-//   6) If areaCode missing -> reply ask area, stop
-//   7) Run Firestore search: ConversationalSearchService.buildQueryFromMap(_currentFilters)
-//      (Maps: type->type, areaCode->areaCode, serviceType->serviceType, budget->price<=budget)
-//   8) Save results in _lastResults; keep _currentFilters
-//   9) Send top 3 results to AiBrainService.composeMarketingReply(...) -> marketing-style reply
-//  10) Append reply to _messages
+//   4) Merge params_patch into _currentFilters
+//   5) If is_complete == false -> append clarifying_questions, stop
+//   6) Run Firestore search: ConversationalSearchService (areaCode, type, serviceType, budget -> price <= budget)
+//   7) Save results to _lastResults
+//   8) Save buyer interest (UserInterestService) if user signed in and filters non-empty; ignore errors
+//   9) Send top 3 to aqaraiAgentCompose (composeMarketingReply), append reply
 //
 // Step-by-step tests:
-//   a) "السلام عليكم" -> greeting reply, stop
-//   b) "ابي بيت للبيع بالقادسية" -> search, marketing reply with 1-3 options + one question
-//   c) "ابي أرخص" -> budget -10% or ask budget; then search or clarify
+//   a) "السلام عليكم" -> intent=greeting, append friendly message, stop
+//   b) "ابي بيت للبيع بالقادسية" -> params_patch, search (areaCode, type, serviceType), top3 -> compose, append
+//   c) "ابي أرخص" -> params_patch.budget or is_complete=false + clarifying_questions
 //   d) "كم غرفة؟" -> clarifying_questions or params_patch.bedrooms
-//   e) "غير المنطقة للنزهة" -> reset_filters, areaCode=nuzha, search
+//   e) "غير المنطقة للنزهة" -> reset_filters=true, clear state, params_patch.areaCode=nuzha, search
 // =============================================================================
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -32,6 +30,8 @@ import 'package:flutter/material.dart';
 import 'package:aqarai_app/home_page.dart';
 import 'package:aqarai_app/services/ai_brain_service.dart';
 import 'package:aqarai_app/services/conversational_search_service.dart';
+import 'package:aqarai_app/services/user_interest_service.dart';
+import 'package:aqarai_app/services/notification_service.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({super.key});
@@ -46,6 +46,7 @@ class _AssistantPageState extends State<AssistantPage> {
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
   bool _isAr = true;
+  bool _fcmSetupDone = false;
 
   /// فلاتر البحث الحالية (من الـ Agent)
   Map<String, dynamic> _currentFilters = {};
@@ -76,6 +77,19 @@ class _AssistantPageState extends State<AssistantPage> {
         isUser: false,
         timestamp: DateTime.now(),
       ));
+    }
+    if (!_fcmSetupDone) {
+      _fcmSetupDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final user = FirebaseAuth.instance.currentUser;
+        final isAdmin = (await user?.getIdTokenResult(true))?.claims?['admin'] == true;
+        if (mounted) {
+          await NotificationService.setup(
+            context,
+            subscribeAdmin: isAdmin == true,
+          );
+        }
+      });
     }
   }
 
@@ -112,39 +126,45 @@ class _AssistantPageState extends State<AssistantPage> {
         _appendReply(_isAr ? 'ما قدرت أتحقق من الدخول. جرّب مرة ثانية.' : 'Could not verify sign-in. Try again.');
         return;
       }
-      final aiBrain = AiBrainService();
-      final last8 = _last8Messages();
-      final top3ForContext = _top3ShortResults();
 
-      final analyzeResult = await aiBrain.analyze(
+      final aiBrain = AiBrainService();
+      final lastMessages = _last8Messages();
+
+      final result = await aiBrain.analyzeMessage(
         message: text,
-        last8Messages: last8,
-        currentFilters: Map<String, dynamic>.from(_currentFilters),
-        top3LastResults: top3ForContext,
-        idToken: idToken,
+        chatHistory: lastMessages,
+        currentFilters: _currentFilters.isEmpty ? null : Map<String, dynamic>.from(_currentFilters),
       );
 
-      if (analyzeResult.intent == 'greeting') {
+      final intent = result['intent']?.toString() ?? 'general_question';
+      final paramsPatch = result['params_patch'] is Map ? Map<String, dynamic>.from(result['params_patch'] as Map) : <String, dynamic>{};
+      final resetFilters = result['reset_filters'] == true;
+      final isComplete = result['is_complete'] == true;
+      final clarifyingQuestions = result['clarifying_questions'] is List
+          ? (result['clarifying_questions'] as List).map((e) => e.toString()).toList()
+          : <String>[];
+
+      if (intent == 'greeting') {
         _appendReply(_isAr ? 'هلا وغلا! كيف أقدر أساعدك؟ اكتب المنطقة ونوع العقار (مثل: ابي بيت للبيع في القادسية).' : 'Hi! How can I help? Type area and property type (e.g. house for sale in Qadisiya).');
         return;
       }
 
-      if (analyzeResult.resetFilters) {
+      if (resetFilters) {
         setState(() {
           _currentFilters = {};
           _lastResults = [];
         });
       }
 
-      for (final e in analyzeResult.paramsPatch.entries) {
+      for (final e in paramsPatch.entries) {
         if (e.value != null) {
           _currentFilters[e.key] = e.value;
         }
       }
 
-      if (!analyzeResult.isComplete) {
-        final msg = analyzeResult.clarifyingQuestions.isNotEmpty
-            ? analyzeResult.clarifyingQuestions.join('\n')
+      if (!isComplete) {
+        final msg = clarifyingQuestions.isNotEmpty
+            ? clarifyingQuestions.join('\n')
             : (_isAr ? 'في أي منطقة تبحث؟' : 'Which area are you looking in?');
         _appendReply(msg);
         return;
@@ -164,21 +184,25 @@ class _AssistantPageState extends State<AssistantPage> {
         _lastResults = List.from(docs);
       });
 
-      final top3List = _lastResults.take(3).map((doc) {
-        final d = doc.data();
-        return <String, dynamic>{
-          'id': doc.id,
-          'areaAr': d['areaAr'],
-          'areaEn': d['areaEn'],
-          'type': d['type'],
-          'price': d['price'],
-          'size': d['size'],
-        };
-      }).toList();
+      try {
+        final interestUser = FirebaseAuth.instance.currentUser;
+        if (interestUser != null && _currentFilters.isNotEmpty) {
+          await UserInterestService().saveInterest(
+            userId: interestUser.uid,
+            filters: _currentFilters,
+          );
+        }
+      } catch (_) {
+        // ignore interest tracking errors; do not block chat response
+      }
+
+      final top3List = _top3ShortResults();
 
       String reply;
       if (top3List.isEmpty) {
-        reply = _isAr ? 'ما لقيت عقارات تطابق الفلاتر. جرب منطقة أو ميزانية ثانية.' : 'No properties match. Try different area or budget.';
+        reply = _isAr
+            ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
+            : 'No matching property in this area right now.\n\nI can:\n1) Search nearby areas\n2) Show all available properties\n3) Register your interest and notify you when a new listing appears.';
       } else {
         reply = await aiBrain.composeMarketingReply(top3Results: top3List, idToken: idToken, isAr: _isAr);
       }

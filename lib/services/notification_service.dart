@@ -2,6 +2,8 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -92,17 +94,42 @@ class NotificationService {
         // أندرويد (وغيره)
         token = await _fcm.getToken();
       }
-      if (token != null) debugPrint('🎯 FCM token: $token');
+      if (token != null) {
+        debugPrint('🎯 FCM token: $token');
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null && token.isNotEmpty) {
+          try {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .set({'fcmToken': token}, SetOptions(merge: true));
+          } catch (e) {
+            debugPrint('❌ [Push] save fcmToken to Firestore failed: $e');
+          }
+        }
+      }
     } catch (e) {
       // منع الكراش: بعض البيئات ترجع "cannot parse response" أو "network lost"
       debugPrint('❌ [Push] getToken failed: $e');
     }
 
-    // 5) الهاندلرز
+    // 5) عند تجديد التوكن — احفظه في Firestore
+    _fcm.onTokenRefresh.listen((newToken) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null && newToken.isNotEmpty) {
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({'fcmToken': newToken}, SetOptions(merge: true))
+            .catchError((e) => debugPrint('❌ [Push] onTokenRefresh save failed: $e'));
+      }
+    });
+
+    // 6) الهاندلرز
     FirebaseMessaging.onMessage.listen((m) => _handle(context, m));
     FirebaseMessaging.onMessageOpenedApp.listen((m) => _handle(context, m));
 
-    // 6) إذا تم فتح التطبيق من إشعار وهو مغلق مسبقًا
+    // 7) إذا تم فتح التطبيق من إشعار وهو مغلق مسبقًا
     final initialMsg = await _fcm.getInitialMessage();
     if (initialMsg != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

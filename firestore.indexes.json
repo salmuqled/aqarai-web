@@ -37,6 +37,15 @@
       ]
     },
     {
+      "collectionGroup": "buyer_interests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "wanted_requests",
       "queryScope": "COLLECTION",
       "fields": [

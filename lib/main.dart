@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:aqarai_app/firebase_options.dart';
 import 'package:aqarai_app/auth/login_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
+import 'package:aqarai_app/services/notification_service.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -15,6 +17,9 @@ import 'package:aqarai_app/app/locale_notifier.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  FirebaseMessaging.onBackgroundMessage(
+    NotificationService.firebaseMessagingBackgroundHandler,
+  );
   runApp(const MyApp());
 }
 

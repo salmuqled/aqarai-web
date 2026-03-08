@@ -17,6 +17,7 @@ import 'package:aqarai_app/data/governorates_data_en.dart';
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 
 import 'package:aqarai_app/pages/my_ads_page.dart';
+import 'package:aqarai_app/services/seller_radar_service.dart';
 
 class AddPropertyPage extends StatefulWidget {
   const AddPropertyPage({super.key});
@@ -32,6 +33,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   String? selectedArea;
   String? selectedPropertyType;
   String selectedServiceType = 'sale';
+
+  int? _interestedBuyersCount;
 
   File? pickedImage;
   bool _loading = false;
@@ -68,6 +71,13 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     v = v.replaceAll(RegExp(r'_+'), '_');
     v = v.replaceAll(RegExp(r'^_+|_+$'), '');
     return v;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _updateInterestedBuyersCount());
   }
 
   @override
@@ -141,6 +151,26 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _updateInterestedBuyersCount() async {
+    if (selectedArea == null || selectedPropertyType == null) {
+      if (mounted) setState(() => _interestedBuyersCount = null);
+      return;
+    }
+    final areaAr = selectedArea!;
+    final areaEn = areaArToEn[areaAr] ?? '';
+    final areaCode = _code(areaEn.isNotEmpty ? areaEn : areaAr);
+    try {
+      final count = await SellerRadarService().getInterestedBuyersCount(
+        areaCode: areaCode,
+        type: selectedPropertyType!,
+        serviceType: selectedServiceType,
+      );
+      if (mounted) setState(() => _interestedBuyersCount = count);
+    } catch (_) {
+      if (mounted) setState(() => _interestedBuyersCount = null);
+    }
   }
 
   bool _validate(AppLocalizations loc) {
@@ -361,6 +391,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                               selectedArea = item["area"];
                             });
                             Navigator.pop(context);
+                            WidgetsBinding.instance.addPostFrameCallback(
+                                (_) => _updateInterestedBuyersCount());
                           },
                         );
                       },
@@ -413,8 +445,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                       ),
                       value: 'sale',
                       groupValue: selectedServiceType,
-                      onChanged: (v) =>
-                          setState(() => selectedServiceType = v!),
+                      onChanged: (v) {
+                        setState(() => selectedServiceType = v!);
+                        WidgetsBinding.instance.addPostFrameCallback(
+                            (_) => _updateInterestedBuyersCount());
+                      },
                     ),
                   ),
                   Expanded(
@@ -425,8 +460,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                       ),
                       value: 'rent',
                       groupValue: selectedServiceType,
-                      onChanged: (v) =>
-                          setState(() => selectedServiceType = v!),
+                      onChanged: (v) {
+                        setState(() => selectedServiceType = v!);
+                        WidgetsBinding.instance.addPostFrameCallback(
+                            (_) => _updateInterestedBuyersCount());
+                      },
                     ),
                   ),
                   Expanded(
@@ -437,8 +475,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                       ),
                       value: 'exchange',
                       groupValue: selectedServiceType,
-                      onChanged: (v) =>
-                          setState(() => selectedServiceType = v!),
+                      onChanged: (v) {
+                        setState(() => selectedServiceType = v!);
+                        WidgetsBinding.instance.addPostFrameCallback(
+                            (_) => _updateInterestedBuyersCount());
+                      },
                     ),
                   ),
                 ],
@@ -483,7 +524,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                     child: Text(loc.propertyType_chalet),
                   ),
                 ],
-                onChanged: (v) => setState(() => selectedPropertyType = v),
+                onChanged: (v) {
+                  setState(() => selectedPropertyType = v);
+                  WidgetsBinding.instance.addPostFrameCallback(
+                      (_) => _updateInterestedBuyersCount());
+                },
               ),
 
               const SizedBox(height: 12),
@@ -659,6 +704,21 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
               ),
 
               const SizedBox(height: 22),
+
+              if (_interestedBuyersCount != null &&
+                  _interestedBuyersCount! > 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    '🔥 يوجد $_interestedBuyersCount مشتري يبحثون عن عقار مشابه الآن',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.orange.shade800,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
 
               SizedBox(
                 width: double.infinity,
