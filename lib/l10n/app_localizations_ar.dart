@@ -292,6 +292,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get myAds => 'إعلاناتي';
 
   @override
+  String get favorites => 'المفضلة';
+
+  @override
+  String get favoritesEmpty => 'لا توجد عقارات محفوظة.';
+
+  @override
   String get all => 'الكل';
 
   @override

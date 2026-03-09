@@ -284,6 +284,8 @@
   },
 
   "myAds": "My Ads",
+  "favorites": "Favorites",
+  "favoritesEmpty": "No saved properties.",
   "all": "All",
   "active": "Active",
   "expiredAds": "Expired",

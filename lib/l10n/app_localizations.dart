@@ -649,6 +649,10 @@ abstract class AppLocalizations {
   /// **'My Ads'**
   String get myAds;
 
+  String get favorites;
+
+  String get favoritesEmpty;
+
   /// No description provided for @all.
   ///
   /// In en, this message translates to:

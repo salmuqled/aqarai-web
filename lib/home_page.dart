@@ -14,6 +14,7 @@ import 'package:aqarai_app/pages/my_ads_page.dart';
 import 'package:aqarai_app/pages/valuation_page.dart';
 import 'package:aqarai_app/pages/wanted_page.dart';
 import 'package:aqarai_app/pages/admin_requests_page.dart';
+import 'package:aqarai_app/pages/favorites_page.dart';
 
 import 'package:aqarai_app/app/locale_notifier.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
@@ -272,6 +273,20 @@ class _HomePageState extends State<HomePage> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => const WantedPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          Expanded(
+                            child: _BottomItem(
+                              icon: Icons.favorite,
+                              label: loc.favorites,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const FavoritesPage(),
                                   ),
                                 );
                               },

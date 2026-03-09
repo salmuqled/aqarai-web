@@ -292,6 +292,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get myAds => 'My Ads';
 
   @override
+  String get favorites => 'Favorites';
+
+  @override
+  String get favoritesEmpty => 'No saved properties.';
+
+  @override
   String get all => 'All';
 
   @override

@@ -123,6 +123,10 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /users/{userId}/favorites/{favoriteId} {
+      allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
     /* ============================================================
         Interested Leads (تفاصيل المهتم — ضغط "أنا مهتم")
     ============================================================ */

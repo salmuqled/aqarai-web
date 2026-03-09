@@ -284,6 +284,8 @@
   },
 
   "myAds": "إعلاناتي",
+  "favorites": "المفضلة",
+  "favoritesEmpty": "لا توجد عقارات محفوظة.",
   "all": "الكل",
   "active": "فعّالة",
   "expiredAds": "منتهية",

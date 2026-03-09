@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
@@ -84,6 +85,10 @@ class PropertyDetailsPage extends StatelessWidget {
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
+        actions: [
+          if (FirebaseAuth.instance.currentUser != null && !isAdminView)
+            _FavoriteHeart(propertyId: propertyId),
+        ],
       ),
 
       body: FutureBuilder<DocumentSnapshot>(
@@ -588,6 +593,60 @@ class PropertyDetailsPage extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Text("$label: $value", style: const TextStyle(fontSize: 16)),
+    );
+  }
+}
+
+/// Heart icon that toggles favorite state for the current user.
+class _FavoriteHeart extends StatelessWidget {
+  final String propertyId;
+
+  const _FavoriteHeart({required this.propertyId});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox.shrink();
+
+    final ref = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites')
+        .doc(propertyId);
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: ref.snapshots(),
+      builder: (context, snapshot) {
+        final isFavorite = snapshot.data?.exists ?? false;
+        return IconButton(
+          icon: Icon(
+            isFavorite ? Icons.favorite : Icons.favorite_border,
+            color: isFavorite ? Colors.red : null,
+          ),
+          onPressed: () async {
+            try {
+              if (isFavorite) {
+                await ref.delete();
+              } else {
+                await ref.set({
+                  'propertyId': propertyId,
+                  'savedAt': FieldValue.serverTimestamp(),
+                });
+              }
+            } catch (_) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      AppLocalizations.of(context)!.noWantedItems,
+                    ),
+                  ),
+                );
+              }
+            }
+          },
+        );
+      },
     );
   }
 }
