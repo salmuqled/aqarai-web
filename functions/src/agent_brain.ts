@@ -71,6 +71,11 @@ I can:
 2. Show all available properties
 3. Register your interest and notify you when a new listing appears.`;
 
+const SINGLE_RESULT_ASKED_MORE_AR =
+  "حالياً هذا العقار الوحيد المطابق لطلبك في هذه المنطقة.\nإذا حاب أبحث لك في مناطق قريبة ممكن تناسبك.";
+const SINGLE_RESULT_ASKED_MORE_EN =
+  "This is currently the only property matching your request in this area.\nI can also check nearby areas if you'd like.";
+
 const COMPOSE_SYSTEM_AR = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
 
 STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
@@ -182,6 +187,7 @@ export const aqaraiAgentCompose = onCall(
     const data = (request.data as Record<string, unknown>) || {};
     const top3Results = Array.isArray(data.top3Results) ? data.top3Results : [];
     const locale = data.locale === "ar" ? "ar" : "en";
+    const userAskedForMore = data.userAskedForMore === true;
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -189,6 +195,11 @@ export const aqaraiAgentCompose = onCall(
     }
     if (top3Results.length === 0) {
       return { reply: locale === "ar" ? NO_RESULTS_AR : NO_RESULTS_EN };
+    }
+    if (top3Results.length === 1 && userAskedForMore) {
+      return {
+        reply: locale === "ar" ? SINGLE_RESULT_ASKED_MORE_AR : SINGLE_RESULT_ASKED_MORE_EN,
+      };
     }
 
     try {

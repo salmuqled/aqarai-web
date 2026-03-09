@@ -129,16 +129,20 @@ class AiBrainService {
     return AgentAnalyzeResult.fromJson(result);
   }
 
-  /// Generate marketing-style reply from top 3 results (Kuwaiti tone, one next question)
+  /// Generate marketing-style reply from top 3 results (Kuwaiti tone, one next question).
+  /// When [userAskedForMore] is true and there is only one result, backend returns
+  /// a message offering to search nearby areas instead of repeating the property.
   Future<String> composeMarketingReply({
     required List<Map<String, dynamic>> top3Results,
     required String idToken,
     bool isAr = true,
+    bool userAskedForMore = false,
   }) async {
     final body = jsonEncode({
       'data': {
         'top3Results': top3Results,
         'locale': isAr ? 'ar' : 'en',
+        'userAskedForMore': userAskedForMore,
       },
     });
     final response = await http

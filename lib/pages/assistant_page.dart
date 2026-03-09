@@ -197,6 +197,7 @@ class _AssistantPageState extends State<AssistantPage> {
       }
 
       final top3List = _top3ShortResults();
+      final userAskedForMore = _userAskedForMoreOptions(text);
 
       String reply;
       if (top3List.isEmpty) {
@@ -204,7 +205,12 @@ class _AssistantPageState extends State<AssistantPage> {
             ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
             : 'No matching property in this area right now.\n\nI can:\n1) Search nearby areas\n2) Show all available properties\n3) Register your interest and notify you when a new listing appears.';
       } else {
-        reply = await aiBrain.composeMarketingReply(top3Results: top3List, idToken: idToken, isAr: _isAr);
+        reply = await aiBrain.composeMarketingReply(
+          top3Results: top3List,
+          idToken: idToken,
+          isAr: _isAr,
+          userAskedForMore: userAskedForMore,
+        );
       }
       _appendReply(reply);
     } catch (e) {
@@ -246,6 +252,16 @@ class _AssistantPageState extends State<AssistantPage> {
         'size': d['size'],
       };
     }).toList();
+  }
+
+  /// True if the user message suggests they want more/different options (e.g. "عندك أكثر؟", "غيره؟").
+  bool _userAskedForMoreOptions(String message) {
+    final lower = message.trim().toLowerCase();
+    const arPatterns = ['أكثر', 'اغير', 'غيره', 'ثاني', 'ثانية', 'غير', 'خيارات', 'بديل', 'بدائل'];
+    const enPatterns = ['more', 'another', 'other', 'different', 'alternatives', 'options', 'else'];
+    final hasAr = arPatterns.any((p) => lower.contains(p));
+    final hasEn = enPatterns.any((p) => lower.contains(p));
+    return hasAr || hasEn;
   }
 
   void _closeToTraditionalSearch() {

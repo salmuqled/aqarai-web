@@ -85,7 +85,7 @@ class FavoritesPage extends StatelessWidget {
   }
 }
 
-class _FavoritePropertyTile extends StatelessWidget {
+class _FavoritePropertyTile extends StatefulWidget {
   final String propertyId;
   final AppLocalizations loc;
   final bool isAr;
@@ -96,24 +96,31 @@ class _FavoritePropertyTile extends StatelessWidget {
     required this.isAr,
   });
 
+  @override
+  State<_FavoritePropertyTile> createState() => _FavoritePropertyTileState();
+}
+
+class _FavoritePropertyTileState extends State<_FavoritePropertyTile> {
+  bool _cleanupTriggered = false;
+
   String _typeLabel(String typeEn) {
     switch (typeEn.toLowerCase()) {
       case 'apartment':
-        return loc.propertyType_apartment;
+        return widget.loc.propertyType_apartment;
       case 'house':
-        return loc.propertyType_house;
+        return widget.loc.propertyType_house;
       case 'building':
-        return loc.propertyType_building;
+        return widget.loc.propertyType_building;
       case 'land':
-        return loc.propertyType_land;
+        return widget.loc.propertyType_land;
       case 'industrialland':
-        return loc.propertyType_industrialLand;
+        return widget.loc.propertyType_industrialLand;
       case 'shop':
-        return loc.propertyType_shop;
+        return widget.loc.propertyType_shop;
       case 'office':
-        return loc.propertyType_office;
+        return widget.loc.propertyType_office;
       case 'chalet':
-        return loc.propertyType_chalet;
+        return widget.loc.propertyType_chalet;
       default:
         return typeEn;
     }
@@ -124,7 +131,7 @@ class _FavoritePropertyTile extends StatelessWidget {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance
           .collection('properties')
-          .doc(propertyId)
+          .doc(widget.propertyId)
           .get(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
@@ -141,12 +148,26 @@ class _FavoritePropertyTile extends StatelessWidget {
           );
         }
         if (!snap.hasData || !snap.data!.exists) {
+          if (!_cleanupTriggered) {
+            _cleanupTriggered = true;
+            final user = FirebaseAuth.instance.currentUser;
+            if (user != null) {
+              Future.microtask(() {
+                FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .collection('favorites')
+                    .doc(widget.propertyId)
+                    .delete();
+              });
+            }
+          }
           return const SizedBox.shrink();
         }
         final data = snap.data!.data() as Map<String, dynamic>;
         final type = data['type'] ?? '';
         final price = (data['price'] ?? 0) as num;
-        final area = isAr
+        final area = widget.isAr
             ? (data['areaAr'] ?? data['area'] ?? '')
             : (data['areaEn'] ?? data['area'] ?? '');
         final List<dynamic>? images = data['images'];
@@ -165,7 +186,8 @@ class _FavoritePropertyTile extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => PropertyDetailsPage(propertyId: propertyId),
+                  builder: (_) =>
+                      PropertyDetailsPage(propertyId: widget.propertyId),
                 ),
               );
             },
