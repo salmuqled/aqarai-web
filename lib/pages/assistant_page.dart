@@ -54,6 +54,20 @@ class _AssistantPageState extends State<AssistantPage> {
   /// نتائج آخر استعلام — للرد على المتابعة ولتأليف الرد التسويقي
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _lastResults = [];
 
+  /// مناطق قريبة للـ fallback عند عدم وجود نتائج في المنطقة المطلوبة (areaCode → قائمة areaCode)
+  static const Map<String, List<String>> _nearbyAreaCodes = {
+    'qadisiya': ['rawda', 'kaifan', 'khaldiya'],
+    'nuzha': ['faiha', 'daeya', 'shamiya'],
+    'shamiya': ['kaifan', 'daeya', 'rawda'],
+  };
+
+  /// تسمية المنطقة للرسالة (areaCode → عرض عربي)
+  static const Map<String, String> _areaCodeToLabel = {
+    'qadisiya': 'القادسية',
+    'nuzha': 'النزهة',
+    'shamiya': 'الشامية',
+  };
+
   static const String _welcomeAr =
       'هلا وغلا! أنا مساعدك في عقار أي. تقدر تسألني عن أي عقار، أسعار الإيجار بالشاليهات، أو أسعار العقار في أي منطقة مثل القادسية. ولا تتردد، أي سؤال؟';
   static const String _welcomeEn =
@@ -196,8 +210,38 @@ class _AssistantPageState extends State<AssistantPage> {
         // ignore interest tracking errors; do not block chat response
       }
 
-      final top3List = _top3ShortResults();
+      List<Map<String, dynamic>> top3List = _top3ShortResults();
       final userAskedForMore = _userAskedForMoreOptions(text);
+      bool isNearbyFallback = false;
+      String requestedAreaLabel = '';
+
+      if (top3List.isEmpty) {
+        final areaCode = _currentFilters['areaCode']?.toString().trim();
+        final nearbyCodes = areaCode != null ? _nearbyAreaCodes[areaCode] : null;
+        if (nearbyCodes != null && nearbyCodes.isNotEmpty) {
+          final nearbyQuery = searchService.buildQueryNearbyFromMap(_currentFilters, nearbyCodes);
+          final nearbySnapshot = await nearbyQuery.get();
+          final nearbyDocs = nearbySnapshot.docs;
+          if (nearbyDocs.isNotEmpty && mounted) {
+            setState(() {
+              _lastResults = List.from(nearbyDocs);
+            });
+            top3List = _lastResults.take(3).map((doc) {
+              final d = doc.data();
+              return <String, dynamic>{
+                'id': doc.id,
+                'areaAr': d['areaAr'],
+                'areaEn': d['areaEn'],
+                'type': d['type'],
+                'price': d['price'],
+                'size': d['size'],
+              };
+            }).toList();
+            isNearbyFallback = true;
+            requestedAreaLabel = _areaCodeToLabel[areaCode] ?? areaCode ?? '';
+          }
+        }
+      }
 
       String reply;
       if (top3List.isEmpty) {
@@ -210,6 +254,8 @@ class _AssistantPageState extends State<AssistantPage> {
           idToken: idToken,
           isAr: _isAr,
           userAskedForMore: userAskedForMore,
+          isNearbyFallback: isNearbyFallback,
+          requestedAreaLabel: requestedAreaLabel,
         );
       }
       _appendReply(reply);

@@ -137,12 +137,16 @@ class AiBrainService {
     required String idToken,
     bool isAr = true,
     bool userAskedForMore = false,
+    bool isNearbyFallback = false,
+    String requestedAreaLabel = '',
   }) async {
     final body = jsonEncode({
       'data': {
         'top3Results': top3Results,
         'locale': isAr ? 'ar' : 'en',
         'userAskedForMore': userAskedForMore,
+        'isNearbyFallback': isNearbyFallback,
+        'requestedAreaLabel': requestedAreaLabel,
       },
     });
     final response = await http

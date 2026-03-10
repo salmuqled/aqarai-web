@@ -76,6 +76,44 @@ const SINGLE_RESULT_ASKED_MORE_AR =
 const SINGLE_RESULT_ASKED_MORE_EN =
   "This is currently the only property matching your request in this area.\nI can also check nearby areas if you'd like.";
 
+const TYPE_LABEL_AR: Record<string, string> = {
+  house: "بيت",
+  apartment: "شقة",
+  villa: "فيلا",
+  chalet: "شاليه",
+  land: "أرض",
+  office: "مكتب",
+  shop: "محل",
+  building: "عمارة",
+  industrialLand: "أرض صناعية",
+};
+
+function formatNearbyReplyAr(results: unknown[], requestedAreaLabel: string): string {
+  const areaLabel = requestedAreaLabel || "هذه المنطقة";
+  let intro = `حالياً ما لقيت عقار مطابق في ${areaLabel}،\nلكن لقيت عقارات قريبة ممكن تناسبك:\n\n`;
+  const lines = (results as Record<string, unknown>[]).map((r) => {
+    const type = (r.type as string) || "";
+    const typeLabel = TYPE_LABEL_AR[type] || type;
+    const area = (r.areaAr as string) || (r.areaEn as string) || "";
+    const price = typeof r.price === "number" ? r.price : Number(r.price) || 0;
+    const priceStr = price >= 1000 ? `${Math.round(price / 1000)} ألف` : String(price);
+    return `• ${typeLabel} في ${area} – السعر ${priceStr}`;
+  });
+  return intro + lines.join("\n");
+}
+
+function formatNearbyReplyEn(results: unknown[], requestedAreaLabel: string): string {
+  const areaLabel = requestedAreaLabel || "this area";
+  let intro = `No matching property in ${areaLabel} right now.\nFound nearby options that might work:\n\n`;
+  const lines = (results as Record<string, unknown>[]).map((r) => {
+    const type = (r.type as string) || "";
+    const area = (r.areaEn as string) || (r.areaAr as string) || "";
+    const price = typeof r.price === "number" ? r.price : Number(r.price) || 0;
+    return `• ${type} in ${area} – KWD ${price}`;
+  });
+  return intro + lines.join("\n");
+}
+
 const COMPOSE_SYSTEM_AR = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
 
 STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
@@ -188,6 +226,8 @@ export const aqaraiAgentCompose = onCall(
     const top3Results = Array.isArray(data.top3Results) ? data.top3Results : [];
     const locale = data.locale === "ar" ? "ar" : "en";
     const userAskedForMore = data.userAskedForMore === true;
+    const isNearbyFallback = data.isNearbyFallback === true;
+    const requestedAreaLabel = typeof data.requestedAreaLabel === "string" ? data.requestedAreaLabel : "";
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -195,6 +235,12 @@ export const aqaraiAgentCompose = onCall(
     }
     if (top3Results.length === 0) {
       return { reply: locale === "ar" ? NO_RESULTS_AR : NO_RESULTS_EN };
+    }
+    if (isNearbyFallback && top3Results.length > 0) {
+      const reply = locale === "ar"
+        ? formatNearbyReplyAr(top3Results, requestedAreaLabel)
+        : formatNearbyReplyEn(top3Results, requestedAreaLabel);
+      return { reply };
     }
     if (top3Results.length === 1 && userAskedForMore) {
       return {

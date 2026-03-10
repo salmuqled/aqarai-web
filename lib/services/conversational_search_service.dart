@@ -254,4 +254,49 @@ class ConversationalSearchService {
       bedrooms: bedrooms != null && bedrooms > 0 ? bedrooms : null,
     ));
   }
+
+  /// استعلام في مناطق قريبة فقط (للـ fallback عند عدم وجود نتائج في المنطقة المطلوبة).
+  /// [nearbyAreaCodes] قائمة areaCode للمناطق القريبة (مثلاً ['rawda', 'kaifan', 'khaldiya']).
+  /// يرجع استعلام بحد أقصى 3 نتائج، الأحدث أولاً.
+  Query<Map<String, dynamic>> buildQueryNearbyFromMap(
+    Map<String, dynamic> filters,
+    List<String> nearbyAreaCodes,
+  ) {
+    if (nearbyAreaCodes.isEmpty) {
+      return buildQueryFromMap(filters).limit(0);
+    }
+    final type = filters['type']?.toString().trim();
+    final serviceType = filters['serviceType']?.toString().trim();
+    final budget = filters['budget'] is num
+        ? (filters['budget'] as num).toDouble()
+        : (filters['budget'] != null ? double.tryParse(filters['budget'].toString()) : null);
+    final bedrooms = filters['bedrooms'] is int
+        ? filters['bedrooms'] as int
+        : (filters['bedrooms'] != null ? int.tryParse(filters['bedrooms'].toString()) : null);
+    final governorateCode = filters['governorateCode']?.toString().trim();
+
+    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
+        .collection('properties')
+        .where('approved', isEqualTo: true)
+        .where('status', isEqualTo: 'active')
+        .where('areaCode', whereIn: nearbyAreaCodes.length > 10 ? nearbyAreaCodes.sublist(0, 10) : nearbyAreaCodes);
+
+    if (governorateCode != null && governorateCode.isNotEmpty && governorateCode != 'chalet') {
+      q = q.where('governorateCode', isEqualTo: governorateCode);
+    }
+    if (type != null && type.isNotEmpty) {
+      q = q.where('type', isEqualTo: type);
+    }
+    if (serviceType != null && serviceType.isNotEmpty) {
+      q = q.where('serviceType', isEqualTo: serviceType);
+    }
+    if (budget != null && budget > 0) {
+      q = q.where('price', isLessThanOrEqualTo: budget);
+    }
+    if (bedrooms != null && bedrooms > 0) {
+      q = q.where('roomCount', isEqualTo: bedrooms);
+    }
+
+    return q.orderBy('createdAt', descending: true).limit(3);
+  }
 }
