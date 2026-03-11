@@ -132,6 +132,166 @@ const FLOORS_PHRASES: { phrases: string[]; value: number }[] = [
   { phrases: ["دورين"], value: 2 },
 ];
 
+// ---------------------------------------------------------------------------
+// Kuwait areas: Arabic name -> areaCode (matches lib/data/ar_to_en_mapping.dart + _code(en))
+// ---------------------------------------------------------------------------
+
+const KUWAIT_AREAS: Record<string, string> = {
+  // Capital Governorate (longer names first for substring matching)
+  "ضاحية حصه المبارك": "hessa_al_mubarak_district",
+  "شمال غرب الصليبخات": "north_west_sulaibikhat",
+  "الشويخ السكنية": "shuwaikh_residential",
+  "الشويخ الصناعية": "shuwaikh_industrial",
+  "القبلة - جبلة": "al_qibla_jibla",
+  "عبدالله السالم": "abdullah_al_salem",
+  "جابر الاحمد": "jaber_al_ahmad",
+  "بنيد القار": "bneid_al_qar",
+  "الصالحية": "al_sawlihya",
+  "المباركية": "mubarakiya",
+  "الدسمة": "dasma",
+  "الدعية": "daeya",
+  "الفيحاء": "faiha",
+  "النزهة": "nuzha",
+  "الروضة": "rawda",
+  "العديلية": "adailiya",
+  "الخالدية": "khaldiya",
+  "كيفان": "kaifan",
+  "الشامية": "shamiya",
+  "اليرموك": "yarmouk",
+  "المنصورية": "mansouriya",
+  "القادسية": "qadisiya",
+  "القيروان": "qairawan",
+  "قرطبة": "qurtuba",
+  "السرة": "surra",
+  "الدوحة": "doha",
+  "دسمان": "dasman",
+  "غرناطة": "granada",
+  "الصليبيخات": "sulaibikhat",
+  "النهضة": "nahdha",
+  "المرقاب": "al_murqab",
+  "الشرق": "sharq",
+  // Hawalli Governorate
+  "غرب مشرف - مبارك العبدالله": "west_mishref_mubarak_al_abdullah",
+  "جنوب السرة": "south_surra",
+  "ميدان حولي": "maidan_hawalli",
+  "الشعب السكني": "shaab_residential",
+  "الشعب البحري": "shaab_marine",
+  "حولي": "hawalli",
+  "السالمية": "salmiya",
+  "البدع": "bidaa",
+  "الجابرية": "jabriya",
+  "الرميثية": "rumaithiya",
+  "مشرف": "mishref",
+  "بيان": "bayan",
+  "سلوى": "salwa",
+  "الزهراء": "zahra",
+  "السلام": "al_salam",
+  "حطين": "hateen",
+  "الشهداء": "shuhada",
+  "الصديق": "al_siddiq",
+  // Farwaniya Governorate
+  "العارضية الحرفية - الصناعية": "ardiya_industrial",
+  "خيطان الجنوبي الجديدة": "south_new_khaitan",
+  "عبدالله المبارك - غرب الجليب": "abdullah_al_mubarak",
+  "جليب الشيوخ - الحساوي": "jleeb_al_shuyoukh_hassawi",
+  "جنوب عبدالله المبارك": "south_abdullah_al_mubarak",
+  "غرب عبدالله المبارك": "west_abdullah_al_mubarak",
+  "اسطبلات الفروانية": "farwaniya_stables",
+  "الفروانية": "farwaniya",
+  "خيطان": "khaitan",
+  "الرقعي": "riggae",
+  "الضجيج": "dajeej",
+  "الري": "rai",
+  "الأندلس": "andalous",
+  "العارضية": "ardiya",
+  "العمرية": "omariya",
+  "الرابية": "rabya",
+  "الرحاب": "rehab",
+  "صباح الناصر": "sabah_al_nasser",
+  "اشبيلية": "ishbiliya",
+  "الفردوس": "firdous",
+  // Ahmadi Governorate
+  "صباح الاحمد البحرية - الخيران": "sabah_al_ahmad_marine_khiran",
+  "علي صباح السالم - ام الهيمان": "ali_sabah_al_salem_umm_al_hayman",
+  "صباح الأحمد السكنية": "sabah_al_ahmad_residential",
+  "الخيران السكنية - الجانب البري": "khiran_residential_inland",
+  "جنوب صباح الأحمد": "south_sabah_al_ahmad",
+  "اسطبلات الاحمدي": "ahmadi_stables",
+  "الوفرة السكنية": "wafra_housing",
+  "مزارع الوفرة": "wafra_farms",
+  "فهد الاحمد": "fahad_al_ahmad",
+  "الشعيبة الصناعية": "shuaiba_industrial",
+  "ميناء عبدالله": "mina_abdullah",
+  "جابر العلي": "jaber_al_ali",
+  "الاحمدي": "ahmadi",
+  "المنقف": "mangaf",
+  "الفحيحيل": "fahaheel",
+  "أبو حليفة": "abu_halifa",
+  "الظهر": "daher",
+  "الرقة": "reqqa",
+  "هدية": "hadiya",
+  "الصباحية": "sabahiya",
+  "الفنطاس": "fintas",
+  "المهبولة": "mahboula",
+  "العقيلة": "eqaila",
+  "الضباعية": "dhubaiya",
+  "الجليعة": "julaia",
+  "الزور": "zour",
+  "بنيدر": "bneider",
+  "النويصيب": "nuwaiseeb",
+  // Jahra Governorate
+  "جنوب سعد العبدالله": "south_saad_al_abdullah",
+  "النسيم الجنوبي": "south_naseem",
+  "امغرة الصناعية": "amghara_industrial",
+  "اسطبلات الجهراء": "jahra_stables",
+  "الجهراء الصناعية": "jahra_industrial",
+  "سعد العبدالله": "saad_al_abdullah",
+  "الجهراء": "jahra",
+  "النعيم": "naeem",
+  "القصر": "qasr",
+  "الواحة": "waha",
+  "تيماء": "taima",
+  "الصليبية": "sulaibiya",
+  "العيون": "oyoun",
+  "الصبية": "subiya",
+  "النسيم": "naseem",
+  "كبد": "kabad",
+  "المطلاع": "mutlaa",
+  "الخويسات": "khusais",
+  "الهجن": "hejin",
+  "العبدلي": "abdali",
+  "السالمي": "salmi",
+  "النعايم": "naaim",
+  // Mubarak Al-Kabeer
+  "اسواق القرين - غرب ابوفطيرة الحرفية": "west_abu_fatira_craft_zone_aswaq_al_qurain",
+  "مبارك الكبير": "mubarak_al_kabeer",
+  "القرين": "qurain",
+  "القصور": "qusour",
+  "العدان": "adan",
+  "المسيلة": "messila",
+  "صباح السالم": "sabah_al_salem",
+  "أبو فطيرة": "abu_fatira",
+  "أبو الحصانية": "abu_hasaniya",
+  "الفنيطيس": "funaitees",
+  "المسايل": "maseila",
+  "صبحان": "sabhan",
+};
+
+/**
+ * Extract areaCode from user message by matching Arabic area names (mirrors app area codes).
+ * Checks longer names first so "الشويخ السكنية" matches before "الشويخ".
+ */
+function extractAreaFromText(text: string): string | null {
+  if (!text || typeof text !== "string") return null;
+  const normalized = normalizeArabic(text);
+  const entries = Object.entries(KUWAIT_AREAS).sort((a, b) => b[0].length - a[0].length);
+  for (const [areaAr, code] of entries) {
+    const normalizedArea = normalizeArabic(areaAr);
+    if (normalizedArea && normalized.includes(normalizedArea)) return code;
+  }
+  return null;
+}
+
 /**
  * Detect and normalize common Kuwaiti / Gulf real-estate phrases in the user message.
  * Uses normalizeArabic(text) before matching so different spellings (إيجار, ايجار) match.
@@ -676,6 +836,47 @@ const SESSION_MEMORY_KEYS = ["areaCode", "type", "serviceType", "budget", "bedro
 /** Triggers that indicate user is starting a completely new search; reset memory and use only new params */
 const NEW_SEARCH_TRIGGERS = ["أبي", "ابي", "دور لي", "أبحث عن", "ابحث عن"];
 
+// ---------------------------------------------------------------------------
+// Greeting handling (no OpenAI, no search; natural conversation)
+// ---------------------------------------------------------------------------
+
+const GREETING_WORDS = [
+  "السلام",
+  "السلام عليكم",
+  "هلا",
+  "هلا والله",
+  "مرحبا",
+  "صباح الخير",
+  "مساء الخير",
+];
+
+const GREETING_REPLIES_AR = [
+  "وعليكم السلام، حياك الله. شنو نوع العقار اللي تبحث عنه؟",
+  "وعليكم السلام، هلا فيك. تبي تبحث عن عقار في أي منطقة؟",
+  "وعليكم السلام، تفضل. تبي شراء ولا إيجار؟",
+  "هلا والله، قل لي المنطقة ونوع العقار وأنا أشوف لك الخيارات.",
+  "مرحبا، شنو نوع العقار اللي تبحث عنه؟",
+];
+
+function randomGreeting(): string {
+  return GREETING_REPLIES_AR[Math.floor(Math.random() * GREETING_REPLIES_AR.length)];
+}
+
+/** True if message contains a greeting phrase and has no real estate intent (no search, no OpenAI). */
+function isGreetingOnly(text: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  const normalized = normalizeArabic(text.trim());
+  const hasGreeting = GREETING_WORDS.some((w) => normalized.includes(normalizeArabic(w)));
+  if (!hasGreeting) return false;
+  const hasArea = extractAreaFromText(text) != null;
+  const kuwaiti = normalizeKuwaitiIntent(text);
+  const hasPropertyType = kuwaiti.propertyType != null && String(kuwaiti.propertyType).trim() !== "";
+  const hasServiceType = kuwaiti.serviceType != null && String(kuwaiti.serviceType).trim() !== "";
+  const hasBudget = /\d/.test(text);
+  const hasRealEstateIntent = hasArea || hasPropertyType || hasServiceType || hasBudget;
+  return !hasRealEstateIntent;
+}
+
 function isNewSearchTrigger(text: string): boolean {
   const t = normalizeArabic((text || "").trim());
   return NEW_SEARCH_TRIGGERS.some((trigger) => t.startsWith(normalizeArabic(trigger)) || t === normalizeArabic(trigger));
@@ -838,6 +1039,16 @@ export const aqaraiAgentAnalyze = onCall(
       throw new HttpsError("invalid-argument", "message required");
     }
     const kuwaitiIntent = normalizeKuwaitiIntent(rawMessage);
+    if (isGreetingOnly(rawMessage)) {
+      return {
+        intent: "greeting",
+        params_patch: {},
+        reset_filters: false,
+        is_complete: false,
+        clarifying_questions: [],
+        greeting_reply: randomGreeting(),
+      };
+    }
     let message = rawMessage.split(/\s+/).map((w) => normalizeAreaName(w)).join(" ");
     const last8Messages = Array.isArray(data.last8Messages) ? data.last8Messages : [];
     const currentFilters = (data.currentFilters && typeof data.currentFilters === "object") ? data.currentFilters as Record<string, unknown> : {};
@@ -893,6 +1104,19 @@ export const aqaraiAgentAnalyze = onCall(
         paramsPatch.serviceType = kuwaitiIntent.serviceType;
       }
 
+      // If OpenAI did not set areaCode, try to detect from user message (matches all app areas)
+      let isCompleteFinal = isComplete;
+      let clarifyingQuestionsFinal = clarifyingQuestions;
+      const currentArea = paramsPatch.areaCode != null && String(paramsPatch.areaCode).trim() !== "" ? String(paramsPatch.areaCode).trim() : null;
+      if (!currentArea) {
+        const detectedArea = extractAreaFromText(rawMessage);
+        if (detectedArea) {
+          paramsPatch.areaCode = detectedArea;
+          isCompleteFinal = true;
+          clarifyingQuestionsFinal = [];
+        }
+      }
+
       let finalParamsPatch: Record<string, unknown>;
       let finalResetFilters = resetFilters;
       if (isNewSearchTrigger(rawMessage)) {
@@ -911,8 +1135,8 @@ export const aqaraiAgentAnalyze = onCall(
         intent,
         params_patch: finalParamsPatch,
         reset_filters: finalResetFilters,
-        is_complete: isComplete,
-        clarifying_questions: clarifyingQuestions,
+        is_complete: isCompleteFinal,
+        clarifying_questions: clarifyingQuestionsFinal,
       };
       if (kuwaitiIntent.requestType != null) {
         out.requestType = kuwaitiIntent.requestType;

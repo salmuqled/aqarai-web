@@ -164,7 +164,11 @@ class _AssistantPageState extends State<AssistantPage> {
           : <String>[];
 
       if (intent == 'greeting') {
-        _appendReply(_isAr ? 'هلا وغلا! كيف أقدر أساعدك؟ اكتب المنطقة ونوع العقار (مثل: ابي بيت للبيع في القادسية).' : 'Hi! How can I help? Type area and property type (e.g. house for sale in Qadisiya).');
+        final greetingReply = result['greeting_reply']?.toString();
+        final reply = (greetingReply != null && greetingReply.isNotEmpty)
+            ? greetingReply
+            : (_isAr ? 'هلا وغلا! كيف أقدر أساعدك؟ اكتب المنطقة ونوع العقار (مثل: ابي بيت للبيع في القادسية).' : 'Hi! How can I help? Type area and property type (e.g. house for sale in Qadisiya).');
+        _appendReply(reply);
         return;
       }
 
