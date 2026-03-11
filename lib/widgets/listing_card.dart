@@ -22,8 +22,16 @@ class ListingCard extends StatelessWidget {
   final Map<String, dynamic> data;
   /// Optional intelligence labels from backend (e.g. new_listing, high_demand, good_deal). Max 2 displayed.
   final List<String>? labels;
+  /// When provided, card is tappable and opens details (e.g. PropertyDetailsPage).
+  final VoidCallback? onTap;
 
-  const ListingCard({super.key, required this.id, required this.data, this.labels});
+  const ListingCard({
+    super.key,
+    required this.id,
+    required this.data,
+    this.labels,
+    this.onTap,
+  });
 
   /// Resolve labels from widget or data, map to badge text, max 2.
   List<String> _effectiveLabels(bool isArabic) {
@@ -65,7 +73,7 @@ class ListingCard extends StatelessWidget {
 
     final cover = _coverFrom(data['images'], data['coverUrl']);
     final price = data['price'];
-    final area = (data['area'] ?? data['area_id'] ?? '').toString();
+    final area = (data['area'] ?? data['areaAr'] ?? data['areaEn'] ?? data['area_id'] ?? data['areaCode'] ?? '').toString();
     final type = (data['type'] ?? '').toString().toLowerCase();
 
     // ---------------------- ترجمة الأنواع ----------------------
@@ -85,10 +93,7 @@ class ListingCard extends StatelessWidget {
     final typeText = isArabic ? (propertyTypeAr[type] ?? type) : type;
 
     return GestureDetector(
-      onTap: () {
-        // TODO: زر التفاصيل
-        // Navigator.push(...)
-      },
+      onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,

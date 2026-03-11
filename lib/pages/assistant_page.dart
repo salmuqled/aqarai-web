@@ -24,6 +24,9 @@
 //   e) "غير المنطقة للنزهة" -> reset_filters=true, clear state, params_patch.areaCode=nuzha, search
 // =============================================================================
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -32,6 +35,8 @@ import 'package:aqarai_app/services/ai_brain_service.dart';
 import 'package:aqarai_app/services/conversational_search_service.dart';
 import 'package:aqarai_app/services/user_interest_service.dart';
 import 'package:aqarai_app/services/notification_service.dart';
+import 'package:aqarai_app/widgets/listing_card.dart';
+import 'package:aqarai_app/widgets/property_details_page.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({super.key});
@@ -295,6 +300,7 @@ class _AssistantPageState extends State<AssistantPage> {
       final userAskedForMore = _userAskedForMoreOptions(text);
 
       String reply;
+      List<Map<String, dynamic>>? replyResults;
       if (top3List.isEmpty) {
         final nearbyCodesForSimilar = areaCode.isNotEmpty ? _nearbyAreaCodes[areaCode] : null;
         if (areaCode.isNotEmpty &&
@@ -313,6 +319,7 @@ class _AssistantPageState extends State<AssistantPage> {
             final recs = similarResult['recommendations'] as List<dynamic>?;
             if (similarReply.isNotEmpty && recs != null && recs.isNotEmpty) {
               reply = similarReply;
+              replyResults = recs.take(3).map((e) => Map<String, dynamic>.from(e as Map)).toList();
             } else {
               reply = _isAr
                   ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
@@ -337,17 +344,46 @@ class _AssistantPageState extends State<AssistantPage> {
           isNearbyFallback: isNearbyFallback,
           requestedAreaLabel: requestedAreaLabel,
         );
+        replyResults = top3List.take(3).map((e) => Map<String, dynamic>.from(e)).toList();
       }
-      _appendReply(reply);
-    } catch (e) {
-      _appendReply(_isAr ? 'حصل خطأ بالاتصال. تأكد من النت وجرب مرة ثانية، أو اضغط X للبحث العادي.' : 'Connection error. Check your network or tap X for traditional search.');
+      _appendReply(reply, results: replyResults);
+    } catch (e, st) {
+      debugPrint('Assistant _sendMessage error: $e');
+      debugPrint('Stack trace: $st');
+      final isNetworkError = e is SocketException ||
+          e is TimeoutException ||
+          e is HandshakeException ||
+          (e is OSError && _isNetworkOsError(e.errorCode));
+      final message = isNetworkError
+          ? (_isAr
+              ? 'ما في اتصال بالنت أو السيرفر مو واصل. تأكد من النت وجرب مرة ثانية، أو اضغط X للبحث العادي.'
+              : 'No internet or server unreachable. Check your network and try again, or tap X for traditional search.')
+          : (_isAr
+              ? 'حصل خطأ بالاتصال. تأكد من النت وجرب مرة ثانية، أو اضغط X للبحث العادي.'
+              : 'Connection error. Check your network or tap X for traditional search.');
+      _appendReply(message);
     }
   }
 
-  void _appendReply(String text) {
+  /// True for common OS error codes that mean network unreachable / no route.
+  static bool _isNetworkOsError(int? code) {
+    if (code == null) return false;
+    // 50 = Network is down (macOS/iOS), 51 = Network unreachable, 61 = Connection refused, etc.
+    return const [50, 51, 61, 64, 65].contains(code);
+  }
+
+  void _appendReply(String text, {List<Map<String, dynamic>>? results}) {
     if (!mounted) return;
+    final list = results != null && results.isNotEmpty
+        ? results.take(3).map((e) => Map<String, dynamic>.from(e)).toList()
+        : null;
     setState(() {
-      _messages.add(ChatMessage(text: text, isUser: false, timestamp: DateTime.now()));
+      _messages.add(ChatMessage(
+        text: text,
+        isUser: false,
+        timestamp: DateTime.now(),
+        results: list,
+      ));
       _isLoading = false;
     });
     _scrollToBottom();
@@ -541,6 +577,10 @@ class _AssistantPageState extends State<AssistantPage> {
 
   Widget _buildMessageBubble(ChatMessage msg) {
     final isUser = msg.isUser;
+    final assistantResults = msg.results != null && msg.results!.isNotEmpty
+        ? msg.results!.take(3).toList()
+        : <Map<String, dynamic>>[];
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -555,28 +595,81 @@ class _AssistantPageState extends State<AssistantPage> {
             ),
           if (!isUser) const SizedBox(width: 10),
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: isUser
-                    ? const Color(0xFF238636).withOpacity(0.9)
-                    : Colors.white.withOpacity(0.12),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? 20 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 20),
-                ),
-              ),
-              child: Text(
-                msg.text,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  height: 1.4,
-                ),
-              ),
-            ),
+            child: isUser
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF238636).withOpacity(0.9),
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                        bottomLeft: Radius.circular(20),
+                        bottomRight: Radius.circular(4),
+                      ),
+                    ),
+                    child: Text(
+                      msg.text,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        height: 1.4,
+                      ),
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.12),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(20),
+                            topRight: Radius.circular(20),
+                            bottomLeft: Radius.circular(4),
+                            bottomRight: Radius.circular(20),
+                          ),
+                        ),
+                        child: Text(
+                          msg.text,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                      if (assistantResults.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        ...assistantResults.map((property) {
+                          final id = property['id']?.toString() ?? '';
+                          final labels = property['labels'];
+                          final labelList = labels is List
+                              ? (labels).map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList()
+                              : null;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: ListingCard(
+                              id: id,
+                              data: property,
+                              labels: labelList?.isNotEmpty == true ? labelList : null,
+                              onTap: id.isEmpty
+                                  ? null
+                                  : () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => PropertyDetailsPage(propertyId: id),
+                                        ),
+                                      );
+                                    },
+                            ),
+                          );
+                        }),
+                      ],
+                    ],
+                  ),
           ),
           if (isUser) const SizedBox(width: 10),
           if (isUser)
@@ -645,6 +738,13 @@ class ChatMessage {
   final String text;
   final bool isUser;
   final DateTime timestamp;
+  /// When non-null and non-empty, show up to 3 property cards under this (assistant) message.
+  final List<Map<String, dynamic>>? results;
 
-  ChatMessage({required this.text, required this.isUser, required this.timestamp});
+  ChatMessage({
+    required this.text,
+    required this.isUser,
+    required this.timestamp,
+    this.results,
+  });
 }

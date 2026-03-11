@@ -975,6 +975,22 @@ export const aqaraiAgentCompose = onCall(
       return { reply: appendSuggestionsToReply(reply, suggestionContext, locale) };
     }
 
+    const isAdmin = request.auth?.token?.admin === true;
+    const canUseCache = areaCode && !isAdmin;
+    if (canUseCache) {
+      const cacheKey = getCacheKey({
+        areaCode,
+        type: propertyType,
+        serviceType,
+        budget: userBudget,
+      });
+      const cached = getCachedResult(cacheKey);
+      if (cached != null) {
+        console.log("CACHE HIT compose", cacheKey);
+        return cached as { reply: string; results: Record<string, unknown>[] };
+      }
+    }
+
     let marketInsightPrefix = "";
     if (areaCode && propertyType) {
       try {
@@ -1005,11 +1021,21 @@ export const aqaraiAgentCompose = onCall(
       const replyBody = completion.choices?.[0]?.message?.content?.trim() || (locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?");
       let reply = marketInsightPrefix + replyBody;
       reply = appendSuggestionsToReply(reply, suggestionContext, locale);
-      return { reply };
+      const response = { reply, results: top3Results };
+      if (canUseCache) {
+        const cacheKey = getCacheKey({
+          areaCode,
+          type: propertyType,
+          serviceType,
+          budget: userBudget,
+        });
+        setCachedResult(cacheKey, response);
+      }
+      return response;
     } catch (err) {
       console.error("Agent compose error:", err);
       const fallback = locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?";
-      return { reply: appendSuggestionsToReply(fallback, suggestionContext, locale) };
+      return { reply: appendSuggestionsToReply(fallback, suggestionContext, locale), results: top3Results };
     }
   }
 );
