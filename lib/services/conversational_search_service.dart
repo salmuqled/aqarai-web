@@ -297,6 +297,6 @@ class ConversationalSearchService {
       q = q.where('roomCount', isEqualTo: bedrooms);
     }
 
-    return q.orderBy('createdAt', descending: true).limit(3);
+    return q.orderBy('createdAt', descending: true).limit(30);
   }
 }

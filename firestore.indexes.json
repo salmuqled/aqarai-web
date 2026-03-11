@@ -49,12 +49,39 @@
       ]
     },
     {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "buyer_interests",
       "queryScope": "COLLECTION",
       "fields": [
         {"fieldPath": "areaCode", "order": "ASCENDING"},
         {"fieldPath": "type", "order": "ASCENDING"},
         {"fieldPath": "serviceType", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "buyer_interests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "ASCENDING"}
       ]
     },
     {

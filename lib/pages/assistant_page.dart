@@ -191,7 +191,7 @@ class _AssistantPageState extends State<AssistantPage> {
 
       final searchService = ConversationalSearchService();
       final query = searchService.buildQueryFromMap(_currentFilters);
-      final snapshot = await query.limit(10).get();
+      final snapshot = await query.limit(30).get();
       final docs = snapshot.docs;
       if (!mounted) return;
       setState(() {
@@ -210,14 +210,42 @@ class _AssistantPageState extends State<AssistantPage> {
         // ignore interest tracking errors; do not block chat response
       }
 
-      List<Map<String, dynamic>> top3List = _top3ShortResults();
-      final userAskedForMore = _userAskedForMoreOptions(text);
+      final areaCode = _currentFilters['areaCode']?.toString().trim() ?? '';
+      final userBudget = _currentFilters['budget'] is num
+          ? (_currentFilters['budget'] as num).toDouble()
+          : (_currentFilters['budget'] != null ? double.tryParse(_currentFilters['budget'].toString()) : null);
+
+      List<Map<String, dynamic>> top3List;
       bool isNearbyFallback = false;
       String requestedAreaLabel = '';
 
+      if (_lastResults.isNotEmpty) {
+        final propsForRank = _buildPropsForRank(_lastResults);
+        top3List = await aiBrain.rankResults(
+          properties: propsForRank,
+          requestedAreaCode: areaCode,
+          nearbyAreaCodes: [],
+          userBudget: userBudget,
+          idToken: idToken,
+        );
+        if (top3List.isNotEmpty && mounted) {
+          final idList = top3List.map((e) => e['id'] as String?).whereType<String>().toList();
+          final docById = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{
+            for (final d in _lastResults) d.id: d
+          };
+          final orderedDocs = idList.map((id) => docById[id]).whereType<QueryDocumentSnapshot<Map<String, dynamic>>>().toList();
+          if (orderedDocs.isNotEmpty) {
+            setState(() {
+              _lastResults = orderedDocs;
+            });
+          }
+        }
+      } else {
+        top3List = [];
+      }
+
       if (top3List.isEmpty) {
-        final areaCode = _currentFilters['areaCode']?.toString().trim();
-        final nearbyCodes = areaCode != null ? _nearbyAreaCodes[areaCode] : null;
+        final nearbyCodes = areaCode.isNotEmpty ? _nearbyAreaCodes[areaCode] : null;
         if (nearbyCodes != null && nearbyCodes.isNotEmpty) {
           final nearbyQuery = searchService.buildQueryNearbyFromMap(_currentFilters, nearbyCodes);
           final nearbySnapshot = await nearbyQuery.get();
@@ -226,28 +254,80 @@ class _AssistantPageState extends State<AssistantPage> {
             setState(() {
               _lastResults = List.from(nearbyDocs);
             });
-            top3List = _lastResults.take(3).map((doc) {
-              final d = doc.data();
-              return <String, dynamic>{
-                'id': doc.id,
-                'areaAr': d['areaAr'],
-                'areaEn': d['areaEn'],
-                'type': d['type'],
-                'price': d['price'],
-                'size': d['size'],
+            final propsForRank = _buildPropsForRank(_lastResults);
+            top3List = await aiBrain.rankResults(
+              properties: propsForRank,
+              requestedAreaCode: areaCode,
+              nearbyAreaCodes: nearbyCodes,
+              userBudget: userBudget,
+              idToken: idToken,
+            );
+            if (top3List.isEmpty) {
+              top3List = _lastResults.take(3).map((doc) {
+                final d = doc.data();
+                return <String, dynamic>{
+                  'id': doc.id,
+                  'areaAr': d['areaAr'],
+                  'areaEn': d['areaEn'],
+                  'type': d['type'],
+                  'price': d['price'],
+                  'size': d['size'],
+                };
+              }).toList();
+            } else {
+              final idList = top3List.map((e) => e['id'] as String?).whereType<String>().toList();
+              final docById = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{
+                for (final d in _lastResults) d.id: d
               };
-            }).toList();
+              final orderedDocs = idList.map((id) => docById[id]).whereType<QueryDocumentSnapshot<Map<String, dynamic>>>().toList();
+              if (orderedDocs.isNotEmpty) {
+                setState(() {
+                  _lastResults = orderedDocs;
+                });
+              }
+            }
             isNearbyFallback = true;
-            requestedAreaLabel = _areaCodeToLabel[areaCode] ?? areaCode ?? '';
+            requestedAreaLabel = _areaCodeToLabel[areaCode] ?? areaCode;
           }
         }
       }
 
+      final userAskedForMore = _userAskedForMoreOptions(text);
+
       String reply;
       if (top3List.isEmpty) {
-        reply = _isAr
-            ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
-            : 'No matching property in this area right now.\n\nI can:\n1) Search nearby areas\n2) Show all available properties\n3) Register your interest and notify you when a new listing appears.';
+        final nearbyCodesForSimilar = areaCode.isNotEmpty ? _nearbyAreaCodes[areaCode] : null;
+        if (areaCode.isNotEmpty &&
+            _currentFilters['type'] != null &&
+            nearbyCodesForSimilar != null &&
+            nearbyCodesForSimilar.isNotEmpty) {
+          try {
+            final similarResult = await aiBrain.findSimilarRecommendations(
+              requestedAreaCode: areaCode,
+              propertyType: _currentFilters['type']!.toString().trim(),
+              idToken: idToken,
+              nearbyAreaCodes: nearbyCodesForSimilar,
+              userBudget: userBudget,
+            );
+            final similarReply = similarResult['reply']?.toString() ?? '';
+            final recs = similarResult['recommendations'] as List<dynamic>?;
+            if (similarReply.isNotEmpty && recs != null && recs.isNotEmpty) {
+              reply = similarReply;
+            } else {
+              reply = _isAr
+                  ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
+                  : 'No matching property in this area right now.\n\nI can:\n1) Search nearby areas\n2) Show all available properties\n3) Register your interest and notify you when a new listing appears.';
+            }
+          } catch (_) {
+            reply = _isAr
+                ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
+                : 'No matching property in this area right now.\n\nI can:\n1) Search nearby areas\n2) Show all available properties\n3) Register your interest and notify you when a new listing appears.';
+          }
+        } else {
+          reply = _isAr
+              ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
+              : 'No matching property in this area right now.\n\nI can:\n1) Search nearby areas\n2) Show all available properties\n3) Register your interest and notify you when a new listing appears.';
+        }
       } else {
         reply = await aiBrain.composeMarketingReply(
           top3Results: top3List,
@@ -286,16 +366,23 @@ class _AssistantPageState extends State<AssistantPage> {
     return list;
   }
 
-  List<Map<String, dynamic>> _top3ShortResults() {
-    return _lastResults.take(3).map((doc) {
+  /// Builds property maps for ranking (id, areaCode, areaAr, areaEn, type, price, size, createdAt, featuredUntil).
+  /// Sends timestamps as milliseconds so the backend can score recency and featured.
+  List<Map<String, dynamic>> _buildPropsForRank(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    return docs.map((doc) {
       final d = doc.data();
+      final createdAt = d['createdAt'];
+      final featuredUntil = d['featuredUntil'];
       return <String, dynamic>{
         'id': doc.id,
+        'areaCode': d['areaCode'],
         'areaAr': d['areaAr'],
         'areaEn': d['areaEn'],
         'type': d['type'],
         'price': d['price'],
         'size': d['size'],
+        'createdAt': createdAt is Timestamp ? createdAt.millisecondsSinceEpoch : createdAt,
+        'featuredUntil': featuredUntil is Timestamp ? featuredUntil.millisecondsSinceEpoch : featuredUntil,
       };
     }).toList();
   }

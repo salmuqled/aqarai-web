@@ -4,11 +4,33 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 
+/// Badge text for labels (Arabic). Max 2 shown.
+const Map<String, String> _labelBadgeAr = {
+  'new_listing': '🆕 إعلان جديد',
+  'high_demand': '🔥 طلب عالي',
+  'good_deal': '⭐ فرصة جيدة',
+};
+
+const Map<String, String> _labelBadgeEn = {
+  'new_listing': '🆕 New listing',
+  'high_demand': '🔥 High demand',
+  'good_deal': '⭐ Good deal',
+};
+
 class ListingCard extends StatelessWidget {
   final String id;
   final Map<String, dynamic> data;
+  /// Optional intelligence labels from backend (e.g. new_listing, high_demand, good_deal). Max 2 displayed.
+  final List<String>? labels;
 
-  const ListingCard({super.key, required this.id, required this.data});
+  const ListingCard({super.key, required this.id, required this.data, this.labels});
+
+  /// Resolve labels from widget or data, map to badge text, max 2.
+  List<String> _effectiveLabels(bool isArabic) {
+    final raw = labels ?? (data['labels'] is List ? (data['labels'] as List).map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList() : <String>[]);
+    final map = isArabic ? _labelBadgeAr : _labelBadgeEn;
+    return raw.take(2).map((id) => map[id] ?? id).where((s) => s.isNotEmpty).toList();
+  }
 
   // ---------------------- تنسيق السعر ----------------------
   String _fmtPrice(num? p, String locale) {
@@ -118,6 +140,30 @@ class ListingCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_effectiveLabels(isArabic).isNotEmpty) ...[
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: _effectiveLabels(isArabic)
+                          .map((text) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  text,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.amber[800],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Row(
                     children: [
                       Text(

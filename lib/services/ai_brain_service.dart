@@ -129,6 +129,85 @@ class AiBrainService {
     return AgentAnalyzeResult.fromJson(result);
   }
 
+  /// Rank property results by score (area match, nearby, featured, recency, budget).
+  /// Returns top 3 only; does not modify Firestore. Use before compose when you have many results.
+  Future<List<Map<String, dynamic>>> rankResults({
+    required List<Map<String, dynamic>> properties,
+    required String requestedAreaCode,
+    List<String> nearbyAreaCodes = const [],
+    double? userBudget,
+    required String idToken,
+  }) async {
+    if (properties.isEmpty) return [];
+    final body = jsonEncode({
+      'data': {
+        'properties': properties,
+        'requestedAreaCode': requestedAreaCode,
+        'nearbyAreaCodes': nearbyAreaCodes,
+        'userBudget': userBudget,
+      },
+    });
+    final response = await http
+        .post(
+          Uri.parse('$_baseUrl/aqaraiAgentRankResults'),
+          headers: <String, String>{
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $idToken',
+          },
+          body: body,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode != 200) {
+      throw Exception('Agent rank failed: ${response.statusCode}');
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>?;
+    final result = json?['result'] as Map<String, dynamic>?;
+    final top3 = result?['top3'] as List<dynamic>?;
+    if (top3 == null) return [];
+    return top3.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// When main + nearby both return 0, get similar property recommendations from backend.
+  /// Returns reply text and list of recommendation maps (id, areaAr, areaEn, type, price, size).
+  Future<Map<String, dynamic>> findSimilarRecommendations({
+    required String requestedAreaCode,
+    required String propertyType,
+    required String idToken,
+    List<String> nearbyAreaCodes = const [],
+    double? userBudget,
+  }) async {
+    final body = jsonEncode({
+      'data': {
+        'requestedAreaCode': requestedAreaCode,
+        'propertyType': propertyType,
+        'nearbyAreaCodes': nearbyAreaCodes,
+        'userBudget': userBudget,
+        'locale': 'ar',
+      },
+    });
+    final response = await http
+        .post(
+          Uri.parse('$_baseUrl/aqaraiAgentFindSimilar'),
+          headers: <String, String>{
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $idToken',
+          },
+          body: body,
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode != 200) {
+      throw Exception('Find similar failed: ${response.statusCode}');
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>?;
+    final result = json?['result'] as Map<String, dynamic>?;
+    final reply = result?['reply']?.toString() ?? '';
+    final recs = result?['recommendations'] as List<dynamic>?;
+    final recommendations = recs != null ? recs.map((e) => Map<String, dynamic>.from(e as Map)).toList() : <Map<String, dynamic>>[];
+    return {'reply': reply, 'recommendations': recommendations};
+  }
+
   /// Generate marketing-style reply from top 3 results (Kuwaiti tone, one next question).
   /// When [userAskedForMore] is true and there is only one result, backend returns
   /// a message offering to search nearby areas instead of repeating the property.
