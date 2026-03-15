@@ -967,6 +967,18 @@ export interface SessionMemory {
   bedrooms?: number;
 }
 
+/** Structured search context that evolves during the conversation (initial → refinement → comparison). */
+export interface SearchContext {
+  areaCode?: string;
+  propertyType?: string;
+  serviceType?: string;
+  budget?: number;
+  bedrooms?: number;
+  intent?: "residential" | "investment";
+  lastModifier?: string;
+  conversationStage?: "initial" | "refinement" | "comparison";
+}
+
 const SESSION_MEMORY_KEYS = ["areaCode", "type", "serviceType", "budget", "bedrooms"] as const;
 
 /** Triggers that indicate user is starting a completely new search; reset memory and use only new params */
@@ -1086,6 +1098,69 @@ function getSessionMemory(filters: Record<string, unknown>): SessionMemory & Rec
   const bedrooms = filters.bedrooms;
   if (bedrooms != null && typeof bedrooms === "number" && !Number.isNaN(bedrooms)) mem.bedrooms = bedrooms;
   return mem;
+}
+
+/** Build SearchContext from currentFilters (client state). */
+function getSearchContextFromFilters(filters: Record<string, unknown>): SearchContext {
+  const ctx: SearchContext = {};
+  const areaCode = filters.areaCode;
+  if (areaCode != null && String(areaCode).trim() !== "") ctx.areaCode = String(areaCode).trim();
+  const type = filters.type;
+  if (type != null && String(type).trim() !== "") ctx.propertyType = String(type).trim();
+  const serviceType = filters.serviceType;
+  if (serviceType != null && String(serviceType).trim() !== "") ctx.serviceType = String(serviceType).trim();
+  const budget = filters.budget;
+  if (budget != null && typeof budget === "number" && !Number.isNaN(budget)) ctx.budget = budget;
+  const bedrooms = filters.bedrooms;
+  if (bedrooms != null && typeof bedrooms === "number" && !Number.isNaN(bedrooms)) ctx.bedrooms = bedrooms;
+  return ctx;
+}
+
+/** Apply parsed params (from OpenAI + extraction) onto the context; new values override. */
+function applyParamsToContext(context: SearchContext, paramsPatch: Record<string, unknown>): void {
+  const areaCode = paramsPatch.areaCode;
+  if (areaCode != null && String(areaCode).trim() !== "") context.areaCode = String(areaCode).trim();
+  const type = paramsPatch.type;
+  if (type != null && String(type).trim() !== "") context.propertyType = String(type).trim();
+  const serviceType = paramsPatch.serviceType;
+  if (serviceType != null && String(serviceType).trim() !== "") context.serviceType = String(serviceType).trim();
+  const budget = paramsPatch.budget;
+  if (budget != null && (typeof budget === "number" || typeof budget === "string")) {
+    const n = typeof budget === "number" ? budget : Number(budget);
+    if (!Number.isNaN(n)) context.budget = n;
+  }
+  const bedrooms = paramsPatch.bedrooms;
+  if (bedrooms != null && (typeof bedrooms === "number" || typeof bedrooms === "string")) {
+    const n = typeof bedrooms === "number" ? bedrooms : Number(bedrooms);
+    if (!Number.isNaN(n)) context.bedrooms = n;
+  }
+}
+
+/** Apply a modifier (أرخص شوي، أكبر شوي، etc.) to context and set refinement stage. */
+function applyModifierToContext(context: SearchContext, modifier: { type: string }): void {
+  context.lastModifier = modifier.type;
+  context.conversationStage = "refinement";
+  if (modifier.type === "budget_down" && context.budget != null) {
+    context.budget = Math.round(Number(context.budget) * 0.9);
+  } else if (modifier.type === "budget_up" && context.budget != null) {
+    context.budget = Math.round(Number(context.budget) * 1.1);
+  } else if (modifier.type === "size_up") {
+    context.bedrooms = (context.bedrooms ?? 3) + 1;
+  } else if (modifier.type === "size_down") {
+    context.bedrooms = Math.max(1, (context.bedrooms ?? 3) - 1);
+  }
+  // same_area: no change to areaCode; already in context
+}
+
+/** Build query filters (params_patch shape) from SearchContext for the client. */
+function contextToQueryFilters(context: SearchContext): Record<string, unknown> {
+  const q: Record<string, unknown> = {};
+  if (context.areaCode != null && context.areaCode !== "") q.areaCode = context.areaCode;
+  if (context.propertyType != null && context.propertyType !== "") q.type = context.propertyType;
+  if (context.serviceType != null && context.serviceType !== "") q.serviceType = context.serviceType;
+  if (context.budget != null && !Number.isNaN(Number(context.budget))) q.budget = context.budget;
+  if (context.bedrooms != null && !Number.isNaN(Number(context.bedrooms))) q.bedrooms = context.bedrooms;
+  return q;
 }
 
 /** Merge session memory with new params: new values override, missing keys keep previous. */
@@ -1324,52 +1399,36 @@ export const aqaraiAgentAnalyze = onCall(
         }
       }
 
-      // Smart filter adjustments: follow-up phrases (أرخص شوي، أكبر، نفس المنطقة) modify session and re-run search
+      // SearchContext: structured conversation state (initial → refinement → comparison)
       const modifier = detectSearchModifier(rawMessage);
       const hasPreviousSearch =
         (sessionMemory.areaCode != null && String(sessionMemory.areaCode).trim() !== "") ||
         (sessionMemory.budget != null && typeof sessionMemory.budget === "number") ||
         (sessionMemory.propertyType != null && String(sessionMemory.propertyType).trim() !== "");
-      if (modifier != null && hasPreviousSearch && !isNewSearchTrigger(rawMessage)) {
-        const patch: Record<string, unknown> = {
-          areaCode: sessionMemory.areaCode ?? paramsPatch.areaCode,
-          type: sessionMemory.propertyType ?? paramsPatch.type,
-          serviceType: sessionMemory.serviceType ?? paramsPatch.serviceType,
-          budget: sessionMemory.budget != null ? Number(sessionMemory.budget) : paramsPatch.budget,
-          bedrooms: sessionMemory.bedrooms ?? paramsPatch.bedrooms,
-        };
-        if (modifier.type === "budget_down" && sessionMemory.budget != null) {
-          patch.budget = Math.round(Number(sessionMemory.budget) * 0.9);
-        }
-        if (modifier.type === "budget_up" && sessionMemory.budget != null) {
-          patch.budget = Math.round(Number(sessionMemory.budget) * 1.1);
-        }
-        if (modifier.type === "same_area" && sessionMemory.areaCode != null) {
-          patch.areaCode = sessionMemory.areaCode;
-        }
-        if (modifier.type === "size_up" || modifier.type === "size_down") {
-          // Keep session filters and run search again; client can use size if supported
-        }
-        Object.keys(patch).forEach((k) => {
-          if (patch[k] != null) paramsPatch[k] = patch[k];
-        });
-        isCompleteFinal = true;
-        clarifyingQuestionsFinal = [];
-      }
 
-      let finalParamsPatch: Record<string, unknown>;
-      let finalResetFilters = resetFilters;
+      let context: SearchContext;
       if (isNewSearchTrigger(rawMessage)) {
-        finalParamsPatch = { ...paramsPatch };
-        finalResetFilters = true;
+        context = {};
+        applyParamsToContext(context, paramsPatch);
+        context.conversationStage = "initial";
       } else {
-        finalParamsPatch = mergeSessionMemory(sessionMemory, paramsPatch);
-        for (const k of Object.keys(paramsPatch)) {
-          if (!SESSION_MEMORY_KEYS.includes(k as (typeof SESSION_MEMORY_KEYS)[number])) {
-            finalParamsPatch[k] = paramsPatch[k];
-          }
+        context = getSearchContextFromFilters(currentFilters);
+        applyParamsToContext(context, paramsPatch);
+        if (modifier != null && hasPreviousSearch) {
+          applyModifierToContext(context, modifier);
+          isCompleteFinal = true;
+          clarifyingQuestionsFinal = [];
         }
       }
+      if (rawMessage) context.intent = detectBuyerIntent(rawMessage);
+
+      let finalParamsPatch: Record<string, unknown> = contextToQueryFilters(context);
+      for (const k of Object.keys(paramsPatch)) {
+        if (!SESSION_MEMORY_KEYS.includes(k as (typeof SESSION_MEMORY_KEYS)[number])) {
+          finalParamsPatch[k] = paramsPatch[k];
+        }
+      }
+      const finalResetFilters = isNewSearchTrigger(rawMessage) ? true : resetFilters;
 
       const out: Record<string, unknown> = {
         intent,
