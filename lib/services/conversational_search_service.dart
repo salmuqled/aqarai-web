@@ -227,9 +227,8 @@ class ConversationalSearchService {
     if (filters.propertyType != null && filters.propertyType!.isNotEmpty) {
       q = q.where('type', isEqualTo: filters.propertyType);
     }
-    if (filters.maxPrice != null && filters.maxPrice! > 0) {
-      q = q.where('price', isLessThanOrEqualTo: filters.maxPrice);
-    }
+    // لا نضيف فلتر السعر هنا لتجنب الحاجة لفهرس مركب (price + orderBy createdAt).
+    // التطبيق يصفّي حسب الميزانية في الذاكرة بعد جلب النتائج.
     if (filters.bedrooms != null && filters.bedrooms! > 0) {
       q = q.where('roomCount', isEqualTo: filters.bedrooms);
     }
@@ -267,9 +266,7 @@ class ConversationalSearchService {
     }
     final type = filters['type']?.toString().trim();
     final serviceType = filters['serviceType']?.toString().trim();
-    final budget = filters['budget'] is num
-        ? (filters['budget'] as num).toDouble()
-        : (filters['budget'] != null ? double.tryParse(filters['budget'].toString()) : null);
+    // budget يُطبّق في الذاكرة في التطبيق لتجنب الحاجة لفهرس مركب.
     final bedrooms = filters['bedrooms'] is int
         ? filters['bedrooms'] as int
         : (filters['bedrooms'] != null ? int.tryParse(filters['bedrooms'].toString()) : null);
@@ -290,9 +287,7 @@ class ConversationalSearchService {
     if (serviceType != null && serviceType.isNotEmpty) {
       q = q.where('serviceType', isEqualTo: serviceType);
     }
-    if (budget != null && budget > 0) {
-      q = q.where('price', isLessThanOrEqualTo: budget);
-    }
+    // فلتر السعر يُطبّق في الذاكرة في التطبيق لتجنب الحاجة لفهرس مركب.
     if (bedrooms != null && bedrooms > 0) {
       q = q.where('roomCount', isEqualTo: bedrooms);
     }

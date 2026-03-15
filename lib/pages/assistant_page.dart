@@ -35,6 +35,7 @@ import 'package:aqarai_app/services/ai_brain_service.dart';
 import 'package:aqarai_app/services/conversational_search_service.dart';
 import 'package:aqarai_app/services/user_interest_service.dart';
 import 'package:aqarai_app/services/notification_service.dart';
+import 'package:aqarai_app/widgets/chat_bubble.dart';
 import 'package:aqarai_app/widgets/listing_card.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
 
@@ -53,6 +54,10 @@ class _AssistantPageState extends State<AssistantPage> {
   bool _assistantTyping = false;
   bool _isAr = true;
   bool _fcmSetupDone = false;
+  /// صورة واسم المستخدم: من Auth أولاً، وإلا من Firestore (مربوط بحساب مثل إنستغرام أو رفع صورة).
+  String? _userPhotoUrl;
+  String? _userDisplayName;
+  bool _userProfileLoaded = false;
 
   /// فلاتر البحث الحالية (من الـ Agent)
   Map<String, dynamic> _currentFilters = {};
@@ -110,6 +115,55 @@ class _AssistantPageState extends State<AssistantPage> {
           );
         }
       });
+    }
+    // جلب صورة البروفايل: من Auth أولاً، وإلا من Firestore (مربوط بالإيميل مثل إنستغرام)
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && !_userProfileLoaded) {
+      _userProfileLoaded = true;
+      _loadUserProfile();
+    }
+  }
+
+  /// يحدّث _userPhotoUrl و _userDisplayName: أولاً من Auth، إن لم توجد صورة من Firestore (users/{uid})
+  Future<void> _loadUserProfile() async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null || !mounted) return;
+    // إذا عندنا صورة من تسجيل الدخول (قوقل مثلاً) نستخدمها
+    final authPhoto = authUser.photoURL;
+    final authName = authUser.displayName?.trim();
+    if (authPhoto != null && authPhoto.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _userPhotoUrl = authPhoto;
+          _userDisplayName = authName?.isNotEmpty == true ? authName : null;
+        });
+      }
+      return;
+    }
+    // لو دخل بالإيميل نبحث في Firestore عن صورة مربوطة (إنستغرام أو رفع).
+    // لربط صورة لاحقاً: احفظ في users/{uid} الحقول photoURL و/أو displayName (من واجهة الربط أو رفع الصورة).
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(authUser.uid)
+          .get();
+      if (!mounted) return;
+      final data = doc.data();
+      final url = data?['photoURL'] ?? data?['avatarUrl'];
+      final name = data?['displayName'];
+      final photo = url is String ? url : (url != null ? url.toString() : null);
+      final nameStr = name is String ? name : (name != null ? name.toString() : null);
+      setState(() {
+        _userPhotoUrl = (photo != null && photo.isNotEmpty) ? photo : null;
+        _userDisplayName = (nameStr != null && nameStr.trim().isNotEmpty) ? nameStr.trim() : authName;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _userPhotoUrl = null;
+          _userDisplayName = authName;
+        });
+      }
     }
   }
 
@@ -202,8 +256,23 @@ class _AssistantPageState extends State<AssistantPage> {
 
       final searchService = ConversationalSearchService();
       final query = searchService.buildQueryFromMap(_currentFilters);
-      final snapshot = await query.limit(30).get();
-      final docs = snapshot.docs;
+      final userBudgetForQuery = _currentFilters['budget'] is num
+          ? (_currentFilters['budget'] as num).toDouble()
+          : (_currentFilters['budget'] != null ? double.tryParse(_currentFilters['budget'].toString()) : null);
+      // عند وجود ميزانية نجلِب أكثر ثم نصفّي في الذاكرة (لتجنب الحاجة لفهرس مركب في Firestore).
+      final limit = (userBudgetForQuery != null && userBudgetForQuery > 0) ? 100 : 30;
+      final snapshot = await query.limit(limit).get();
+      var docs = snapshot.docs;
+      if (userBudgetForQuery != null && userBudgetForQuery > 0) {
+        docs = docs
+            .where((d) {
+              final p = d.data()['price'];
+              final price = p is num ? p.toDouble() : (p != null ? double.tryParse(p.toString()) : null);
+              return price != null && price <= userBudgetForQuery;
+            })
+            .take(30)
+            .toList();
+      }
       if (!mounted) return;
       setState(() {
         _lastResults = List.from(docs);
@@ -545,64 +614,70 @@ class _AssistantPageState extends State<AssistantPage> {
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
     final theme = Theme.of(context);
 
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0D1117),
-              Color(0xFF161B22),
-              Color(0xFF0D1117),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // هيدر: عنوان + زر إغلاق X
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: Row(
-                  children: [
-                    Icon(Icons.auto_awesome, color: Colors.amber[300], size: 28),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        isAr ? 'مساعدك العقاري' : 'Your Property Assistant',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Material(
-                      color: Colors.white.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        onTap: _closeToTraditionalSearch,
-                        borderRadius: BorderRadius.circular(12),
-                        child: const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Icon(Icons.close, color: Colors.white, size: 24),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                isAr ? 'اضغط X للبحث التقليدي' : 'Tap X for traditional search',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 8),
+    // ChatGPT-style: خلفية بيضاء بالكامل
+    const Color surfaceWhite = Color(0xFFFFFFFF);
+    const Color surfaceLightGrey = Color(0xFFF1F1F1);
+    const Color textDark = Color(0xFF1A1A1A);
+    const Color textSecondary = Color(0xFF6B6B6B);
+    const Color accentPrimary = Color(0xFF101046);
 
-              // قائمة الرسائل
-              Expanded(
+    return Scaffold(
+      backgroundColor: surfaceWhite,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // هيدر بأسلوب ChatGPT: كبسولات رمادية فاتحة
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: surfaceLightGrey,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_awesome, color: accentPrimary, size: 22),
+                        const SizedBox(width: 8),
+                        Text(
+                          isAr ? 'مساعدك العقاري' : 'AqarAi',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: textDark,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Material(
+                    color: surfaceLightGrey,
+                    borderRadius: BorderRadius.circular(24),
+                    child: InkWell(
+                      onTap: _closeToTraditionalSearch,
+                      borderRadius: BorderRadius.circular(24),
+                      child: const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Icon(Icons.close, color: textDark, size: 22),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              isAr ? 'اضغط X للبحث التقليدي' : 'Tap X for traditional search',
+              style: const TextStyle(color: textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 6),
+
+            // منطقة الشات — خلفية بيضاء
+            Expanded(
+              child: Container(
+                color: surfaceWhite,
                 child: ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -616,54 +691,54 @@ class _AssistantPageState extends State<AssistantPage> {
                   },
                 ),
               ),
+            ),
 
-              // حقل الإدخال
-              Container(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
-                color: Colors.black26,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        onSubmitted: (_) => _sendMessage(),
-                        style: const TextStyle(color: Colors.white, fontSize: 16),
-                        decoration: InputDecoration(
-                          hintText: isAr ? 'اكتب سؤالك هنا...' : 'Type your question...',
-                          hintStyle: TextStyle(color: Colors.white54, fontSize: 15),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.1),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            // حقل الإدخال — رمادي فاتح مثل ChatGPT
+            Container(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
+              color: surfaceWhite,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      onSubmitted: (_) => _sendMessage(),
+                      style: const TextStyle(color: textDark, fontSize: 16),
+                      decoration: InputDecoration(
+                        hintText: isAr ? 'اسأل أي شيء...' : 'Ask anything...',
+                        hintStyle: const TextStyle(color: textSecondary, fontSize: 15),
+                        filled: true,
+                        fillColor: surfaceLightGrey,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
                         ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Material(
-                      color: const Color(0xFF238636),
+                  ),
+                  const SizedBox(width: 10),
+                  Material(
+                    color: accentPrimary,
+                    borderRadius: BorderRadius.circular(24),
+                    child: InkWell(
+                      onTap: _isLoading ? null : _sendMessage,
                       borderRadius: BorderRadius.circular(24),
-                      child: InkWell(
-                        onTap: _isLoading ? null : _sendMessage,
-                        borderRadius: BorderRadius.circular(24),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Icon(
-                            Icons.send_rounded,
-                            color: _isLoading ? Colors.white38 : Colors.white,
-                            size: 24,
-                          ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Icon(
+                          Icons.send_rounded,
+                          color: _isLoading ? Colors.white38 : Colors.white,
+                          size: 24,
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -675,115 +750,126 @@ class _AssistantPageState extends State<AssistantPage> {
         ? msg.results!.take(3).toList()
         : <Map<String, dynamic>>[];
 
+    if (isUser) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Flexible(child: ChatBubble(message: msg.text, isUser: true)),
+            const SizedBox(width: 8),
+            _buildUserAvatar(),
+          ],
+        ),
+      );
+    }
+
+    // AI message: left-aligned row with avatar, bubble (ChatBubble style), then cards/suggestions
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: isUser
-          ? Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F5D56),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  msg.text,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            )
-          : Row(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildAssistantAvatar(),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: Colors.grey.shade300,
-                  child: Icon(Icons.smart_toy, size: 16, color: Colors.grey.shade600),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF2F2F2),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          msg.text,
-                          style: TextStyle(
-                            color: Colors.black87,
-                            fontSize: 15,
-                            height: 1.4,
-                          ),
-                        ),
+                ChatBubble(message: msg.text, isUser: false),
+                if (assistantResults.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  ...assistantResults.map((property) {
+                    final id = property['id']?.toString() ?? '';
+                    final labels = property['labels'];
+                    final labelList = labels is List
+                        ? (labels).map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList()
+                        : null;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: ListingCard(
+                        id: id,
+                        data: property,
+                        labels: labelList?.isNotEmpty == true ? labelList : null,
+                        onTap: id.isEmpty
+                            ? null
+                            : () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => PropertyDetailsPage(propertyId: id),
+                                  ),
+                                );
+                              },
                       ),
-                      if (assistantResults.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        ...assistantResults.map((property) {
-                          final id = property['id']?.toString() ?? '';
-                          final labels = property['labels'];
-                          final labelList = labels is List
-                              ? (labels).map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList()
-                              : null;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: ListingCard(
-                              id: id,
-                              data: property,
-                              labels: labelList?.isNotEmpty == true ? labelList : null,
-                              onTap: id.isEmpty
-                                  ? null
-                                  : () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => PropertyDetailsPage(propertyId: id),
-                                        ),
-                                      );
-                                    },
-                            ),
-                          );
-                        }),
-                      ],
-                      if (msg.suggestions != null && msg.suggestions!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: msg.suggestions!.map((s) {
-                              return GestureDetector(
-                                onTap: () => _sendMessage(s),
+                    );
+                  }),
+                ],
+                if (msg.suggestions != null && msg.suggestions!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: msg.suggestions!.map((s) {
+                        return GestureDetector(
+                          onTap: () => _sendMessage(s),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade200,
+                                    color: const Color(0xFFF1F1F1),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Text(
                                     s,
-                                    style: const TextStyle(fontSize: 14),
+                                    style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
                                   ),
                                 ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                    ],
+                        );
+                      }).toList(),
+                    ),
                   ),
-                ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// صورة المستخدم: من Auth (قوقل) أو من Firestore إن كان الإيميل مربوط بحساب (إنستغرام/رفع صورة).
+  Widget _buildUserAvatar() {
+    final photoUrl = _userPhotoUrl ?? FirebaseAuth.instance.currentUser?.photoURL;
+    final name = _userDisplayName ?? FirebaseAuth.instance.currentUser?.displayName?.trim();
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: const Color(0xFFE8E8E8),
+      backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+          ? NetworkImage(photoUrl)
+          : null,
+      child: photoUrl == null || photoUrl.isEmpty
+          ? Text(
+              name != null && name.isNotEmpty
+                  ? name.substring(0, 1).toUpperCase()
+                  : '?',
+              style: const TextStyle(
+                color: Color(0xFF101046),
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            )
+          : null,
+    );
+  }
+
+  /// أفاتار المساعد — أيقونة ثابتة احترافية (بدون دوائر مزعجة).
+  Widget _buildAssistantAvatar() {
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: const Color(0xFFE8E8E8),
+      child: Icon(Icons.smart_toy_rounded, size: 18, color: Colors.grey.shade600),
     );
   }
 
@@ -793,27 +879,86 @@ class _AssistantPageState extends State<AssistantPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: Colors.grey.shade300,
-            child: Icon(Icons.smart_toy, size: 16, color: Colors.grey.shade600),
-          ),
+          _buildAssistantAvatar(),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF2F2F2),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              "...",
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.black87,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1F1F1),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(18),
               ),
             ),
+            child: const _TypingDots(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Three animated dots for "AI is typing" indicator.
+class _TypingDots extends StatefulWidget {
+  const _TypingDots();
+
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value * 3; // 0..3 over one cycle
+        double opacity(int i) {
+          final x = (t - i) % 3;
+          if (x < 0.4) return 0.3 + 0.7 * (x / 0.4);
+          if (x < 0.8) return 1.0;
+          return 1.0 - (x - 0.8) / 0.2 * 0.7;
+        }
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dot(opacity(0)),
+            const SizedBox(width: 4),
+            _dot(opacity(1)),
+            const SizedBox(width: 4),
+            _dot(opacity(2)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _dot(double opacity) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(
+        color: Color.lerp(const Color(0xFFE0E0E0), const Color(0xFF1A1A1A), opacity.clamp(0.0, 1.0))!,
+        shape: BoxShape.circle,
       ),
     );
   }
