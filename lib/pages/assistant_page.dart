@@ -54,10 +54,6 @@ class _AssistantPageState extends State<AssistantPage> {
   bool _assistantTyping = false;
   bool _isAr = true;
   bool _fcmSetupDone = false;
-  /// صورة واسم المستخدم: من Auth أولاً، وإلا من Firestore (مربوط بحساب مثل إنستغرام أو رفع صورة).
-  String? _userPhotoUrl;
-  String? _userDisplayName;
-  bool _userProfileLoaded = false;
 
   /// فلاتر البحث الحالية (من الـ Agent)
   Map<String, dynamic> _currentFilters = {};
@@ -115,55 +111,6 @@ class _AssistantPageState extends State<AssistantPage> {
           );
         }
       });
-    }
-    // جلب صورة البروفايل: من Auth أولاً، وإلا من Firestore (مربوط بالإيميل مثل إنستغرام)
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null && !_userProfileLoaded) {
-      _userProfileLoaded = true;
-      _loadUserProfile();
-    }
-  }
-
-  /// يحدّث _userPhotoUrl و _userDisplayName: أولاً من Auth، إن لم توجد صورة من Firestore (users/{uid})
-  Future<void> _loadUserProfile() async {
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser == null || !mounted) return;
-    // إذا عندنا صورة من تسجيل الدخول (قوقل مثلاً) نستخدمها
-    final authPhoto = authUser.photoURL;
-    final authName = authUser.displayName?.trim();
-    if (authPhoto != null && authPhoto.isNotEmpty) {
-      if (mounted) {
-        setState(() {
-          _userPhotoUrl = authPhoto;
-          _userDisplayName = authName?.isNotEmpty == true ? authName : null;
-        });
-      }
-      return;
-    }
-    // لو دخل بالإيميل نبحث في Firestore عن صورة مربوطة (إنستغرام أو رفع).
-    // لربط صورة لاحقاً: احفظ في users/{uid} الحقول photoURL و/أو displayName (من واجهة الربط أو رفع الصورة).
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(authUser.uid)
-          .get();
-      if (!mounted) return;
-      final data = doc.data();
-      final url = data?['photoURL'] ?? data?['avatarUrl'];
-      final name = data?['displayName'];
-      final photo = url is String ? url : (url != null ? url.toString() : null);
-      final nameStr = name is String ? name : (name != null ? name.toString() : null);
-      setState(() {
-        _userPhotoUrl = (photo != null && photo.isNotEmpty) ? photo : null;
-        _userDisplayName = (nameStr != null && nameStr.trim().isNotEmpty) ? nameStr.trim() : authName;
-      });
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _userPhotoUrl = null;
-          _userDisplayName = authName;
-        });
-      }
     }
   }
 
@@ -839,37 +786,44 @@ class _AssistantPageState extends State<AssistantPage> {
     );
   }
 
-  /// صورة المستخدم: من Auth (قوقل) أو من Firestore إن كان الإيميل مربوط بحساب (إنستغرام/رفع صورة).
+  /// دائرة واحدة ناعمة (بخط واحد) ثم اللوقو بداخلها — بدون ClipOval مزدوج.
+  static const double _avatarSize = 32;
+
   Widget _buildUserAvatar() {
-    final photoUrl = _userPhotoUrl ?? FirebaseAuth.instance.currentUser?.photoURL;
-    final name = _userDisplayName ?? FirebaseAuth.instance.currentUser?.displayName?.trim();
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: const Color(0xFFE8E8E8),
-      backgroundImage: photoUrl != null && photoUrl.isNotEmpty
-          ? NetworkImage(photoUrl)
-          : null,
-      child: photoUrl == null || photoUrl.isEmpty
-          ? Text(
-              name != null && name.isNotEmpty
-                  ? name.substring(0, 1).toUpperCase()
-                  : '?',
-              style: const TextStyle(
-                color: Color(0xFF101046),
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            )
-          : null,
+    return Container(
+      width: _avatarSize,
+      height: _avatarSize,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color(0xFF101046),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Image.asset(
+          'assets/images/aqarai_chat_logo.png',
+          fit: BoxFit.contain,
+        ),
+      ),
     );
   }
 
-  /// أفاتار المساعد — أيقونة ثابتة احترافية (بدون دوائر مزعجة).
   Widget _buildAssistantAvatar() {
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: const Color(0xFFE8E8E8),
-      child: Icon(Icons.smart_toy_rounded, size: 18, color: Colors.grey.shade600),
+    return Container(
+      width: _avatarSize,
+      height: _avatarSize,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color(0xFF101046),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Image.asset(
+          'assets/images/aqarai_chat_logo.png',
+          fit: BoxFit.contain,
+        ),
+      ),
     );
   }
 

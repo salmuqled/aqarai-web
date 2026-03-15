@@ -53,6 +53,7 @@ flutter:
   assets:
     - assets/images/app_icon.png
     - assets/images/aqarai_logo_transparent.png
+    - assets/images/aqarai_chat_logo.png
     - assets/images/kuwait_bridge_bg.png
 
 flutter_icons:

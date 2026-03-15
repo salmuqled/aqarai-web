@@ -205,21 +205,26 @@ class _HomePageState extends State<HomePage> {
               color: _bgColor,
               padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 12),
               child: SizedBox(
-                height: 74,
+                height: 165,
                 child: Stack(
                   clipBehavior: Clip.none,
+                  alignment: Alignment.bottomCenter,
                   children: [
-                    Container(
-                      height: 74,
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(36),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black26, blurRadius: 12),
-                        ],
-                      ),
-                      child: Row(
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        height: 74,
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(36),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black26, blurRadius: 12),
+                          ],
+                        ),
+                        child: Row(
                         children: [
                           Expanded(
                             child: _BottomItem(
@@ -249,7 +254,7 @@ class _HomePageState extends State<HomePage> {
                               },
                             ),
                           ),
-                          const Expanded(child: _CenterAddSlot(label: ' ')),
+                          Expanded(child: const SizedBox.shrink()),
                           Expanded(
                             child: _BottomItem(
                               icon: Icons.beach_access,
@@ -294,14 +299,16 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ],
                       ),
+                        ),
                     ),
 
                     Positioned(
                       left: 0,
                       right: 0,
-                      top: -22,
+                      bottom: 94,
                       child: Center(
                         child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: () {
                             Navigator.push(
                               context,
@@ -310,25 +317,39 @@ class _HomePageState extends State<HomePage> {
                               ),
                             );
                           },
-                          child: Container(
-                            width: 64,
-                            height: 64,
-                            decoration: const BoxDecoration(
-                              color: Colors.blueAccent,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black38,
-                                  blurRadius: 14,
-                                  offset: Offset(0, 6),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                loc.addProperty,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
                                 ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.add,
-                              color: Colors.white,
-                              size: 34,
-                            ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF101046),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black38,
+                                      blurRadius: 12,
+                                      offset: Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.add,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -469,29 +490,3 @@ class _BottomItem extends StatelessWidget {
   }
 }
 
-class _CenterAddSlot extends StatelessWidget {
-  final String label;
-  const _CenterAddSlot({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      ignoring: true,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(height: 18),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: Colors.black87,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
