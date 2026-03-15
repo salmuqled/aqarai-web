@@ -1,36 +1,44 @@
 /**
- * AI Agent Brain: AI Real Estate Agent (From Bot to Agent)
- *
- * Context policy (received from client):
- *   - last8Messages: last 8 chat messages (role + content)
- *   - currentFilters: areaCode, type, serviceType, budget, bedrooms
- *   - top3LastResults: [{ id, areaAr, areaEn, type, price, size }]
- *
- * aqaraiAgentAnalyze: message + context -> STRICT JSON
- *   { intent, params_patch, reset_filters, is_complete, clarifying_questions }
- *   - intent: search_property | greeting | follow_up | general_question
- *   - params_patch: only non-null keys (areaCode, type, serviceType, budget, bedrooms, investmentFlag)
- *   - Never hallucinate numbers; areaCode required for search
- *
- * aqaraiAgentCompose: top3 results -> marketing reply (1-3 options, ONE next question, Kuwaiti tone)
- *
- * Step tests: a) السلام عليكم b) ابي بيت للبيع بالقادسية c) ابي أرخص d) كم غرفة؟ e) غير المنطقة للنزهة
+ * AI Agent Brain: orchestrator only. Delegates to search_context, intent_parser,
+ * context_updater, query_builder, ranking_engine, insight_engine, suggestion_engine, response_composer.
  */
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import OpenAI from "openai";
 import { normalizeAreaName } from "./area_normalizer";
+import {
+  getSearchContextFromFilters,
+  contextToQueryFilters,
+  type SearchContext,
+} from "./search_context";
+import { parseUserMessage, normalizeKuwaitiIntent } from "./intent_parser";
+import { mergeContextForTurn } from "./context_updater";
+import {
+  rankPropertyResults,
+  computePropertyLabels,
+  findSimilarProperties,
+  type FindSimilarParams,
+} from "./ranking_engine";
+import { getMarketSignal } from "./insight_engine";
+import { buildInsights } from "./insight_engine";
+import { buildSmartSuggestions } from "./suggestion_engine";
+import { composeAssistantResponse } from "./response_composer";
 
 const db = admin.firestore();
 
 // ---------------------------------------------------------------------------
-// In-memory search cache (60s TTL; reduces latency for repeated queries)
+// Cache (60s TTL)
 // ---------------------------------------------------------------------------
 
 const SEARCH_CACHE = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_TTL_MS = 60000; // 60 seconds
+const CACHE_TTL_MS = 60000;
 
-function getCacheKey(params: { areaCode?: string; type?: string; serviceType?: string; budget?: number | null }): string {
+function getCacheKey(params: {
+  areaCode?: string;
+  type?: string;
+  serviceType?: string;
+  budget?: number | null;
+}): string {
   return JSON.stringify({
     areaCode: params.areaCode ?? "",
     type: params.type ?? "",
@@ -42,352 +50,32 @@ function getCacheKey(params: { areaCode?: string; type?: string; serviceType?: s
 function getCachedResult(key: string): unknown | null {
   const entry = SEARCH_CACHE.get(key);
   if (!entry) return null;
-
-  const now = Date.now();
-  if (now - entry.timestamp > CACHE_TTL_MS) {
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
     SEARCH_CACHE.delete(key);
     return null;
   }
-
   return entry.data;
 }
 
 function setCachedResult(key: string, data: unknown): void {
-  SEARCH_CACHE.set(key, {
-    data,
-    timestamp: Date.now(),
-  });
+  SEARCH_CACHE.set(key, { data, timestamp: Date.now() });
 }
 
 // ---------------------------------------------------------------------------
-// Area intelligence: nearby areas that may have better prices (for suggestions)
+// Helpers
 // ---------------------------------------------------------------------------
 
-const AREA_INTELLIGENCE: Record<string, string[]> = {
-  nuzha: ["kaifan", "rawda"],
-  qadisiya: ["kaifan", "khaldiya"],
-  rumaithiya: ["salmiya", "jabriya"],
-  jabriya: ["hawalli", "salmiya"],
-  salmiya: ["hawalli"],
-};
-
-/** Arabic labels for area codes used in AREA_INTELLIGENCE (for readable suggestions). */
-const AREA_CODE_TO_LABEL_AR: Record<string, string> = {
-  kaifan: "كيفان",
-  rawda: "الروضة",
-  khaldiya: "الخالدية",
-  salmiya: "السالمية",
-  jabriya: "الجابرية",
-  hawalli: "حولي",
-};
-
-const AREA_CODE_TO_LABEL_EN: Record<string, string> = {
-  kaifan: "Kaifan",
-  rawda: "Rawda",
-  khaldiya: "Khaldiya",
-  salmiya: "Salmiya",
-  jabriya: "Jabriya",
-  hawalli: "Hawalli",
-};
-
-function buildAreaSuggestion(areaCode: string, locale: string): string {
-  const nearby = AREA_INTELLIGENCE[areaCode];
-  if (!nearby || nearby.length === 0) return "";
-  const labelMap = locale === "ar" ? AREA_CODE_TO_LABEL_AR : AREA_CODE_TO_LABEL_EN;
-  const labels = nearby.map((c) => labelMap[c] || c);
-  if (locale === "ar") {
-    return `ملاحظة: لو توسعنا شوي في المناطق، ممكن تلاقي خيارات أرخص في ${labels.join(" أو ")}.`;
-  }
-  return `Note: expanding your search slightly may find cheaper options in ${labels.join(" or ")}.`;
+function extractJson(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) throw new Error("No JSON object in response");
+  return JSON.parse(trimmed.substring(start, end + 1)) as Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
-// Arabic text normalization (for keyword matching)
+// Static reply strings and formatters
 // ---------------------------------------------------------------------------
-
-/**
- * Normalize Arabic letters and remove tashkeel so different spellings match.
- * - أ / إ / آ → ا
- * - ة → ه
- * - ى → ي
- * - Remove diacritics (tashkeel)
- */
-export function normalizeArabic(text: string): string {
-  if (!text || typeof text !== "string") return "";
-  let s = text
-    .replace(/[\u0622\u0623\u0625]/g, "\u0627")
-    .replace(/\u0629/g, "\u0647")
-    .replace(/\u0649/g, "\u064A")
-    .replace(/[\u064B-\u0652\u0670]/g, "");
-  return s;
-}
-
-// ---------------------------------------------------------------------------
-// Kuwaiti Arabic intent normalization (before search)
-// ---------------------------------------------------------------------------
-
-export interface KuwaitiIntentNormalized {
-  propertyType?: string;
-  serviceType?: string;
-  requestType?: string;
-  /** Optional metadata: e.g. "corner", "double_street" (not in Firestore schema) */
-  features?: string[];
-  /** Optional metadata: e.g. 2 for "دورين" (not in Firestore schema) */
-  floors?: number;
-  normalizedText: string;
-}
-
-/** Phrases that map to serviceType (order: longer matches first; substring match for Arabic) */
-const SERVICE_PHRASES: { phrases: string[]; value: string }[] = [
-  { phrases: ["بدلية", "بدليه", "بدل"], value: "exchange" },
-  { phrases: ["للإيجار", "للايجار", "إيجار", "ايجار"], value: "rent" },
-  { phrases: ["للبيع", "بيع"], value: "sale" },
-];
-
-/** Phrases that map to propertyType (order: longer/more specific first) */
-const PROPERTY_PHRASES: { phrases: string[]; value: string }[] = [
-  { phrases: ["شاليهات", "شاليه"], value: "chalet" },
-  { phrases: ["منزل", "بيت", "سكني"], value: "house" },
-  { phrases: ["شقة", "شقه"], value: "apartment" },
-  { phrases: ["أرض", "ارض"], value: "land" },
-  { phrases: ["بناية", "بنايه", "عمارة", "عماره", "استثماري"], value: "building" },
-  { phrases: ["فيلا", "فيله"], value: "villa" },
-  { phrases: ["مكتب"], value: "office" },
-  { phrases: ["تجاري"], value: "commercial" },
-  { phrases: ["مخزن"], value: "warehouse" },
-  { phrases: ["محل"], value: "shop" },
-];
-
-/** Phrases that map to requestType */
-const REQUEST_PHRASES: { phrases: string[]; value: string }[] = [
-  { phrases: ["مطلوب"], value: "wanted" },
-];
-
-/** Property features (optional metadata; not stored in Firestore) */
-const FEATURE_PHRASES: { phrases: string[]; value: string }[] = [
-  { phrases: ["زاوية", "زاويه"], value: "corner" },
-  { phrases: ["بطن وظهر", "بطن و ظهر"], value: "double_street" },
-];
-
-/** Floors (optional metadata; e.g. "دورين" -> 2) */
-const FLOORS_PHRASES: { phrases: string[]; value: number }[] = [
-  { phrases: ["دورين"], value: 2 },
-];
-
-// ---------------------------------------------------------------------------
-// Kuwait areas: Arabic name -> areaCode (matches lib/data/ar_to_en_mapping.dart + _code(en))
-// ---------------------------------------------------------------------------
-
-const KUWAIT_AREAS: Record<string, string> = {
-  // Capital Governorate (longer names first for substring matching)
-  "ضاحية حصه المبارك": "hessa_al_mubarak_district",
-  "شمال غرب الصليبخات": "north_west_sulaibikhat",
-  "الشويخ السكنية": "shuwaikh_residential",
-  "الشويخ الصناعية": "shuwaikh_industrial",
-  "القبلة - جبلة": "al_qibla_jibla",
-  "عبدالله السالم": "abdullah_al_salem",
-  "جابر الاحمد": "jaber_al_ahmad",
-  "بنيد القار": "bneid_al_qar",
-  "الصالحية": "al_sawlihya",
-  "المباركية": "mubarakiya",
-  "الدسمة": "dasma",
-  "الدعية": "daeya",
-  "الفيحاء": "faiha",
-  "النزهة": "nuzha",
-  "الروضة": "rawda",
-  "العديلية": "adailiya",
-  "الخالدية": "khaldiya",
-  "كيفان": "kaifan",
-  "الشامية": "shamiya",
-  "اليرموك": "yarmouk",
-  "المنصورية": "mansouriya",
-  "القادسية": "qadisiya",
-  "القيروان": "qairawan",
-  "قرطبة": "qurtuba",
-  "السرة": "surra",
-  "الدوحة": "doha",
-  "دسمان": "dasman",
-  "غرناطة": "granada",
-  "الصليبيخات": "sulaibikhat",
-  "النهضة": "nahdha",
-  "المرقاب": "al_murqab",
-  "الشرق": "sharq",
-  // Hawalli Governorate
-  "غرب مشرف - مبارك العبدالله": "west_mishref_mubarak_al_abdullah",
-  "جنوب السرة": "south_surra",
-  "ميدان حولي": "maidan_hawalli",
-  "الشعب السكني": "shaab_residential",
-  "الشعب البحري": "shaab_marine",
-  "حولي": "hawalli",
-  "السالمية": "salmiya",
-  "البدع": "bidaa",
-  "الجابرية": "jabriya",
-  "الرميثية": "rumaithiya",
-  "مشرف": "mishref",
-  "بيان": "bayan",
-  "سلوى": "salwa",
-  "الزهراء": "zahra",
-  "السلام": "al_salam",
-  "حطين": "hateen",
-  "الشهداء": "shuhada",
-  "الصديق": "al_siddiq",
-  // Farwaniya Governorate
-  "العارضية الحرفية - الصناعية": "ardiya_industrial",
-  "خيطان الجنوبي الجديدة": "south_new_khaitan",
-  "عبدالله المبارك - غرب الجليب": "abdullah_al_mubarak",
-  "جليب الشيوخ - الحساوي": "jleeb_al_shuyoukh_hassawi",
-  "جنوب عبدالله المبارك": "south_abdullah_al_mubarak",
-  "غرب عبدالله المبارك": "west_abdullah_al_mubarak",
-  "اسطبلات الفروانية": "farwaniya_stables",
-  "الفروانية": "farwaniya",
-  "خيطان": "khaitan",
-  "الرقعي": "riggae",
-  "الضجيج": "dajeej",
-  "الري": "rai",
-  "الأندلس": "andalous",
-  "العارضية": "ardiya",
-  "العمرية": "omariya",
-  "الرابية": "rabya",
-  "الرحاب": "rehab",
-  "صباح الناصر": "sabah_al_nasser",
-  "اشبيلية": "ishbiliya",
-  "الفردوس": "firdous",
-  // Ahmadi Governorate
-  "صباح الاحمد البحرية - الخيران": "sabah_al_ahmad_marine_khiran",
-  "علي صباح السالم - ام الهيمان": "ali_sabah_al_salem_umm_al_hayman",
-  "صباح الأحمد السكنية": "sabah_al_ahmad_residential",
-  "الخيران السكنية - الجانب البري": "khiran_residential_inland",
-  "جنوب صباح الأحمد": "south_sabah_al_ahmad",
-  "اسطبلات الاحمدي": "ahmadi_stables",
-  "الوفرة السكنية": "wafra_housing",
-  "مزارع الوفرة": "wafra_farms",
-  "فهد الاحمد": "fahad_al_ahmad",
-  "الشعيبة الصناعية": "shuaiba_industrial",
-  "ميناء عبدالله": "mina_abdullah",
-  "جابر العلي": "jaber_al_ali",
-  "الاحمدي": "ahmadi",
-  "المنقف": "mangaf",
-  "الفحيحيل": "fahaheel",
-  "أبو حليفة": "abu_halifa",
-  "الظهر": "daher",
-  "الرقة": "reqqa",
-  "هدية": "hadiya",
-  "الصباحية": "sabahiya",
-  "الفنطاس": "fintas",
-  "المهبولة": "mahboula",
-  "العقيلة": "eqaila",
-  "الضباعية": "dhubaiya",
-  "الجليعة": "julaia",
-  "الزور": "zour",
-  "بنيدر": "bneider",
-  "النويصيب": "nuwaiseeb",
-  // Jahra Governorate
-  "جنوب سعد العبدالله": "south_saad_al_abdullah",
-  "النسيم الجنوبي": "south_naseem",
-  "امغرة الصناعية": "amghara_industrial",
-  "اسطبلات الجهراء": "jahra_stables",
-  "الجهراء الصناعية": "jahra_industrial",
-  "سعد العبدالله": "saad_al_abdullah",
-  "الجهراء": "jahra",
-  "النعيم": "naeem",
-  "القصر": "qasr",
-  "الواحة": "waha",
-  "تيماء": "taima",
-  "الصليبية": "sulaibiya",
-  "العيون": "oyoun",
-  "الصبية": "subiya",
-  "النسيم": "naseem",
-  "كبد": "kabad",
-  "المطلاع": "mutlaa",
-  "الخويسات": "khusais",
-  "الهجن": "hejin",
-  "العبدلي": "abdali",
-  "السالمي": "salmi",
-  "النعايم": "naaim",
-  // Mubarak Al-Kabeer
-  "اسواق القرين - غرب ابوفطيرة الحرفية": "west_abu_fatira_craft_zone_aswaq_al_qurain",
-  "مبارك الكبير": "mubarak_al_kabeer",
-  "القرين": "qurain",
-  "القصور": "qusour",
-  "العدان": "adan",
-  "المسيلة": "messila",
-  "صباح السالم": "sabah_al_salem",
-  "أبو فطيرة": "abu_fatira",
-  "أبو الحصانية": "abu_hasaniya",
-  "الفنيطيس": "funaitees",
-  "المسايل": "maseila",
-  "صبحان": "sabhan",
-};
-
-/**
- * Extract areaCode from user message by matching Arabic area names (mirrors app area codes).
- * Checks longer names first so "الشويخ السكنية" matches before "الشويخ".
- */
-function extractAreaFromText(text: string): string | null {
-  if (!text || typeof text !== "string") return null;
-  const normalized = normalizeArabic(text);
-  const entries = Object.entries(KUWAIT_AREAS).sort((a, b) => b[0].length - a[0].length);
-  for (const [areaAr, code] of entries) {
-    const normalizedArea = normalizeArabic(areaAr);
-    if (normalizedArea && normalized.includes(normalizedArea)) return code;
-  }
-  return null;
-}
-
-/**
- * Detect and normalize common Kuwaiti / Gulf real-estate phrases in the user message.
- * Uses normalizeArabic(text) before matching so different spellings (إيجار, ايجار) match.
- * Returns normalized propertyType, serviceType, requestType, optional features/floors; does not change area logic.
- */
-export function normalizeKuwaitiIntent(text: string): KuwaitiIntentNormalized {
-  const t = (text || "").trim();
-  const tNorm = normalizeArabic(t);
-  let propertyType: string | undefined;
-  let serviceType: string | undefined;
-  let requestType: string | undefined;
-  const features: string[] = [];
-  let floors: number | undefined;
-
-  for (const { phrases, value } of SERVICE_PHRASES) {
-    if (phrases.some((p) => tNorm.includes(normalizeArabic(p)))) {
-      serviceType = value;
-      break;
-    }
-  }
-  for (const { phrases, value } of PROPERTY_PHRASES) {
-    if (phrases.some((p) => tNorm.includes(normalizeArabic(p)))) {
-      propertyType = value;
-      break;
-    }
-  }
-  for (const { phrases, value } of REQUEST_PHRASES) {
-    if (phrases.some((p) => tNorm.includes(normalizeArabic(p)))) {
-      requestType = value;
-      break;
-    }
-  }
-  for (const { phrases, value } of FEATURE_PHRASES) {
-    if (phrases.some((p) => tNorm.includes(normalizeArabic(p)))) {
-      features.push(value);
-    }
-  }
-  for (const { phrases, value } of FLOORS_PHRASES) {
-    if (phrases.some((p) => tNorm.includes(normalizeArabic(p)))) {
-      floors = value;
-      break;
-    }
-  }
-
-  const out: KuwaitiIntentNormalized = {
-    propertyType,
-    serviceType,
-    requestType,
-    normalizedText: t,
-  };
-  if (features.length > 0) out.features = features;
-  if (floors != null) out.floors = floors;
-  return out;
-}
 
 const ANALYZE_SYSTEM = `You are a Kuwaiti real estate expert. Mode: SEARCH FIRST — ASK LATER. Extract whatever the user provides and allow search immediately. Return JSON only.
 
@@ -459,7 +147,7 @@ const TYPE_LABEL_AR: Record<string, string> = {
 
 function formatNearbyReplyAr(results: unknown[], requestedAreaLabel: string): string {
   const areaLabel = requestedAreaLabel || "هذه المنطقة";
-  let intro = `حالياً ما لقيت عقار مطابق في ${areaLabel}،\nلكن لقيت عقارات قريبة ممكن تناسبك:\n\n`;
+  const intro = `حالياً ما لقيت عقار مطابق في ${areaLabel}،\nلكن لقيت عقارات قريبة ممكن تناسبك:\n\n`;
   const lines = (results as Record<string, unknown>[]).map((r) => {
     const type = (r.type as string) || "";
     const typeLabel = TYPE_LABEL_AR[type] || type;
@@ -473,7 +161,7 @@ function formatNearbyReplyAr(results: unknown[], requestedAreaLabel: string): st
 
 function formatNearbyReplyEn(results: unknown[], requestedAreaLabel: string): string {
   const areaLabel = requestedAreaLabel || "this area";
-  let intro = `No matching property in ${areaLabel} right now.\nFound nearby options that might work:\n\n`;
+  const intro = `No matching property in ${areaLabel} right now.\nFound nearby options that might work:\n\n`;
   const lines = (results as Record<string, unknown>[]).map((r) => {
     const type = (r.type as string) || "";
     const area = (r.areaEn as string) || (r.areaAr as string) || "";
@@ -481,456 +169,6 @@ function formatNearbyReplyEn(results: unknown[], requestedAreaLabel: string): st
     return `• ${type} in ${area} – KWD ${price}`;
   });
   return intro + lines.join("\n");
-}
-
-// ---------------------------------------------------------------------------
-// Suggestion Engine (next actions; no Firestore)
-// ---------------------------------------------------------------------------
-
-export interface SuggestionContext {
-  areaCode?: string;
-  propertyType?: string;
-  serviceType?: string;
-  userBudget?: number;
-  resultsCount: number;
-}
-
-const SUGGESTIONS_HAVE_RESULTS_AR = [
-  "تبي أشوف لك خيارات أرخص في نفس المنطقة؟",
-  "تبي نفس النوع لكن في مناطق قريبة؟",
-  "تبي نفس العقار للإيجار بدل الشراء؟",
-];
-
-const SUGGESTIONS_HAVE_RESULTS_EN = [
-  "Want to see cheaper options in the same area?",
-  "Want the same type in nearby areas?",
-  "Want the same property for rent instead of sale?",
-];
-
-const SUGGESTIONS_NO_RESULTS_AR = [
-  "تبي أشوف لك نفس العقار في مناطق قريبة؟",
-  "تبي أوسع نطاق البحث؟",
-  "تبي أبحث عن عقارات مشابهة؟",
-];
-
-const SUGGESTIONS_NO_RESULTS_EN = [
-  "Want to see the same property in nearby areas?",
-  "Want to widen the search scope?",
-  "Want to search for similar properties?",
-];
-
-/** Generate up to 3 short next-action suggestions based on context. */
-export function buildNextSuggestions(context: SuggestionContext, locale: "ar" | "en"): string[] {
-  const count = context.resultsCount ?? 0;
-  const list = count > 0
-    ? (locale === "ar" ? SUGGESTIONS_HAVE_RESULTS_AR : SUGGESTIONS_HAVE_RESULTS_EN)
-    : (locale === "ar" ? SUGGESTIONS_NO_RESULTS_AR : SUGGESTIONS_NO_RESULTS_EN);
-  return list.slice(0, 3);
-}
-
-function appendSuggestionsToReply(reply: string, context: SuggestionContext, locale: "ar" | "en"): string {
-  const suggestions = buildNextSuggestions(context, locale);
-  if (suggestions.length === 0) return reply;
-  const prefix = locale === "ar" ? "ممكن أيضاً:\n\n" : "You can also:\n\n";
-  const lines = suggestions.map((s) => `• ${s}`).join("\n");
-  return reply + "\n\n" + prefix + lines;
-}
-
-const COMPOSE_SYSTEM_AR = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
-
-STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
-
-Format:
-1. Open with a short line that you found options (e.g. "لقيت لك 3 عقارات ممكن تناسبك في القادسية:").
-2. List each property from the results in one line with bullet (•): type, size if available, brief detail, price in د.ك (e.g. "• بيت 400م شارع واحد – السعر 680 ألف").
-3. End with exactly ONE short follow-up question. Examples: "تبي أشوف لك تفاصيل واحد منهم؟" or "ميزانيتك تقريباً كم؟" or "تفضل شارع واحد أو زاوية؟". For house: do NOT ask about bedrooms; ask budget, land size, age, or street type. For apartment: you may ask bedrooms or budget.
-Never ask more than one question. Be direct and broker-like.`;
-
-const COMPOSE_SYSTEM_EN = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
-
-STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
-
-Format:
-1. Open with a short line that you found options (e.g. "Found 3 properties that might work for you in Qadisiya:").
-2. List each property from the results in one line with bullet (•): type, size if available, brief detail, price in KWD.
-3. End with exactly ONE short follow-up question (e.g. "Want details on one of them?" or "What's your budget?" or "Corner or single street?"). For house: do not ask about bedrooms. For apartment: you may ask bedrooms or budget.
-Never ask more than one question. Be direct and broker-like.`;
-
-function extractJson(text: string): Record<string, unknown> {
-  const trimmed = text.trim();
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error("No JSON object in response");
-  }
-  const jsonStr = trimmed.substring(start, end + 1);
-  return JSON.parse(jsonStr) as Record<string, unknown>;
-}
-
-// ---------------------------------------------------------------------------
-// Market Awareness (buyer_interests + properties; no schema change)
-// ---------------------------------------------------------------------------
-
-/** Demand: count buyer_interests in last 7 days for areaCode + propertyType. buyer_interests uses "type" field. */
-async function getMarketDemandStats(
-  areaCode: string,
-  propertyType: string
-): Promise<{ demandLast7Days: number }> {
-  if (!areaCode?.trim() || !propertyType?.trim()) return { demandLast7Days: 0 };
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const q = db
-    .collection("buyer_interests")
-    .where("areaCode", "==", areaCode.trim())
-    .where("type", "==", propertyType.trim())
-    .where("createdAt", ">=", sevenDaysAgo);
-  const snap = await q.get();
-  return { demandLast7Days: snap.size };
-}
-
-/** Supply: count active properties for areaCode + type. */
-async function getMarketSupplyStats(
-  areaCode: string,
-  propertyType: string
-): Promise<{ supplyCount: number }> {
-  if (!areaCode?.trim() || !propertyType?.trim()) return { supplyCount: 0 };
-  const q = db
-    .collection("properties")
-    .where("areaCode", "==", areaCode.trim())
-    .where("type", "==", propertyType.trim())
-    .where("status", "==", "active");
-  const snap = await q.get();
-  return { supplyCount: snap.size };
-}
-
-type MarketSignal = "high_demand_low_supply" | "high_demand" | "low_demand" | "normal";
-
-function analyzeMarket(demand: number, supply: number): MarketSignal {
-  if (demand >= 10 && supply <= 3) return "high_demand_low_supply";
-  if (demand >= 10 && supply > 10) return "high_demand";
-  if (demand <= 3 && supply >= 10) return "low_demand";
-  return "normal";
-}
-
-const MARKET_INSIGHT_AR: Record<MarketSignal, string> = {
-  high_demand_low_supply: "حالياً الطلب على هذا النوع من العقارات في {area} مرتفع والعروض قليلة.",
-  high_demand: "فيه طلب ملحوظ حالياً على هذا النوع من العقارات في {area}.",
-  low_demand: "حالياً الطلب منخفض نسبياً على هذا النوع من العقارات في {area}.",
-  normal: "",
-};
-
-const MARKET_INSIGHT_EN: Record<MarketSignal, string> = {
-  high_demand_low_supply: "Demand for this type of property in {area} is high right now and supply is low.",
-  high_demand: "There is noticeable demand for this type of property in {area} at the moment.",
-  low_demand: "Demand for this type of property in {area} is relatively low at the moment.",
-  normal: "",
-};
-
-function getMarketInsightText(signal: MarketSignal, areaLabel: string, locale: "ar" | "en"): string {
-  if (signal === "normal") return "";
-  const template = locale === "ar" ? MARKET_INSIGHT_AR[signal] : MARKET_INSIGHT_EN[signal];
-  return template.replace("{area}", areaLabel || (locale === "ar" ? "هذه المنطقة" : "this area"));
-}
-
-/** Compute min/max price from a list of properties (for market insight). */
-function computeAreaPriceRange(properties: Record<string, unknown>[]): { min: number; max: number } | null {
-  if (!properties || properties.length === 0) return null;
-  const prices = properties
-    .map((p) => (typeof p.price === "number" ? p.price : Number(p.price)))
-    .filter((p) => typeof p === "number" && !Number.isNaN(p));
-  if (prices.length === 0) return null;
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  return { min, max };
-}
-
-/** Generate market insight text about price range in the area. */
-function buildMarketInsight(
-  areaLabel: string,
-  range: { min: number; max: number } | null,
-  locale: string
-): string {
-  if (!range) return "";
-  if (locale === "ar") {
-    return `لاحظت أن أغلب العقارات في ${areaLabel} حالياً بين ${range.min.toLocaleString("ar")} و ${range.max.toLocaleString("ar")} دينار.`;
-  }
-  return `Most properties in ${areaLabel} are currently between ${range.min.toLocaleString()} and ${range.max.toLocaleString()} KWD.`;
-}
-
-/** Compute average price from a list of properties (for best-deal detection). */
-function computeAveragePrice(properties: Record<string, unknown>[]): number | null {
-  if (!properties || properties.length === 0) return null;
-  const prices = properties
-    .map((p) => (typeof p.price === "number" ? p.price : Number(p.price)))
-    .filter((p) => typeof p === "number" && !Number.isNaN(p));
-  if (prices.length === 0) return null;
-  const sum = prices.reduce((a, b) => a + b, 0);
-  return sum / prices.length;
-}
-
-/** Find first property priced significantly below average (>5% under). */
-function detectBestDeal(
-  properties: Record<string, unknown>[],
-  averagePrice: number
-): Record<string, unknown> | null {
-  if (!averagePrice) return null;
-  const deal = properties.find((p) => {
-    const price = typeof p.price === "number" ? p.price : Number(p.price);
-    if (typeof price !== "number" || Number.isNaN(price)) return false;
-    const diff = averagePrice - price;
-    return diff > averagePrice * 0.05;
-  });
-  return deal ?? null;
-}
-
-/** Build best-deal insight text when a property is below local market average. */
-function buildBestDealInsight(
-  areaLabel: string,
-  deal: Record<string, unknown> | null,
-  averagePrice: number | null,
-  locale: string
-): string {
-  if (!deal || averagePrice == null) return "";
-  const price = typeof deal.price === "number" ? deal.price : Number(deal.price);
-  if (typeof price !== "number" || Number.isNaN(price)) return "";
-  const diff = Math.round(averagePrice - price);
-  if (diff <= 0) return "";
-  if (locale === "ar") {
-    return `ملاحظة: هذا العقار سعره أقل من متوسط السوق في ${areaLabel} بحوالي ${diff.toLocaleString("ar")} دينار.`;
-  }
-  return `Note: this property is priced about ${diff.toLocaleString()} KWD below the average in ${areaLabel}.`;
-}
-
-// ---------------------------------------------------------------------------
-// Buyer intent: investment vs residential (for proactive insights)
-// ---------------------------------------------------------------------------
-
-function detectBuyerIntent(text: string): "investment" | "residential" {
-  const t = normalizeArabic(text);
-  if (
-    t.includes("استثمار") ||
-    t.includes("دخل") ||
-    t.includes("ايجار") ||
-    t.includes("عائد")
-  ) {
-    return "investment";
-  }
-  return "residential";
-}
-
-function buildBuyerInsight(areaLabel: string, intent: string, locale: string): string {
-  if (intent !== "investment") return "";
-  if (locale === "ar") {
-    return `بالمناسبة، كثير من المستثمرين يبحثون عن عقارات في ${areaLabel} بسبب العائد الإيجاري الجيد.`;
-  }
-  return `Many investors look for properties in ${areaLabel} due to strong rental returns.`;
-}
-
-// ---------------------------------------------------------------------------
-// Smart Property Ranking (in-memory only; do not write to Firestore)
-// ---------------------------------------------------------------------------
-
-/** Get time in ms from Firestore Timestamp, ISO string, or ms number */
-function toMillis(v: unknown): number | null {
-  if (v == null) return null;
-  if (typeof v === "number" && !Number.isNaN(v)) return v;
-  if (typeof v === "string") {
-    const ms = Date.parse(v);
-    return Number.isNaN(ms) ? null : ms;
-  }
-  if (typeof v === "object" && v !== null && "_seconds" in v) {
-    const s = (v as { _seconds?: number })._seconds;
-    return typeof s === "number" ? s * 1000 : null;
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Property Intelligence Labels (in-memory only; do not write to Firestore)
-// ---------------------------------------------------------------------------
-
-export type PropertyLabelId = "new_listing" | "high_demand" | "good_deal";
-
-/**
- * Compute up to 2 labels per property from available fields and market signal.
- * - new_listing: createdAt within last 7 days
- * - high_demand: marketSignal === "high_demand_low_supply"
- * - good_deal: price < averagePriceSameArea (when average provided)
- */
-export function computePropertyLabels(
-  property: Record<string, unknown>,
-  marketSignal: string,
-  nowMs: number,
-  averagePriceSameArea?: number | null
-): PropertyLabelId[] {
-  const labels: PropertyLabelId[] = [];
-  const createdAt = toMillis(property.createdAt);
-  if (createdAt != null && nowMs - createdAt <= 7 * 24 * 60 * 60 * 1000) {
-    labels.push("new_listing");
-  }
-  if (marketSignal === "high_demand_low_supply") {
-    labels.push("high_demand");
-  }
-  if (averagePriceSameArea != null && averagePriceSameArea > 0) {
-    const price = typeof property.price === "number" ? property.price : Number(property.price);
-    if (!Number.isNaN(price) && price < averagePriceSameArea) {
-      labels.push("good_deal");
-    }
-  }
-  return labels.slice(0, 2);
-}
-
-/** Score a single property; score is stored only in memory (not returned to client) */
-function scoreProperty(
-  prop: Record<string, unknown>,
-  requestedAreaCode: string,
-  nearbyAreaCodes: string[],
-  userBudget: number | null,
-  nowMs: number
-): number {
-  let score = 0;
-  const areaCode = (prop.areaCode as string) || "";
-  if (requestedAreaCode && areaCode === requestedAreaCode) score += 50;
-  if (nearbyAreaCodes.length > 0 && nearbyAreaCodes.includes(areaCode)) score += 20;
-
-  const featuredUntil = toMillis(prop.featuredUntil);
-  if (featuredUntil != null && featuredUntil > nowMs) score += 30;
-
-  const createdAt = toMillis(prop.createdAt);
-  if (createdAt != null && nowMs - createdAt <= 7 * 24 * 60 * 60 * 1000) score += 10;
-
-  const price = typeof prop.price === "number" ? prop.price : Number(prop.price);
-  if (userBudget != null && userBudget > 0 && !Number.isNaN(price) && price <= userBudget) score += 10;
-
-  return score;
-}
-
-/** Rank properties by score (desc), then by createdAt (newest first); return top 3. Does not mutate input or write to Firestore. */
-function rankPropertyResults(
-  properties: Record<string, unknown>[],
-  requestedAreaCode: string,
-  nearbyAreaCodes: string[],
-  userBudget: number | null
-): Record<string, unknown>[] {
-  if (properties.length === 0) return [];
-  const nowMs = Date.now();
-  const withScore = properties.map((p) => ({
-    prop: p,
-    score: scoreProperty(p, requestedAreaCode, nearbyAreaCodes, userBudget, nowMs),
-    createdAtMs: toMillis(p.createdAt) ?? 0,
-  }));
-  withScore.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return b.createdAtMs - a.createdAtMs;
-  });
-  return withScore.slice(0, 3).map((x) => x.prop);
-}
-
-// ---------------------------------------------------------------------------
-// Property Recommendation Engine (when main + nearby both return 0)
-// ---------------------------------------------------------------------------
-
-export interface FindSimilarParams {
-  requestedAreaCode: string;
-  propertyType: string;
-  userBudget?: number | null;
-  nearbyAreaCodes: string[];
-  requestedSize?: number | null;
-}
-
-/** Similarity score in memory only; uses existing properties fields. */
-function scoreSimilarProperty(
-  prop: Record<string, unknown>,
-  userBudget: number | null,
-  requestedSize: number | null,
-  nowMs: number
-): number {
-  let score = 40; // +40 same property type (query already filters by type)
-  const price = typeof prop.price === "number" ? prop.price : Number(prop.price);
-  if (userBudget != null && userBudget > 0 && !Number.isNaN(price)) {
-    const low = userBudget * 0.9;
-    const high = userBudget * 1.1;
-    if (price >= low && price <= high) score += 20;
-  }
-  if (requestedSize != null && requestedSize > 0) {
-    const size = typeof prop.size === "number" ? prop.size : Number(prop.size);
-    if (!Number.isNaN(size) && size > 0) {
-      const diff = Math.abs(size - requestedSize) / requestedSize;
-      if (diff < 0.2) score += 10;
-    }
-  }
-  const createdAt = toMillis(prop.createdAt);
-  if (createdAt != null && nowMs - createdAt <= 14 * 24 * 60 * 60 * 1000) score += 10;
-  return score;
-}
-
-/**
- * Find similar properties in nearby areas; filter by budget band; rank by similarity in memory; return top 3.
- * Does not change Firestore schema. Limit 20 docs from Firestore.
- */
-export async function findSimilarProperties(params: FindSimilarParams): Promise<Record<string, unknown>[]> {
-  const { propertyType, userBudget, nearbyAreaCodes, requestedSize } = params;
-  if (!propertyType?.trim()) return [];
-  const areas = (nearbyAreaCodes || []).filter((a) => a != null && String(a).trim() !== "");
-  if (areas.length === 0) return [];
-
-  const areaList = areas.length > 10 ? areas.slice(0, 10) : areas;
-  const q = db
-    .collection("properties")
-    .where("type", "==", propertyType.trim())
-    .where("status", "==", "active")
-    .where("areaCode", "in", areaList)
-    .limit(20);
-  const snap = await q.get();
-  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown>));
-
-  let filtered = docs;
-  const budget = userBudget != null && userBudget > 0 ? userBudget : null;
-  if (budget != null) {
-    const low = budget * 0.8;
-    const high = budget * 1.2;
-    filtered = docs.filter((p) => {
-      const price = typeof p.price === "number" ? p.price : Number(p.price);
-      return !Number.isNaN(price) && price >= low && price <= high;
-    });
-  }
-
-  const nowMs = Date.now();
-  const reqSize = requestedSize != null && requestedSize > 0 ? requestedSize : null;
-  const withScore = filtered.map((p) => ({
-    prop: p,
-    score: scoreSimilarProperty(p, budget, reqSize, nowMs),
-    createdAtMs: toMillis(p.createdAt) ?? 0,
-  }));
-  withScore.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return b.createdAtMs - a.createdAtMs;
-  });
-  const recommendations = withScore.slice(0, 3).map((x) => x.prop);
-
-  let marketSignal: string = "normal";
-  const { requestedAreaCode } = params;
-  const pType = params.propertyType?.trim();
-  if (requestedAreaCode?.trim() && pType) {
-    try {
-      const [demandRes, supplyRes] = await Promise.all([
-        getMarketDemandStats(requestedAreaCode.trim(), pType),
-        getMarketSupplyStats(requestedAreaCode.trim(), pType),
-      ]);
-      marketSignal = analyzeMarket(demandRes.demandLast7Days, supplyRes.supplyCount);
-    } catch {
-      // non-fatal
-    }
-  }
-  for (const prop of recommendations) {
-    const areaCode = (prop.areaCode as string) || "";
-    const sameArea = recommendations.filter((p) => ((p.areaCode as string) || "") === areaCode);
-    const prices = sameArea.map((p) => (typeof p.price === "number" ? p.price : Number(p.price))).filter((n) => !Number.isNaN(n));
-    const avgPrice = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : null;
-    prop.labels = computePropertyLabels(prop, marketSignal, nowMs, avgPrice);
-  }
-
-  return recommendations;
 }
 
 const SIMILAR_INTRO_AR = "ما لقيت عقار مطابق تماماً لطلبك،\nلكن لقيت عقارات قريبة ممكن تناسبك:\n\n";
@@ -955,238 +193,40 @@ function formatSimilarReplyEn(results: Record<string, unknown>[]): string {
   return SIMILAR_INTRO_EN + lines.join("\n");
 }
 
-// ---------------------------------------------------------------------------
-// Conversation memory (in-memory only; not stored in Firestore)
-// ---------------------------------------------------------------------------
-
-export interface SessionMemory {
-  areaCode?: string;
-  propertyType?: string;
-  serviceType?: string;
-  budget?: number;
-  bedrooms?: number;
+function appendSuggestionsToReply(reply: string, suggestions: string[], locale: string): string {
+  if (suggestions.length === 0) return reply;
+  const prefix = locale === "ar" ? "ممكن أيضاً:\n\n" : "You can also:\n\n";
+  return reply + "\n\n" + prefix + suggestions.map((s) => `• ${s}`).join("\n");
 }
 
-/** Structured search context that evolves during the conversation (initial → refinement → comparison). */
-export interface SearchContext {
-  areaCode?: string;
-  propertyType?: string;
-  serviceType?: string;
-  budget?: number;
-  bedrooms?: number;
-  intent?: "residential" | "investment";
-  lastModifier?: string;
-  conversationStage?: "initial" | "refinement" | "comparison";
-}
+const COMPOSE_SYSTEM_AR = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
 
-const SESSION_MEMORY_KEYS = ["areaCode", "type", "serviceType", "budget", "bedrooms"] as const;
+STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
 
-/** Triggers that indicate user is starting a completely new search; reset memory and use only new params */
-const NEW_SEARCH_TRIGGERS = ["أبي", "ابي", "دور لي", "أبحث عن", "ابحث عن"];
+Format:
+1. Open with a short line that you found options (e.g. "لقيت لك 3 عقارات ممكن تناسبك في القادسية:").
+2. List each property from the results in one line with bullet (•): type, size if available, brief detail, price in د.ك (e.g. "• بيت 400م شارع واحد – السعر 680 ألف").
+3. End with exactly ONE short follow-up question. Examples: "تبي أشوف لك تفاصيل واحد منهم؟" or "ميزانيتك تقريباً كم؟" or "تفضل شارع واحد أو زاوية؟". For house: do NOT ask about bedrooms; ask budget, land size, age, or street type. For apartment: you may ask bedrooms or budget.
+Never ask more than one question. Be direct and broker-like.`;
+
+const COMPOSE_SYSTEM_EN = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
+
+STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
+
+Format:
+1. Open with a short line that you found options (e.g. "Found 3 properties that might work for you in Qadisiya:").
+2. List each property from the results in one line with bullet (•): type, size if available, brief detail, price in KWD.
+3. End with exactly ONE short follow-up question (e.g. "Want details on one of them?" or "What's your budget?" or "Corner or single street?"). For house: do not ask about bedrooms. For apartment: you may ask bedrooms or budget.
+Never ask more than one question. Be direct and broker-like.`;
 
 // ---------------------------------------------------------------------------
-// Greeting handling (no OpenAI, no search; natural conversation)
+// Cloud Functions (orchestrator)
 // ---------------------------------------------------------------------------
-
-const GREETING_WORDS = [
-  "السلام",
-  "السلام عليكم",
-  "هلا",
-  "هلا والله",
-  "مرحبا",
-  "صباح الخير",
-  "مساء الخير",
-];
-
-const GREETING_REPLIES_AR = [
-  "وعليكم السلام.",
-  "وعليكم السلام، حياك الله.",
-  "هلا والله.",
-  "ياهلا ومرحبا.",
-  "مرحبا فيك.",
-  "حياك الله.",
-  "هلا فيك.",
-  "ياهلا.",
-];
-
-const MORNING_GREETING_REPLIES_AR = [
-  "صباح الخير.",
-  "صباح النور.",
-  "صباحك خير.",
-  "صباح الخير، حياك الله.",
-];
-
-const EVENING_GREETING_REPLIES_AR = [
-  "مساء الخير.",
-  "مساء النور.",
-  "مساء الخير، حياك الله.",
-  "مساءك خير.",
-];
-
-function smartGreeting(userText: string): string {
-  const t = normalizeArabic(userText);
-
-  if (t.includes("صباح")) {
-    const i = Math.floor(Math.random() * MORNING_GREETING_REPLIES_AR.length);
-    return MORNING_GREETING_REPLIES_AR[i];
-  }
-
-  if (t.includes("مساء")) {
-    const i = Math.floor(Math.random() * EVENING_GREETING_REPLIES_AR.length);
-    return EVENING_GREETING_REPLIES_AR[i];
-  }
-
-  const i = Math.floor(Math.random() * GREETING_REPLIES_AR.length);
-  return GREETING_REPLIES_AR[i];
-}
-
-/** True if message contains a greeting phrase and has no real estate intent (no search, no OpenAI). */
-function isGreetingOnly(text: string): boolean {
-  if (!text || typeof text !== "string") return false;
-  const normalized = normalizeArabic(text.trim());
-  const hasGreeting = GREETING_WORDS.some((w) => normalized.includes(normalizeArabic(w)));
-  if (!hasGreeting) return false;
-  const hasArea = extractAreaFromText(text) != null;
-  const kuwaiti = normalizeKuwaitiIntent(text);
-  const hasPropertyType = kuwaiti.propertyType != null && String(kuwaiti.propertyType).trim() !== "";
-  const hasServiceType = kuwaiti.serviceType != null && String(kuwaiti.serviceType).trim() !== "";
-  const hasBudget = /\d/.test(text);
-  const hasRealEstateIntent = hasArea || hasPropertyType || hasServiceType || hasBudget;
-  return !hasRealEstateIntent;
-}
-
-function isNewSearchTrigger(text: string): boolean {
-  const t = normalizeArabic((text || "").trim());
-  return NEW_SEARCH_TRIGGERS.some((trigger) => t.startsWith(normalizeArabic(trigger)) || t === normalizeArabic(trigger));
-}
-
-/** Detect follow-up phrases that modify the current search (أرخص شوي، أكبر، نفس المنطقة). */
-function detectSearchModifier(text: string): { type: string } | null {
-  if (!text || typeof text !== "string") return null;
-  const t = normalizeArabic(text.trim());
-
-  if (t.includes("ارخص") || t.includes("اقل") || t.includes("اوفر")) {
-    return { type: "budget_down" };
-  }
-  if (t.includes("اغلى") || t.includes("افخم")) {
-    return { type: "budget_up" };
-  }
-  if (t.includes("اكبر") || t.includes("مساحه اكبر")) {
-    return { type: "size_up" };
-  }
-  if (t.includes("اصغر")) {
-    return { type: "size_down" };
-  }
-  if (t.includes("نفس المنطقه") || t.includes("نفس المنطقة")) {
-    return { type: "same_area" };
-  }
-
-  return null;
-}
-
-/** Extract session memory from currentFilters (only allowed keys) */
-function getSessionMemory(filters: Record<string, unknown>): SessionMemory & Record<string, unknown> {
-  const mem: SessionMemory & Record<string, unknown> = {};
-  const areaCode = filters.areaCode;
-  if (areaCode != null && String(areaCode).trim() !== "") mem.areaCode = String(areaCode).trim();
-  const type = filters.type;
-  if (type != null && String(type).trim() !== "") mem.propertyType = String(type).trim();
-  const serviceType = filters.serviceType;
-  if (serviceType != null && String(serviceType).trim() !== "") mem.serviceType = String(serviceType).trim();
-  const budget = filters.budget;
-  if (budget != null && typeof budget === "number" && !Number.isNaN(budget)) mem.budget = budget;
-  const bedrooms = filters.bedrooms;
-  if (bedrooms != null && typeof bedrooms === "number" && !Number.isNaN(bedrooms)) mem.bedrooms = bedrooms;
-  return mem;
-}
-
-/** Build SearchContext from currentFilters (client state). */
-function getSearchContextFromFilters(filters: Record<string, unknown>): SearchContext {
-  const ctx: SearchContext = {};
-  const areaCode = filters.areaCode;
-  if (areaCode != null && String(areaCode).trim() !== "") ctx.areaCode = String(areaCode).trim();
-  const type = filters.type;
-  if (type != null && String(type).trim() !== "") ctx.propertyType = String(type).trim();
-  const serviceType = filters.serviceType;
-  if (serviceType != null && String(serviceType).trim() !== "") ctx.serviceType = String(serviceType).trim();
-  const budget = filters.budget;
-  if (budget != null && typeof budget === "number" && !Number.isNaN(budget)) ctx.budget = budget;
-  const bedrooms = filters.bedrooms;
-  if (bedrooms != null && typeof bedrooms === "number" && !Number.isNaN(bedrooms)) ctx.bedrooms = bedrooms;
-  return ctx;
-}
-
-/** Apply parsed params (from OpenAI + extraction) onto the context; new values override. */
-function applyParamsToContext(context: SearchContext, paramsPatch: Record<string, unknown>): void {
-  const areaCode = paramsPatch.areaCode;
-  if (areaCode != null && String(areaCode).trim() !== "") context.areaCode = String(areaCode).trim();
-  const type = paramsPatch.type;
-  if (type != null && String(type).trim() !== "") context.propertyType = String(type).trim();
-  const serviceType = paramsPatch.serviceType;
-  if (serviceType != null && String(serviceType).trim() !== "") context.serviceType = String(serviceType).trim();
-  const budget = paramsPatch.budget;
-  if (budget != null && (typeof budget === "number" || typeof budget === "string")) {
-    const n = typeof budget === "number" ? budget : Number(budget);
-    if (!Number.isNaN(n)) context.budget = n;
-  }
-  const bedrooms = paramsPatch.bedrooms;
-  if (bedrooms != null && (typeof bedrooms === "number" || typeof bedrooms === "string")) {
-    const n = typeof bedrooms === "number" ? bedrooms : Number(bedrooms);
-    if (!Number.isNaN(n)) context.bedrooms = n;
-  }
-}
-
-/** Apply a modifier (أرخص شوي، أكبر شوي، etc.) to context and set refinement stage. */
-function applyModifierToContext(context: SearchContext, modifier: { type: string }): void {
-  context.lastModifier = modifier.type;
-  context.conversationStage = "refinement";
-  if (modifier.type === "budget_down" && context.budget != null) {
-    context.budget = Math.round(Number(context.budget) * 0.9);
-  } else if (modifier.type === "budget_up" && context.budget != null) {
-    context.budget = Math.round(Number(context.budget) * 1.1);
-  } else if (modifier.type === "size_up") {
-    context.bedrooms = (context.bedrooms ?? 3) + 1;
-  } else if (modifier.type === "size_down") {
-    context.bedrooms = Math.max(1, (context.bedrooms ?? 3) - 1);
-  }
-  // same_area: no change to areaCode; already in context
-}
-
-/** Build query filters (params_patch shape) from SearchContext for the client. */
-function contextToQueryFilters(context: SearchContext): Record<string, unknown> {
-  const q: Record<string, unknown> = {};
-  if (context.areaCode != null && context.areaCode !== "") q.areaCode = context.areaCode;
-  if (context.propertyType != null && context.propertyType !== "") q.type = context.propertyType;
-  if (context.serviceType != null && context.serviceType !== "") q.serviceType = context.serviceType;
-  if (context.budget != null && !Number.isNaN(Number(context.budget))) q.budget = context.budget;
-  if (context.bedrooms != null && !Number.isNaN(Number(context.bedrooms))) q.bedrooms = context.bedrooms;
-  return q;
-}
-
-/** Merge session memory with new params: new values override, missing keys keep previous. */
-function mergeSessionMemory(
-  sessionMemory: SessionMemory & Record<string, unknown>,
-  paramsPatch: Record<string, unknown>
-): Record<string, unknown> {
-  const merged: Record<string, unknown> = {};
-  for (const key of SESSION_MEMORY_KEYS) {
-    const newVal = paramsPatch[key];
-    const prevVal = key === "type" ? sessionMemory.propertyType ?? sessionMemory[key] : sessionMemory[key];
-    if (newVal != null && newVal !== "") {
-      merged[key] = newVal;
-    } else if (prevVal != null && prevVal !== "") {
-      merged[key] = prevVal;
-    }
-  }
-  return merged;
-}
 
 export const aqaraiAgentRankResults = onCall(
   { region: "us-central1" },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
-    }
+    if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
     const data = (request.data as Record<string, unknown>) || {};
     const properties = Array.isArray(data.properties) ? (data.properties as Record<string, unknown>[]) : [];
     const requestedAreaCode = typeof data.requestedAreaCode === "string" ? data.requestedAreaCode.trim() : "";
@@ -1198,19 +238,19 @@ export const aqaraiAgentRankResults = onCall(
         ? Number(data.userBudget)
         : null;
 
-    const top3 = rankPropertyResults(properties, requestedAreaCode, nearbyAreaCodes, userBudget);
+    const top3 = rankPropertyResults(properties, {
+      requestedAreaCode,
+      nearbyAreaCodes,
+      userBudget,
+    });
 
-    let marketSignal: string = "normal";
+    let marketSignal = "normal";
     const propertyType = top3[0]?.type != null ? String(top3[0].type).trim() : "";
     if (requestedAreaCode && propertyType) {
       try {
-        const [demandRes, supplyRes] = await Promise.all([
-          getMarketDemandStats(requestedAreaCode, propertyType),
-          getMarketSupplyStats(requestedAreaCode, propertyType),
-        ]);
-        marketSignal = analyzeMarket(demandRes.demandLast7Days, supplyRes.supplyCount);
+        marketSignal = await getMarketSignal(db, requestedAreaCode, propertyType);
       } catch {
-        // non-fatal; keep normal
+        // non-fatal
       }
     }
 
@@ -1218,7 +258,9 @@ export const aqaraiAgentRankResults = onCall(
     for (const prop of top3) {
       const areaCode = (prop.areaCode as string) || "";
       const sameArea = top3.filter((p) => ((p.areaCode as string) || "") === areaCode);
-      const prices = sameArea.map((p) => (typeof p.price === "number" ? p.price : Number(p.price))).filter((n) => !Number.isNaN(n));
+      const prices = sameArea
+        .map((p) => (typeof p.price === "number" ? p.price : Number(p.price)))
+        .filter((n) => !Number.isNaN(n));
       const avgPrice = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : null;
       prop.labels = computePropertyLabels(prop, marketSignal, nowMs, avgPrice);
     }
@@ -1230,13 +272,15 @@ export const aqaraiAgentRankResults = onCall(
 export const aqaraiAgentFindSimilar = onCall(
   { region: "us-central1" },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
-    }
+    if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
     const data = (request.data as Record<string, unknown>) || {};
     const requestedAreaCode = typeof data.requestedAreaCode === "string" ? data.requestedAreaCode.trim() : "";
-    const propertyType = typeof data.propertyType === "string" ? data.propertyType.trim() : (typeof data.type === "string" ? data.type.trim() : "");
-    const serviceType = typeof data.serviceType === "string" ? data.serviceType.trim() : "";
+    const propertyType =
+      typeof data.propertyType === "string"
+        ? data.propertyType.trim()
+        : typeof data.type === "string"
+          ? data.type.trim()
+          : "";
     const nearbyAreaCodes = Array.isArray(data.nearbyAreaCodes)
       ? (data.nearbyAreaCodes as string[]).map((s) => String(s).trim()).filter(Boolean)
       : [];
@@ -1245,7 +289,8 @@ export const aqaraiAgentFindSimilar = onCall(
         ? Number(data.userBudget)
         : null;
     const requestedSize =
-      data.requestedSize != null && (typeof data.requestedSize === "number" || typeof data.requestedSize === "string")
+      data.requestedSize != null &&
+      (typeof data.requestedSize === "number" || typeof data.requestedSize === "string")
         ? Number(data.requestedSize)
         : null;
     const locale = data.locale === "ar" ? "ar" : "en";
@@ -1253,7 +298,7 @@ export const aqaraiAgentFindSimilar = onCall(
     const cacheKey = getCacheKey({
       areaCode: requestedAreaCode || undefined,
       type: propertyType || undefined,
-      serviceType: serviceType || undefined,
+      serviceType: undefined,
       budget: userBudget,
     });
     const cached = getCachedResult(cacheKey);
@@ -1262,13 +307,18 @@ export const aqaraiAgentFindSimilar = onCall(
       return cached as { recommendations: Record<string, unknown>[]; reply: string };
     }
 
-    const recommendations = await findSimilarProperties({
-      requestedAreaCode,
-      propertyType,
-      userBudget,
-      nearbyAreaCodes,
-      requestedSize,
-    });
+    const getMarketSignalFn = (areaCode: string, pType: string) => getMarketSignal(db, areaCode, pType);
+    const recommendations = await findSimilarProperties(
+      {
+        requestedAreaCode,
+        propertyType,
+        userBudget,
+        nearbyAreaCodes,
+        requestedSize,
+      } as FindSimilarParams,
+      db,
+      getMarketSignalFn
+    );
 
     let reply =
       recommendations.length > 0
@@ -1278,12 +328,13 @@ export const aqaraiAgentFindSimilar = onCall(
         : "";
 
     if (reply) {
-      const suggestionContext: SuggestionContext = {
-        areaCode: requestedAreaCode || undefined,
+      const suggestions = buildSmartSuggestions({
+        area: requestedAreaCode || undefined,
         propertyType: propertyType || undefined,
+        locale,
         resultsCount: recommendations.length,
-      };
-      reply = appendSuggestionsToReply(reply, suggestionContext, locale);
+      });
+      reply = appendSuggestionsToReply(reply, suggestions, locale);
     }
 
     const response = { recommendations, reply };
@@ -1295,30 +346,24 @@ export const aqaraiAgentFindSimilar = onCall(
 export const aqaraiAgentAnalyze = onCall(
   { region: "us-central1", secrets: ["OPENAI_API_KEY"] },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
-    }
+    if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
     const data = (request.data as Record<string, unknown>) || {};
     const rawMessage = typeof data.message === "string" ? data.message.trim() : "";
-    if (!rawMessage) {
-      throw new HttpsError("invalid-argument", "message required");
-    }
-    const kuwaitiIntent = normalizeKuwaitiIntent(rawMessage);
-    if (isGreetingOnly(rawMessage)) {
+    if (!rawMessage) throw new HttpsError("invalid-argument", "message required");
+
+    const locale = data.locale === "ar" ? "ar" : "en";
+    const parsed = parseUserMessage(rawMessage, locale);
+
+    if (parsed.greeting) {
       return {
         intent: "greeting",
         params_patch: {},
         reset_filters: false,
         is_complete: false,
         clarifying_questions: [],
-        greeting_reply: smartGreeting(rawMessage),
+        greeting_reply: parsed.greetingReply,
       };
     }
-    let message = rawMessage.split(/\s+/).map((w) => normalizeAreaName(w)).join(" ");
-    const last8Messages = Array.isArray(data.last8Messages) ? data.last8Messages : [];
-    const currentFilters = (data.currentFilters && typeof data.currentFilters === "object") ? data.currentFilters as Record<string, unknown> : {};
-    const sessionMemory = getSessionMemory(currentFilters);
-    const top3LastResults = Array.isArray(data.top3LastResults) ? data.top3LastResults : [];
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -1331,7 +376,18 @@ export const aqaraiAgentAnalyze = onCall(
       };
     }
 
-    const context = [
+    const currentFilters =
+      data.currentFilters && typeof data.currentFilters === "object"
+        ? (data.currentFilters as Record<string, unknown>)
+        : {};
+    const last8Messages = Array.isArray(data.last8Messages) ? data.last8Messages : [];
+    const top3LastResults = Array.isArray(data.top3LastResults) ? data.top3LastResults : [];
+
+    const message = rawMessage
+      .split(/\s+/)
+      .map((w) => normalizeAreaName(w))
+      .join(" ");
+    const contextStr = [
       "Current filters (use for merge):",
       JSON.stringify(currentFilters),
       "Last 3 results (id, areaAr, areaEn, type, price, size):",
@@ -1348,87 +404,65 @@ export const aqaraiAgentAnalyze = onCall(
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: ANALYZE_SYSTEM },
-          { role: "user", content: context },
+          { role: "user", content: contextStr },
         ],
         max_tokens: 400,
       });
       const content = completion.choices?.[0]?.message?.content?.trim() || "{}";
-      const parsed = extractJson(content);
-      const intent = typeof parsed.intent === "string" ? parsed.intent : "general_question";
-      const paramsPatch = (parsed.params_patch && typeof parsed.params_patch === "object") ? parsed.params_patch as Record<string, unknown> : {};
-      const resetFilters = parsed.reset_filters === true;
-      const isComplete = parsed.is_complete === true;
-      const clarifyingQuestions = Array.isArray(parsed.clarifying_questions)
-        ? (parsed.clarifying_questions as unknown[]).map((q) => String(q))
+      const openaiParsed = extractJson(content);
+      const intent = typeof openaiParsed.intent === "string" ? openaiParsed.intent : "general_question";
+      const paramsPatch =
+        openaiParsed.params_patch && typeof openaiParsed.params_patch === "object"
+          ? (openaiParsed.params_patch as Record<string, unknown>)
+          : {};
+      const resetFilters = openaiParsed.reset_filters === true;
+      let isCompleteFinal = openaiParsed.is_complete === true;
+      let clarifyingQuestionsFinal = Array.isArray(openaiParsed.clarifying_questions)
+        ? (openaiParsed.clarifying_questions as unknown[]).map((q) => String(q))
         : [];
 
-      if (kuwaitiIntent.propertyType != null && (paramsPatch.type == null || paramsPatch.type === "")) {
-        paramsPatch.type = kuwaitiIntent.propertyType;
-      }
-      if (kuwaitiIntent.serviceType != null && (paramsPatch.serviceType == null || paramsPatch.serviceType === "")) {
-        paramsPatch.serviceType = kuwaitiIntent.serviceType;
+      const kuwaiti = normalizeKuwaitiIntent(rawMessage);
+      if (kuwaiti.propertyType && (paramsPatch.type == null || paramsPatch.type === ""))
+        paramsPatch.type = kuwaiti.propertyType;
+      if (kuwaiti.serviceType && (paramsPatch.serviceType == null || paramsPatch.serviceType === ""))
+        paramsPatch.serviceType = kuwaiti.serviceType;
+
+      if (!paramsPatch.areaCode && parsed.detectedAreaCode) {
+        paramsPatch.areaCode = parsed.detectedAreaCode;
+        isCompleteFinal = true;
+        clarifyingQuestionsFinal = [];
       }
 
-      // Intent memory: use session memory when params are missing (follow-ups like "أرخص شوي" or "أكبر شوي" keep area/type)
-      if (!paramsPatch.areaCode && sessionMemory.areaCode) {
-        paramsPatch.areaCode = sessionMemory.areaCode;
-      }
-      if ((!paramsPatch.type || paramsPatch.type === "") && sessionMemory.propertyType) {
-        paramsPatch.type = sessionMemory.propertyType;
-      }
-      if ((!paramsPatch.serviceType || paramsPatch.serviceType === "") && sessionMemory.serviceType) {
-        paramsPatch.serviceType = sessionMemory.serviceType;
-      }
-      if (paramsPatch.budget == null && sessionMemory.budget != null) {
-        paramsPatch.budget = sessionMemory.budget;
-      }
-      if (paramsPatch.bedrooms == null && sessionMemory.bedrooms != null) {
-        paramsPatch.bedrooms = sessionMemory.bedrooms;
-      }
+      const previousContext = getSearchContextFromFilters(currentFilters);
+      if (!paramsPatch.areaCode && previousContext.areaCode) paramsPatch.areaCode = previousContext.areaCode;
+      if ((!paramsPatch.type || paramsPatch.type === "") && previousContext.propertyType)
+        paramsPatch.type = previousContext.propertyType;
+      if ((!paramsPatch.serviceType || paramsPatch.serviceType === "") && previousContext.serviceType)
+        paramsPatch.serviceType = previousContext.serviceType;
+      if (paramsPatch.budget == null && previousContext.budget != null) paramsPatch.budget = previousContext.budget;
+      if (paramsPatch.bedrooms == null && previousContext.bedrooms != null)
+        paramsPatch.bedrooms = previousContext.bedrooms;
 
-      // If OpenAI did not set areaCode, try to detect from user message (matches all app areas)
-      let isCompleteFinal = isComplete;
-      let clarifyingQuestionsFinal = clarifyingQuestions;
-      const currentArea = paramsPatch.areaCode != null && String(paramsPatch.areaCode).trim() !== "" ? String(paramsPatch.areaCode).trim() : null;
-      if (!currentArea) {
-        const detectedArea = extractAreaFromText(rawMessage);
-        if (detectedArea) {
-          paramsPatch.areaCode = detectedArea;
-          isCompleteFinal = true;
-          clarifyingQuestionsFinal = [];
-        }
-      }
-
-      // SearchContext: structured conversation state (initial → refinement → comparison)
-      const modifier = detectSearchModifier(rawMessage);
       const hasPreviousSearch =
-        (sessionMemory.areaCode != null && String(sessionMemory.areaCode).trim() !== "") ||
-        (sessionMemory.budget != null && typeof sessionMemory.budget === "number") ||
-        (sessionMemory.propertyType != null && String(sessionMemory.propertyType).trim() !== "");
+        (previousContext.areaCode != null && previousContext.areaCode !== "") ||
+        (previousContext.budget != null) ||
+        (previousContext.propertyType != null && previousContext.propertyType !== "");
 
-      let context: SearchContext;
-      if (isNewSearchTrigger(rawMessage)) {
-        context = {};
-        applyParamsToContext(context, paramsPatch);
-        context.conversationStage = "initial";
-      } else {
-        context = getSearchContextFromFilters(currentFilters);
-        applyParamsToContext(context, paramsPatch);
-        if (modifier != null && hasPreviousSearch) {
-          applyModifierToContext(context, modifier);
-          isCompleteFinal = true;
-          clarifyingQuestionsFinal = [];
-        }
+      if (parsed.modifier && hasPreviousSearch && !parsed.isNewSearch) {
+        isCompleteFinal = true;
+        clarifyingQuestionsFinal = [];
       }
-      if (rawMessage) context.intent = detectBuyerIntent(rawMessage);
 
-      let finalParamsPatch: Record<string, unknown> = contextToQueryFilters(context);
-      for (const k of Object.keys(paramsPatch)) {
-        if (!SESSION_MEMORY_KEYS.includes(k as (typeof SESSION_MEMORY_KEYS)[number])) {
-          finalParamsPatch[k] = paramsPatch[k];
-        }
-      }
-      const finalResetFilters = isNewSearchTrigger(rawMessage) ? true : resetFilters;
+      const mergedForTurn = {
+        ...parsed,
+        paramsPatch,
+      };
+      const context = mergeContextForTurn(previousContext, mergedForTurn);
+
+      let finalParamsPatch = contextToQueryFilters(context) as Record<string, unknown>;
+      if (paramsPatch.investmentFlag != null) finalParamsPatch.investmentFlag = paramsPatch.investmentFlag;
+
+      const finalResetFilters = parsed.isNewSearch ? true : resetFilters;
 
       const out: Record<string, unknown> = {
         intent,
@@ -1437,15 +471,9 @@ export const aqaraiAgentAnalyze = onCall(
         is_complete: isCompleteFinal,
         clarifying_questions: clarifyingQuestionsFinal,
       };
-      if (kuwaitiIntent.requestType != null) {
-        out.requestType = kuwaitiIntent.requestType;
-      }
-      if (kuwaitiIntent.features != null && kuwaitiIntent.features.length > 0) {
-        out.features = kuwaitiIntent.features;
-      }
-      if (kuwaitiIntent.floors != null) {
-        out.floors = kuwaitiIntent.floors;
-      }
+      if (kuwaiti.requestType != null) out.requestType = kuwaiti.requestType;
+      if (kuwaiti.features != null && kuwaiti.features.length > 0) out.features = kuwaiti.features;
+      if (kuwaiti.floors != null) out.floors = kuwaiti.floors;
       return out;
     } catch (err) {
       console.error("Agent analyze error:", err);
@@ -1457,46 +485,71 @@ export const aqaraiAgentAnalyze = onCall(
 export const aqaraiAgentCompose = onCall(
   { region: "us-central1", secrets: ["OPENAI_API_KEY"] },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
-    }
+    if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
     const data = (request.data as Record<string, unknown>) || {};
     const top3Results = Array.isArray(data.top3Results) ? (data.top3Results as Record<string, unknown>[]) : [];
     const locale = data.locale === "ar" ? "ar" : "en";
     const userAskedForMore = data.userAskedForMore === true;
     const isNearbyFallback = data.isNearbyFallback === true;
     const requestedAreaLabel = typeof data.requestedAreaLabel === "string" ? data.requestedAreaLabel : "";
-    const rawMessage = typeof data.rawMessage === "string" ? data.rawMessage.trim() : (typeof data.message === "string" ? data.message.trim() : "");
-    const areaCode = typeof data.areaCode === "string" ? data.areaCode.trim() : (top3Results[0]?.areaCode != null ? String(top3Results[0].areaCode).trim() : "");
-    const propertyType = typeof data.propertyType === "string" ? data.propertyType.trim() : (data.type != null ? String(data.type).trim() : (top3Results[0]?.type != null ? String(top3Results[0].type).trim() : ""));
+    const rawMessage =
+      typeof data.rawMessage === "string"
+        ? data.rawMessage.trim()
+        : typeof data.message === "string"
+          ? data.message.trim()
+          : "";
+    const areaCode =
+      typeof data.areaCode === "string"
+        ? data.areaCode.trim()
+        : top3Results[0]?.areaCode != null
+          ? String(top3Results[0].areaCode).trim()
+          : "";
+    const propertyType =
+      typeof data.propertyType === "string"
+        ? data.propertyType.trim()
+        : data.type != null
+          ? String(data.type).trim()
+          : top3Results[0]?.type != null
+            ? String(top3Results[0].type).trim()
+            : "";
     const serviceType = typeof data.serviceType === "string" ? data.serviceType.trim() : "";
-    const userBudget = data.userBudget != null && (typeof data.userBudget === "number" || typeof data.userBudget === "string") ? Number(data.userBudget) : undefined;
-
-    const suggestionContext: SuggestionContext = {
-      areaCode: areaCode || undefined,
-      propertyType: propertyType || undefined,
-      serviceType: serviceType || undefined,
-      userBudget,
-      resultsCount: top3Results.length,
-    };
+    const userBudget =
+      data.userBudget != null &&
+      (typeof data.userBudget === "number" || typeof data.userBudget === "string")
+        ? Number(data.userBudget)
+        : undefined;
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return { reply: locale === "ar" ? "المساعد مو متصل. جرب لاحقاً." : "Assistant unavailable. Try later." };
+      return {
+        reply: locale === "ar" ? "المساعد مو متصل. جرب لاحقاً." : "Assistant unavailable. Try later.",
+      };
     }
+
+    const suggestions = buildSmartSuggestions({
+      area: areaCode || undefined,
+      propertyType: propertyType || undefined,
+      serviceType: serviceType || undefined,
+      locale,
+      resultsCount: top3Results.length,
+    });
+
     if (top3Results.length === 0) {
       const reply = locale === "ar" ? NO_RESULTS_AR : NO_RESULTS_EN;
-      return { reply: appendSuggestionsToReply(reply, suggestionContext, locale) };
+      return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
     }
+
     if (isNearbyFallback && top3Results.length > 0) {
-      const reply = locale === "ar"
-        ? formatNearbyReplyAr(top3Results, requestedAreaLabel)
-        : formatNearbyReplyEn(top3Results, requestedAreaLabel);
-      return { reply: appendSuggestionsToReply(reply, suggestionContext, locale) };
+      const reply =
+        locale === "ar"
+          ? formatNearbyReplyAr(top3Results, requestedAreaLabel)
+          : formatNearbyReplyEn(top3Results, requestedAreaLabel);
+      return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
     }
+
     if (top3Results.length === 1 && userAskedForMore) {
       const reply = locale === "ar" ? SINGLE_RESULT_ASKED_MORE_AR : SINGLE_RESULT_ASKED_MORE_EN;
-      return { reply: appendSuggestionsToReply(reply, suggestionContext, locale) };
+      return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
     }
 
     const areaLabel =
@@ -1522,23 +575,23 @@ export const aqaraiAgentCompose = onCall(
       }
     }
 
-    let marketInsightPrefix = "";
-    if (areaCode && propertyType) {
-      try {
-        const [demandRes, supplyRes] = await Promise.all([
-          getMarketDemandStats(areaCode, propertyType),
-          getMarketSupplyStats(areaCode, propertyType),
-        ]);
-        const signal = analyzeMarket(demandRes.demandLast7Days, supplyRes.supplyCount);
-        const areaLabel = requestedAreaLabel || (top3Results[0]?.areaAr as string) || (top3Results[0]?.areaEn as string) || areaCode;
-        marketInsightPrefix = getMarketInsightText(signal, areaLabel, locale);
-        if (marketInsightPrefix) marketInsightPrefix += "\n\n";
-      } catch (err) {
-        console.warn("Market stats error (non-fatal):", err);
-      }
-    }
+    const context: SearchContext = {
+      areaCode: areaCode || undefined,
+      propertyType: propertyType || undefined,
+      serviceType: serviceType || undefined,
+      budget: userBudget,
+    };
 
     try {
+      const insights = await buildInsights({
+        context,
+        areaLabel,
+        topResults: top3Results,
+        rawMessage: rawMessage || undefined,
+        locale,
+        db,
+      });
+
       const openai = new OpenAI({ apiKey });
       const systemContent = locale === "ar" ? COMPOSE_SYSTEM_AR : COMPOSE_SYSTEM_EN;
       const completion = await openai.chat.completions.create({
@@ -1549,22 +602,18 @@ export const aqaraiAgentCompose = onCall(
         ],
         max_tokens: 300,
       });
-      const replyBody = completion.choices?.[0]?.message?.content?.trim() || (locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?");
-      let reply = marketInsightPrefix + replyBody;
-      const priceRange = computeAreaPriceRange(top3Results);
-      const insightText = buildMarketInsight(areaLabel, priceRange, locale);
-      if (insightText) reply = reply + "\n\n" + insightText;
-      const avgPrice = computeAveragePrice(top3Results);
-      const bestDeal = avgPrice != null ? detectBestDeal(top3Results, avgPrice) : null;
-      const bestDealInsight = buildBestDealInsight(areaLabel, bestDeal, avgPrice, locale);
-      if (bestDealInsight) reply = reply + "\n\n" + bestDealInsight;
-      const intent = rawMessage ? detectBuyerIntent(rawMessage) : "residential";
-      const buyerInsight = buildBuyerInsight(areaLabel, intent, locale);
-      if (buyerInsight) reply = reply + "\n\n" + buyerInsight;
-      const areaSuggestion = areaCode ? buildAreaSuggestion(areaCode, locale) : "";
-      if (areaSuggestion) reply = reply + "\n\n" + areaSuggestion;
-      reply = appendSuggestionsToReply(reply, suggestionContext, locale);
-      const response = { reply, results: top3Results };
+      const mainReplyBody =
+        completion.choices?.[0]?.message?.content?.trim() ||
+        (locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?");
+
+      const payload = composeAssistantResponse({
+        locale,
+        mainReplyBody,
+        results: top3Results,
+        insights,
+        suggestions,
+      });
+
       if (canUseCache) {
         const cacheKey = getCacheKey({
           areaCode,
@@ -1572,13 +621,17 @@ export const aqaraiAgentCompose = onCall(
           serviceType,
           budget: userBudget,
         });
-        setCachedResult(cacheKey, response);
+        setCachedResult(cacheKey, { reply: payload.reply, results: top3Results });
       }
-      return response;
+      return { reply: payload.reply, results: top3Results };
     } catch (err) {
       console.error("Agent compose error:", err);
-      const fallback = locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?";
-      return { reply: appendSuggestionsToReply(fallback, suggestionContext, locale), results: top3Results };
+      const fallback =
+        locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?";
+      return {
+        reply: appendSuggestionsToReply(fallback, suggestions, locale),
+        results: top3Results,
+      };
     }
   }
 );

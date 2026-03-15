@@ -351,7 +351,10 @@ class _AssistantPageState extends State<AssistantPage> {
           requestedAreaLabel: requestedAreaLabel,
           rawMessage: text,
         );
-        replyResults = top3List.take(3).map((e) => Map<String, dynamic>.from(e)).toList();
+        replyResults = _enrichResultsWithFullDocs(
+          top3List.take(3).map((e) => Map<String, dynamic>.from(e)).toList(),
+          _lastResults,
+        );
       }
       final areaName = areaCode.isNotEmpty ? (_areaCodeToLabel[areaCode] ?? areaCode) : null;
       final propertyType = _currentFilters['type']?.toString().trim();
@@ -374,13 +377,18 @@ class _AssistantPageState extends State<AssistantPage> {
           e is TimeoutException ||
           e is HandshakeException ||
           (e is OSError && _isNetworkOsError(e.errorCode));
-      final message = isNetworkError
+      final is404 = e is Exception && e.toString().contains('404');
+      final message = is404
           ? (_isAr
-              ? 'ما في اتصال بالنت أو السيرفر مو واصل. تأكد من النت وجرب مرة ثانية، أو اضغط X للبحث العادي.'
-              : 'No internet or server unreachable. Check your network and try again, or tap X for traditional search.')
-          : (_isAr
-              ? 'حصل خطأ بالاتصال. تأكد من النت وجرب مرة ثانية، أو اضغط X للبحث العادي.'
-              : 'Connection error. Check your network or tap X for traditional search.');
+              ? 'الخادم غير متاح حالياً (404). تأكد من النت وجرب لاحقاً، أو اضغط X للبحث العادي.'
+              : 'Server unavailable (404). Check your network or try later, or tap X for traditional search.')
+          : isNetworkError
+              ? (_isAr
+                  ? 'ما في اتصال بالنت أو السيرفر مو واصل. تأكد من النت وجرب مرة ثانية، أو اضغط X للبحث العادي.'
+                  : 'No internet or server unreachable. Check your network and try again, or tap X for traditional search.')
+              : (_isAr
+                  ? 'حصل خطأ بالاتصال. تأكد من النت وجرب مرة ثانية، أو اضغط X للبحث العادي.'
+                  : 'Connection error. Check your network or tap X for traditional search.');
       _appendReply(message);
     }
   }
@@ -466,6 +474,26 @@ class _AssistantPageState extends State<AssistantPage> {
       });
     }
     return list;
+  }
+
+  /// Merges ranked results (top3 from backend) with full Firestore doc data so cards get images/coverUrl.
+  List<Map<String, dynamic>> _enrichResultsWithFullDocs(
+    List<Map<String, dynamic>> ranked,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> fullDocs,
+  ) {
+    if (fullDocs.isEmpty) return ranked;
+    final docById = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{
+      for (final d in fullDocs) d.id: d
+    };
+    return ranked.map((e) {
+      final id = e['id']?.toString();
+      final doc = id != null ? docById[id] : null;
+      if (doc == null) return Map<String, dynamic>.from(e);
+      final full = Map<String, dynamic>.from(doc.data());
+      full['id'] = doc.id;
+      if (e['labels'] != null) full['labels'] = e['labels'];
+      return full;
+    }).toList();
   }
 
   /// Builds property maps for ranking (id, areaCode, areaAr, areaEn, type, price, size, createdAt, featuredUntil).

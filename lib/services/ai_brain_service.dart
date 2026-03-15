@@ -159,6 +159,11 @@ class AiBrainService {
         .timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {
+      if (response.statusCode == 404) {
+        throw Exception(
+          'Agent rank failed: 404 (backend may not be deployed). Run: cd functions && npm run build && firebase deploy --only functions',
+        );
+      }
       throw Exception('Agent rank failed: ${response.statusCode}');
     }
     final json = jsonDecode(response.body) as Map<String, dynamic>?;
