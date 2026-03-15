@@ -60,6 +60,48 @@ function setCachedResult(key: string, data: unknown): void {
 }
 
 // ---------------------------------------------------------------------------
+// Area intelligence: nearby areas that may have better prices (for suggestions)
+// ---------------------------------------------------------------------------
+
+const AREA_INTELLIGENCE: Record<string, string[]> = {
+  nuzha: ["kaifan", "rawda"],
+  qadisiya: ["kaifan", "khaldiya"],
+  rumaithiya: ["salmiya", "jabriya"],
+  jabriya: ["hawalli", "salmiya"],
+  salmiya: ["hawalli"],
+};
+
+/** Arabic labels for area codes used in AREA_INTELLIGENCE (for readable suggestions). */
+const AREA_CODE_TO_LABEL_AR: Record<string, string> = {
+  kaifan: "كيفان",
+  rawda: "الروضة",
+  khaldiya: "الخالدية",
+  salmiya: "السالمية",
+  jabriya: "الجابرية",
+  hawalli: "حولي",
+};
+
+const AREA_CODE_TO_LABEL_EN: Record<string, string> = {
+  kaifan: "Kaifan",
+  rawda: "Rawda",
+  khaldiya: "Khaldiya",
+  salmiya: "Salmiya",
+  jabriya: "Jabriya",
+  hawalli: "Hawalli",
+};
+
+function buildAreaSuggestion(areaCode: string, locale: string): string {
+  const nearby = AREA_INTELLIGENCE[areaCode];
+  if (!nearby || nearby.length === 0) return "";
+  const labelMap = locale === "ar" ? AREA_CODE_TO_LABEL_AR : AREA_CODE_TO_LABEL_EN;
+  const labels = nearby.map((c) => labelMap[c] || c);
+  if (locale === "ar") {
+    return `ملاحظة: لو توسعنا شوي في المناطق، ممكن تلاقي خيارات أرخص في ${labels.join(" أو ")}.`;
+  }
+  return `Note: expanding your search slightly may find cheaper options in ${labels.join(" or ")}.`;
+}
+
+// ---------------------------------------------------------------------------
 // Arabic text normalization (for keyword matching)
 // ---------------------------------------------------------------------------
 
@@ -590,6 +632,100 @@ function getMarketInsightText(signal: MarketSignal, areaLabel: string, locale: "
   return template.replace("{area}", areaLabel || (locale === "ar" ? "هذه المنطقة" : "this area"));
 }
 
+/** Compute min/max price from a list of properties (for market insight). */
+function computeAreaPriceRange(properties: Record<string, unknown>[]): { min: number; max: number } | null {
+  if (!properties || properties.length === 0) return null;
+  const prices = properties
+    .map((p) => (typeof p.price === "number" ? p.price : Number(p.price)))
+    .filter((p) => typeof p === "number" && !Number.isNaN(p));
+  if (prices.length === 0) return null;
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  return { min, max };
+}
+
+/** Generate market insight text about price range in the area. */
+function buildMarketInsight(
+  areaLabel: string,
+  range: { min: number; max: number } | null,
+  locale: string
+): string {
+  if (!range) return "";
+  if (locale === "ar") {
+    return `لاحظت أن أغلب العقارات في ${areaLabel} حالياً بين ${range.min.toLocaleString("ar")} و ${range.max.toLocaleString("ar")} دينار.`;
+  }
+  return `Most properties in ${areaLabel} are currently between ${range.min.toLocaleString()} and ${range.max.toLocaleString()} KWD.`;
+}
+
+/** Compute average price from a list of properties (for best-deal detection). */
+function computeAveragePrice(properties: Record<string, unknown>[]): number | null {
+  if (!properties || properties.length === 0) return null;
+  const prices = properties
+    .map((p) => (typeof p.price === "number" ? p.price : Number(p.price)))
+    .filter((p) => typeof p === "number" && !Number.isNaN(p));
+  if (prices.length === 0) return null;
+  const sum = prices.reduce((a, b) => a + b, 0);
+  return sum / prices.length;
+}
+
+/** Find first property priced significantly below average (>5% under). */
+function detectBestDeal(
+  properties: Record<string, unknown>[],
+  averagePrice: number
+): Record<string, unknown> | null {
+  if (!averagePrice) return null;
+  const deal = properties.find((p) => {
+    const price = typeof p.price === "number" ? p.price : Number(p.price);
+    if (typeof price !== "number" || Number.isNaN(price)) return false;
+    const diff = averagePrice - price;
+    return diff > averagePrice * 0.05;
+  });
+  return deal ?? null;
+}
+
+/** Build best-deal insight text when a property is below local market average. */
+function buildBestDealInsight(
+  areaLabel: string,
+  deal: Record<string, unknown> | null,
+  averagePrice: number | null,
+  locale: string
+): string {
+  if (!deal || averagePrice == null) return "";
+  const price = typeof deal.price === "number" ? deal.price : Number(deal.price);
+  if (typeof price !== "number" || Number.isNaN(price)) return "";
+  const diff = Math.round(averagePrice - price);
+  if (diff <= 0) return "";
+  if (locale === "ar") {
+    return `ملاحظة: هذا العقار سعره أقل من متوسط السوق في ${areaLabel} بحوالي ${diff.toLocaleString("ar")} دينار.`;
+  }
+  return `Note: this property is priced about ${diff.toLocaleString()} KWD below the average in ${areaLabel}.`;
+}
+
+// ---------------------------------------------------------------------------
+// Buyer intent: investment vs residential (for proactive insights)
+// ---------------------------------------------------------------------------
+
+function detectBuyerIntent(text: string): "investment" | "residential" {
+  const t = normalizeArabic(text);
+  if (
+    t.includes("استثمار") ||
+    t.includes("دخل") ||
+    t.includes("ايجار") ||
+    t.includes("عائد")
+  ) {
+    return "investment";
+  }
+  return "residential";
+}
+
+function buildBuyerInsight(areaLabel: string, intent: string, locale: string): string {
+  if (intent !== "investment") return "";
+  if (locale === "ar") {
+    return `بالمناسبة، كثير من المستثمرين يبحثون عن عقارات في ${areaLabel} بسبب العائد الإيجاري الجيد.`;
+  }
+  return `Many investors look for properties in ${areaLabel} due to strong rental returns.`;
+}
+
 // ---------------------------------------------------------------------------
 // Smart Property Ranking (in-memory only; do not write to Firestore)
 // ---------------------------------------------------------------------------
@@ -851,15 +987,45 @@ const GREETING_WORDS = [
 ];
 
 const GREETING_REPLIES_AR = [
-  "وعليكم السلام، حياك الله. شنو نوع العقار اللي تبحث عنه؟",
-  "وعليكم السلام، هلا فيك. تبي تبحث عن عقار في أي منطقة؟",
-  "وعليكم السلام، تفضل. تبي شراء ولا إيجار؟",
-  "هلا والله، قل لي المنطقة ونوع العقار وأنا أشوف لك الخيارات.",
-  "مرحبا، شنو نوع العقار اللي تبحث عنه؟",
+  "وعليكم السلام.",
+  "وعليكم السلام، حياك الله.",
+  "هلا والله.",
+  "ياهلا ومرحبا.",
+  "مرحبا فيك.",
+  "حياك الله.",
+  "هلا فيك.",
+  "ياهلا.",
 ];
 
-function randomGreeting(): string {
-  return GREETING_REPLIES_AR[Math.floor(Math.random() * GREETING_REPLIES_AR.length)];
+const MORNING_GREETING_REPLIES_AR = [
+  "صباح الخير.",
+  "صباح النور.",
+  "صباحك خير.",
+  "صباح الخير، حياك الله.",
+];
+
+const EVENING_GREETING_REPLIES_AR = [
+  "مساء الخير.",
+  "مساء النور.",
+  "مساء الخير، حياك الله.",
+  "مساءك خير.",
+];
+
+function smartGreeting(userText: string): string {
+  const t = normalizeArabic(userText);
+
+  if (t.includes("صباح")) {
+    const i = Math.floor(Math.random() * MORNING_GREETING_REPLIES_AR.length);
+    return MORNING_GREETING_REPLIES_AR[i];
+  }
+
+  if (t.includes("مساء")) {
+    const i = Math.floor(Math.random() * EVENING_GREETING_REPLIES_AR.length);
+    return EVENING_GREETING_REPLIES_AR[i];
+  }
+
+  const i = Math.floor(Math.random() * GREETING_REPLIES_AR.length);
+  return GREETING_REPLIES_AR[i];
 }
 
 /** True if message contains a greeting phrase and has no real estate intent (no search, no OpenAI). */
@@ -880,6 +1046,30 @@ function isGreetingOnly(text: string): boolean {
 function isNewSearchTrigger(text: string): boolean {
   const t = normalizeArabic((text || "").trim());
   return NEW_SEARCH_TRIGGERS.some((trigger) => t.startsWith(normalizeArabic(trigger)) || t === normalizeArabic(trigger));
+}
+
+/** Detect follow-up phrases that modify the current search (أرخص شوي، أكبر، نفس المنطقة). */
+function detectSearchModifier(text: string): { type: string } | null {
+  if (!text || typeof text !== "string") return null;
+  const t = normalizeArabic(text.trim());
+
+  if (t.includes("ارخص") || t.includes("اقل") || t.includes("اوفر")) {
+    return { type: "budget_down" };
+  }
+  if (t.includes("اغلى") || t.includes("افخم")) {
+    return { type: "budget_up" };
+  }
+  if (t.includes("اكبر") || t.includes("مساحه اكبر")) {
+    return { type: "size_up" };
+  }
+  if (t.includes("اصغر")) {
+    return { type: "size_down" };
+  }
+  if (t.includes("نفس المنطقه") || t.includes("نفس المنطقة")) {
+    return { type: "same_area" };
+  }
+
+  return null;
 }
 
 /** Extract session memory from currentFilters (only allowed keys) */
@@ -1046,7 +1236,7 @@ export const aqaraiAgentAnalyze = onCall(
         reset_filters: false,
         is_complete: false,
         clarifying_questions: [],
-        greeting_reply: randomGreeting(),
+        greeting_reply: smartGreeting(rawMessage),
       };
     }
     let message = rawMessage.split(/\s+/).map((w) => normalizeAreaName(w)).join(" ");
@@ -1104,6 +1294,23 @@ export const aqaraiAgentAnalyze = onCall(
         paramsPatch.serviceType = kuwaitiIntent.serviceType;
       }
 
+      // Intent memory: use session memory when params are missing (follow-ups like "أرخص شوي" or "أكبر شوي" keep area/type)
+      if (!paramsPatch.areaCode && sessionMemory.areaCode) {
+        paramsPatch.areaCode = sessionMemory.areaCode;
+      }
+      if ((!paramsPatch.type || paramsPatch.type === "") && sessionMemory.propertyType) {
+        paramsPatch.type = sessionMemory.propertyType;
+      }
+      if ((!paramsPatch.serviceType || paramsPatch.serviceType === "") && sessionMemory.serviceType) {
+        paramsPatch.serviceType = sessionMemory.serviceType;
+      }
+      if (paramsPatch.budget == null && sessionMemory.budget != null) {
+        paramsPatch.budget = sessionMemory.budget;
+      }
+      if (paramsPatch.bedrooms == null && sessionMemory.bedrooms != null) {
+        paramsPatch.bedrooms = sessionMemory.bedrooms;
+      }
+
       // If OpenAI did not set areaCode, try to detect from user message (matches all app areas)
       let isCompleteFinal = isComplete;
       let clarifyingQuestionsFinal = clarifyingQuestions;
@@ -1115,6 +1322,39 @@ export const aqaraiAgentAnalyze = onCall(
           isCompleteFinal = true;
           clarifyingQuestionsFinal = [];
         }
+      }
+
+      // Smart filter adjustments: follow-up phrases (أرخص شوي، أكبر، نفس المنطقة) modify session and re-run search
+      const modifier = detectSearchModifier(rawMessage);
+      const hasPreviousSearch =
+        (sessionMemory.areaCode != null && String(sessionMemory.areaCode).trim() !== "") ||
+        (sessionMemory.budget != null && typeof sessionMemory.budget === "number") ||
+        (sessionMemory.propertyType != null && String(sessionMemory.propertyType).trim() !== "");
+      if (modifier != null && hasPreviousSearch && !isNewSearchTrigger(rawMessage)) {
+        const patch: Record<string, unknown> = {
+          areaCode: sessionMemory.areaCode ?? paramsPatch.areaCode,
+          type: sessionMemory.propertyType ?? paramsPatch.type,
+          serviceType: sessionMemory.serviceType ?? paramsPatch.serviceType,
+          budget: sessionMemory.budget != null ? Number(sessionMemory.budget) : paramsPatch.budget,
+          bedrooms: sessionMemory.bedrooms ?? paramsPatch.bedrooms,
+        };
+        if (modifier.type === "budget_down" && sessionMemory.budget != null) {
+          patch.budget = Math.round(Number(sessionMemory.budget) * 0.9);
+        }
+        if (modifier.type === "budget_up" && sessionMemory.budget != null) {
+          patch.budget = Math.round(Number(sessionMemory.budget) * 1.1);
+        }
+        if (modifier.type === "same_area" && sessionMemory.areaCode != null) {
+          patch.areaCode = sessionMemory.areaCode;
+        }
+        if (modifier.type === "size_up" || modifier.type === "size_down") {
+          // Keep session filters and run search again; client can use size if supported
+        }
+        Object.keys(patch).forEach((k) => {
+          if (patch[k] != null) paramsPatch[k] = patch[k];
+        });
+        isCompleteFinal = true;
+        clarifyingQuestionsFinal = [];
       }
 
       let finalParamsPatch: Record<string, unknown>;
@@ -1167,6 +1407,7 @@ export const aqaraiAgentCompose = onCall(
     const userAskedForMore = data.userAskedForMore === true;
     const isNearbyFallback = data.isNearbyFallback === true;
     const requestedAreaLabel = typeof data.requestedAreaLabel === "string" ? data.requestedAreaLabel : "";
+    const rawMessage = typeof data.rawMessage === "string" ? data.rawMessage.trim() : (typeof data.message === "string" ? data.message.trim() : "");
     const areaCode = typeof data.areaCode === "string" ? data.areaCode.trim() : (top3Results[0]?.areaCode != null ? String(top3Results[0].areaCode).trim() : "");
     const propertyType = typeof data.propertyType === "string" ? data.propertyType.trim() : (data.type != null ? String(data.type).trim() : (top3Results[0]?.type != null ? String(top3Results[0].type).trim() : ""));
     const serviceType = typeof data.serviceType === "string" ? data.serviceType.trim() : "";
@@ -1198,6 +1439,13 @@ export const aqaraiAgentCompose = onCall(
       const reply = locale === "ar" ? SINGLE_RESULT_ASKED_MORE_AR : SINGLE_RESULT_ASKED_MORE_EN;
       return { reply: appendSuggestionsToReply(reply, suggestionContext, locale) };
     }
+
+    const areaLabel =
+      requestedAreaLabel ||
+      (top3Results[0]?.areaAr as string) ||
+      (top3Results[0]?.areaEn as string) ||
+      areaCode ||
+      (locale === "ar" ? "هذه المنطقة" : "this area");
 
     const isAdmin = request.auth?.token?.admin === true;
     const canUseCache = areaCode && !isAdmin;
@@ -1244,6 +1492,18 @@ export const aqaraiAgentCompose = onCall(
       });
       const replyBody = completion.choices?.[0]?.message?.content?.trim() || (locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?");
       let reply = marketInsightPrefix + replyBody;
+      const priceRange = computeAreaPriceRange(top3Results);
+      const insightText = buildMarketInsight(areaLabel, priceRange, locale);
+      if (insightText) reply = reply + "\n\n" + insightText;
+      const avgPrice = computeAveragePrice(top3Results);
+      const bestDeal = avgPrice != null ? detectBestDeal(top3Results, avgPrice) : null;
+      const bestDealInsight = buildBestDealInsight(areaLabel, bestDeal, avgPrice, locale);
+      if (bestDealInsight) reply = reply + "\n\n" + bestDealInsight;
+      const intent = rawMessage ? detectBuyerIntent(rawMessage) : "residential";
+      const buyerInsight = buildBuyerInsight(areaLabel, intent, locale);
+      if (buyerInsight) reply = reply + "\n\n" + buyerInsight;
+      const areaSuggestion = areaCode ? buildAreaSuggestion(areaCode, locale) : "";
+      if (areaSuggestion) reply = reply + "\n\n" + areaSuggestion;
       reply = appendSuggestionsToReply(reply, suggestionContext, locale);
       const response = { reply, results: top3Results };
       if (canUseCache) {

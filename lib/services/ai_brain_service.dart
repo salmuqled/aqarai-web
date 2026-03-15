@@ -211,6 +211,7 @@ class AiBrainService {
   /// Generate marketing-style reply from top 3 results (Kuwaiti tone, one next question).
   /// When [userAskedForMore] is true and there is only one result, backend returns
   /// a message offering to search nearby areas instead of repeating the property.
+  /// [rawMessage] is the user's last message, used for buyer intent (investment vs residential).
   Future<String> composeMarketingReply({
     required List<Map<String, dynamic>> top3Results,
     required String idToken,
@@ -218,6 +219,7 @@ class AiBrainService {
     bool userAskedForMore = false,
     bool isNearbyFallback = false,
     String requestedAreaLabel = '',
+    String rawMessage = '',
   }) async {
     final body = jsonEncode({
       'data': {
@@ -226,6 +228,7 @@ class AiBrainService {
         'userAskedForMore': userAskedForMore,
         'isNearbyFallback': isNearbyFallback,
         'requestedAreaLabel': requestedAreaLabel,
+        if (rawMessage.isNotEmpty) 'rawMessage': rawMessage,
       },
     });
     final response = await http

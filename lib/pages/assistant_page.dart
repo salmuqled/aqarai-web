@@ -50,6 +50,7 @@ class _AssistantPageState extends State<AssistantPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
+  bool _assistantTyping = false;
   bool _isAr = true;
   bool _fcmSetupDone = false;
 
@@ -122,14 +123,15 @@ class _AssistantPageState extends State<AssistantPage> {
     }
   }
 
-  Future<void> _sendMessage() async {
-    final text = _controller.text.trim();
+  Future<void> _sendMessage([String? prefilledText]) async {
+    final text = (prefilledText?.trim() ?? _controller.text.trim());
     if (text.isEmpty || _isLoading) return;
 
-    _isLoading = true;
     _controller.clear();
     setState(() {
       _messages.add(ChatMessage(text: text, isUser: true, timestamp: DateTime.now()));
+      _isLoading = true;
+      _assistantTyping = true;
     });
     _scrollToBottom();
 
@@ -167,7 +169,7 @@ class _AssistantPageState extends State<AssistantPage> {
         final greetingReply = result['greeting_reply']?.toString();
         final reply = (greetingReply != null && greetingReply.isNotEmpty)
             ? greetingReply
-            : (_isAr ? 'هلا وغلا! كيف أقدر أساعدك؟ اكتب المنطقة ونوع العقار (مثل: ابي بيت للبيع في القادسية).' : 'Hi! How can I help? Type area and property type (e.g. house for sale in Qadisiya).');
+            : (_isAr ? 'وعليكم السلام.' : 'Hi.');
         _appendReply(reply);
         return;
       }
@@ -347,10 +349,24 @@ class _AssistantPageState extends State<AssistantPage> {
           userAskedForMore: userAskedForMore,
           isNearbyFallback: isNearbyFallback,
           requestedAreaLabel: requestedAreaLabel,
+          rawMessage: text,
         );
         replyResults = top3List.take(3).map((e) => Map<String, dynamic>.from(e)).toList();
       }
-      _appendReply(reply, results: replyResults);
+      final areaName = areaCode.isNotEmpty ? (_areaCodeToLabel[areaCode] ?? areaCode) : null;
+      final propertyType = _currentFilters['type']?.toString().trim();
+      final serviceType = _currentFilters['serviceType']?.toString().trim();
+      final suggestions = _buildSmartSuggestions(
+        area: areaName,
+        propertyType: propertyType?.isNotEmpty == true ? propertyType : null,
+        serviceType: serviceType?.isNotEmpty == true ? serviceType : null,
+        isAr: _isAr,
+      );
+      _appendReply(
+        reply,
+        results: replyResults,
+        suggestions: suggestions.isNotEmpty ? suggestions : null,
+      );
     } catch (e, st) {
       debugPrint('Assistant _sendMessage error: $e');
       debugPrint('Stack trace: $st');
@@ -376,7 +392,51 @@ class _AssistantPageState extends State<AssistantPage> {
     return const [50, 51, 61, 64, 65].contains(code);
   }
 
-  void _appendReply(String text, {List<Map<String, dynamic>>? results}) {
+  /// Build contextual suggestion buttons based on current search filters.
+  List<String> _buildSmartSuggestions({
+    String? area,
+    String? propertyType,
+    String? serviceType,
+    bool isAr = true,
+  }) {
+    final suggestions = <String>[];
+    if (isAr) {
+      if (area != null && area.isNotEmpty) {
+        suggestions.add('أرخص شوي في $area');
+        suggestions.add('نفس النوع في مناطق قريبة');
+      }
+      if (propertyType == 'house') {
+        suggestions.add('شقق في نفس المنطقة');
+      }
+      if (propertyType == 'apartment') {
+        suggestions.add('بيوت في نفس المنطقة');
+      }
+      if (serviceType == 'sale') {
+        suggestions.add('للإيجار في نفس المنطقة');
+      }
+    } else {
+      if (area != null && area.isNotEmpty) {
+        suggestions.add('Cheaper options in $area');
+        suggestions.add('Same type in nearby areas');
+      }
+      if (propertyType == 'house') {
+        suggestions.add('Apartments in same area');
+      }
+      if (propertyType == 'apartment') {
+        suggestions.add('Houses in same area');
+      }
+      if (serviceType == 'sale') {
+        suggestions.add('For rent in same area');
+      }
+    }
+    return suggestions.take(3).toList();
+  }
+
+  void _appendReply(
+    String text, {
+    List<Map<String, dynamic>>? results,
+    List<String>? suggestions,
+  }) {
     if (!mounted) return;
     final list = results != null && results.isNotEmpty
         ? results.take(3).map((e) => Map<String, dynamic>.from(e)).toList()
@@ -387,8 +447,10 @@ class _AssistantPageState extends State<AssistantPage> {
         isUser: false,
         timestamp: DateTime.now(),
         results: list,
+        suggestions: suggestions,
       ));
       _isLoading = false;
+      _assistantTyping = false;
     });
     _scrollToBottom();
   }
@@ -516,7 +578,7 @@ class _AssistantPageState extends State<AssistantPage> {
                 child: ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: _messages.length + (_isLoading ? 1 : 0),
+                  itemCount: _messages.length + (_assistantTyping ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index == _messages.length) {
                       return _buildTypingIndicator();
@@ -586,59 +648,52 @@ class _AssistantPageState extends State<AssistantPage> {
         : <Map<String, dynamic>>[];
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser)
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.amber.withOpacity(0.3),
-              child: Icon(Icons.smart_toy_rounded, color: Colors.amber[200], size: 20),
-            ),
-          if (!isUser) const SizedBox(width: 10),
-          Flexible(
-            child: isUser
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF238636).withOpacity(0.9),
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(20),
-                        topRight: Radius.circular(20),
-                        bottomLeft: Radius.circular(20),
-                        bottomRight: Radius.circular(4),
-                      ),
-                    ),
-                    child: Text(
-                      msg.text,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        height: 1.4,
-                      ),
-                    ),
-                  )
-                : Column(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: isUser
+          ? Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F5D56),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  msg.text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: Colors.grey.shade300,
+                  child: Icon(Icons.smart_toy, size: 16, color: Colors.grey.shade600),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(20),
-                            topRight: Radius.circular(20),
-                            bottomLeft: Radius.circular(4),
-                            bottomRight: Radius.circular(20),
-                          ),
+                          color: const Color(0xFFF2F2F2),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
                           msg.text,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: Colors.black87,
                             fontSize: 15,
                             height: 1.4,
                           ),
@@ -672,67 +727,65 @@ class _AssistantPageState extends State<AssistantPage> {
                           );
                         }),
                       ],
+                      if (msg.suggestions != null && msg.suggestions!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: msg.suggestions!.map((s) {
+                              return GestureDetector(
+                                onTap: () => _sendMessage(s),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    s,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
                     ],
                   ),
-          ),
-          if (isUser) const SizedBox(width: 10),
-          if (isUser)
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.blue.withOpacity(0.4),
-              child: const Icon(Icons.person, color: Colors.white70, size: 20),
+                ),
+              ],
             ),
-        ],
-      ),
     );
   }
 
   Widget _buildTypingIndicator() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.amber.withOpacity(0.3),
-            child: Icon(Icons.smart_toy_rounded, color: Colors.amber[200], size: 20),
+            radius: 14,
+            backgroundColor: Colors.grey.shade300,
+            child: Icon(Icons.smart_toy, size: 16, color: Colors.grey.shade600),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(4),
-                bottomRight: Radius.circular(20),
-              ),
+              color: const Color(0xFFF2F2F2),
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _dot(),
-                const SizedBox(width: 6),
-                _dot(),
-                const SizedBox(width: 6),
-                _dot(),
-              ],
+            child: Text(
+              "...",
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.black87,
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _dot() {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.7),
-        shape: BoxShape.circle,
       ),
     );
   }
@@ -744,11 +797,14 @@ class ChatMessage {
   final DateTime timestamp;
   /// When non-null and non-empty, show up to 3 property cards under this (assistant) message.
   final List<Map<String, dynamic>>? results;
+  /// Optional quick-reply suggestions shown under assistant messages.
+  final List<String>? suggestions;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.timestamp,
     this.results,
+    this.suggestions,
   });
 }
