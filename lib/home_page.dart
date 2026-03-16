@@ -153,7 +153,7 @@ class _HomePageState extends State<HomePage> {
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 160),
+                  padding: const EdgeInsets.only(bottom: 200),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -196,16 +196,15 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // Bottom Navigation
+          // Bottom Navigation — حدبة الجمل: نص + زر فوق شريط بانحناء سلس تحته
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: Container(
-              color: _bgColor,
-              padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 12),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 12),
               child: SizedBox(
-                height: 155,
+                height: 192,
                 child: Stack(
                   clipBehavior: Clip.none,
                   alignment: Alignment.bottomCenter,
@@ -215,144 +214,70 @@ class _HomePageState extends State<HomePage> {
                       right: 0,
                       bottom: 0,
                       child: Container(
-                        height: 72,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        height: 86,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(28),
+                          borderRadius: BorderRadius.circular(30),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.12),
-                              blurRadius: 20,
-                              offset: const Offset(0, 2),
+                              blurRadius: 24,
+                              offset: const Offset(0, 4),
                             ),
                           ],
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _BottomItem(
-                                icon: Icons.list,
-                                label: loc.myAds,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const MyAdsPage(),
-                                    ),
-                                  );
-                                },
-                              ),
+                        child: ClipPath(
+                          clipper: _CamelHumpBarClipper(indentDepth: 22, indentWidth: 56),
+                          child: Container(
+                            width: double.infinity,
+                            height: 86,
+                            color: Colors.white,
+                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                            child: Row(
+                              children: [
+                                Expanded(child: _BottomItem(icon: Icons.list, label: loc.myAds, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage())))),
+                                Expanded(child: _BottomItem(icon: Icons.bar_chart, label: loc.valuation, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ValuationPage())))),
+                                const SizedBox(width: 60),
+                                Expanded(child: _BottomItem(icon: Icons.beach_access, label: loc.chalets, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChaletsPage())))),
+                                Expanded(child: _BottomItem(icon: Icons.campaign, label: loc.wanted, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WantedPage())))),
+                                Expanded(child: _BottomItem(icon: Icons.favorite, label: loc.favorites, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage())))),
+                              ],
                             ),
-                            Expanded(
-                              child: _BottomItem(
-                                icon: Icons.bar_chart,
-                                label: loc.valuation,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const ValuationPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            Expanded(child: const SizedBox.shrink()),
-                            Expanded(
-                              child: _BottomItem(
-                                icon: Icons.beach_access,
-                                label: loc.chalets,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const ChaletsPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            Expanded(
-                              child: _BottomItem(
-                                icon: Icons.campaign,
-                                label: loc.wanted,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const WantedPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            Expanded(
-                              child: _BottomItem(
-                                icon: Icons.favorite,
-                                label: loc.favorites,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const FavoritesPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                     Positioned(
                       left: 0,
                       right: 0,
-                      bottom: 82,
+                      bottom: 104,
                       child: Center(
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const AddPropertyPage(),
-                              ),
-                            );
-                          },
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddPropertyPage())),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 loc.addProperty,
                                 textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
+                                style: const TextStyle(
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.3,
-                                  color: const Color(0xFF101046).withOpacity(0.85),
+                                  letterSpacing: 0.2,
+                                  color: Colors.white,
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Container(
-                                width: 52,
-                                height: 52,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF101046),
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.2),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.add,
-                                  color: Colors.white,
-                                  size: 26,
+                              Material(
+                                elevation: 10,
+                                shadowColor: Colors.black38,
+                                shape: const CircleBorder(),
+                                color: const Color(0xFF101046),
+                                child: Container(
+                                  width: 60,
+                                  height: 60,
+                                  alignment: Alignment.center,
+                                  child: const Icon(Icons.add, color: Colors.white, size: 28),
                                 ),
                               ),
                             ],
@@ -464,6 +389,41 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+/// شريط بانحناء سلس (Bezier) في المنتصف — حدبة الجمل: الشريط ينخفض تحت الزر.
+class _CamelHumpBarClipper extends CustomClipper<Path> {
+  final double indentDepth;
+  final double indentWidth;
+
+  _CamelHumpBarClipper({this.indentDepth = 22, this.indentWidth = 56});
+
+  @override
+  Path getClip(Size size) {
+    const r = 30.0;
+    final cx = size.width / 2;
+    final path = Path();
+    path.moveTo(0, size.height - r);
+    path.arcToPoint(Offset(r, size.height), radius: const Radius.circular(r));
+    path.lineTo(size.width - r, size.height);
+    path.arcToPoint(Offset(size.width, size.height - r), radius: const Radius.circular(r));
+    path.lineTo(size.width, r);
+    path.arcToPoint(Offset(size.width - r, 0), radius: const Radius.circular(r));
+    path.lineTo(cx + indentWidth / 2, 0);
+    path.quadraticBezierTo(
+      cx,
+      indentDepth,
+      cx - indentWidth / 2,
+      0,
+    );
+    path.lineTo(r, 0);
+    path.arcToPoint(Offset(0, r), radius: const Radius.circular(r));
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
 class _BottomItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -477,24 +437,33 @@ class _BottomItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.black87, size: 24),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.black87, size: 24),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.fade,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
