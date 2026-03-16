@@ -205,7 +205,7 @@ class _HomePageState extends State<HomePage> {
               color: _bgColor,
               padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 12),
               child: SizedBox(
-                height: 165,
+                height: 155,
                 child: Stack(
                   clipBehavior: Clip.none,
                   alignment: Alignment.bottomCenter,
@@ -215,97 +215,100 @@ class _HomePageState extends State<HomePage> {
                       right: 0,
                       bottom: 0,
                       child: Container(
-                        height: 74,
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        height: 72,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(36),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black26, blurRadius: 12),
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.12),
+                              blurRadius: 20,
+                              offset: const Offset(0, 2),
+                            ),
                           ],
                         ),
                         child: Row(
-                        children: [
-                          Expanded(
-                            child: _BottomItem(
-                              icon: Icons.list,
-                              label: loc.myAds,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const MyAdsPage(),
-                                  ),
-                                );
-                              },
+                          children: [
+                            Expanded(
+                              child: _BottomItem(
+                                icon: Icons.list,
+                                label: loc.myAds,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const MyAdsPage(),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          Expanded(
-                            child: _BottomItem(
-                              icon: Icons.bar_chart,
-                              label: loc.valuation,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const ValuationPage(),
-                                  ),
-                                );
-                              },
+                            Expanded(
+                              child: _BottomItem(
+                                icon: Icons.bar_chart,
+                                label: loc.valuation,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const ValuationPage(),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          Expanded(child: const SizedBox.shrink()),
-                          Expanded(
-                            child: _BottomItem(
-                              icon: Icons.beach_access,
-                              label: loc.chalets,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const ChaletsPage(),
-                                  ),
-                                );
-                              },
+                            Expanded(child: const SizedBox.shrink()),
+                            Expanded(
+                              child: _BottomItem(
+                                icon: Icons.beach_access,
+                                label: loc.chalets,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const ChaletsPage(),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          Expanded(
-                            child: _BottomItem(
-                              icon: Icons.campaign,
-                              label: loc.wanted,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const WantedPage(),
-                                  ),
-                                );
-                              },
+                            Expanded(
+                              child: _BottomItem(
+                                icon: Icons.campaign,
+                                label: loc.wanted,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const WantedPage(),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          Expanded(
-                            child: _BottomItem(
-                              icon: Icons.favorite,
-                              label: loc.favorites,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const FavoritesPage(),
-                                  ),
-                                );
-                              },
+                            Expanded(
+                              child: _BottomItem(
+                                icon: Icons.favorite,
+                                label: loc.favorites,
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const FavoritesPage(),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
                         ),
+                      ),
                     ),
-
                     Positioned(
                       left: 0,
                       right: 0,
-                      bottom: 94,
+                      bottom: 82,
                       child: Center(
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
@@ -319,34 +322,37 @@ class _HomePageState extends State<HomePage> {
                           },
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
                                 loc.addProperty,
-                                style: const TextStyle(
-                                  fontSize: 11,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.white,
+                                  letterSpacing: 0.3,
+                                  color: const Color(0xFF101046).withOpacity(0.85),
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 6),
                               Container(
-                                width: 56,
-                                height: 56,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFF101046),
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF101046),
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black38,
+                                      color: Colors.black.withOpacity(0.2),
                                       blurRadius: 12,
-                                      offset: Offset(0, 4),
+                                      offset: const Offset(0, 3),
                                     ),
                                   ],
                                 ),
                                 child: const Icon(
                                   Icons.add,
                                   color: Colors.white,
-                                  size: 28,
+                                  size: 26,
                                 ),
                               ),
                             ],
@@ -476,13 +482,17 @@ class _BottomItem extends StatelessWidget {
       onTap: onTap,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.black87),
+          Icon(icon, color: Colors.black87, size: 24),
           const SizedBox(height: 4),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 11),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
