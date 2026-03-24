@@ -8,7 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:aqarai_app/widgets/search_box.dart';
 
-import 'package:aqarai_app/pages/chalets_page.dart';
 import 'package:aqarai_app/pages/add_property_page.dart';
 import 'package:aqarai_app/pages/my_ads_page.dart';
 import 'package:aqarai_app/pages/valuation_page.dart';
@@ -153,7 +152,7 @@ class _HomePageState extends State<HomePage> {
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 200),
+                  padding: const EdgeInsets.only(bottom: 130),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -196,97 +195,16 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // Bottom Navigation — حدبة الجمل: نص + زر فوق شريط بانحناء سلس تحته
+          // Bottom Navigation — كبسولة عائمة احترافية
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 12),
-              child: SizedBox(
-                height: 192,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.bottomCenter,
-                  children: [
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        height: 86,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.12),
-                              blurRadius: 24,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: ClipPath(
-                          clipper: _CamelHumpBarClipper(indentDepth: 22, indentWidth: 56),
-                          child: Container(
-                            width: double.infinity,
-                            height: 86,
-                            color: Colors.white,
-                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                            child: Row(
-                              children: [
-                                Expanded(child: _BottomItem(icon: Icons.list, label: loc.myAds, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage())))),
-                                Expanded(child: _BottomItem(icon: Icons.bar_chart, label: loc.valuation, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ValuationPage())))),
-                                const SizedBox(width: 60),
-                                Expanded(child: _BottomItem(icon: Icons.beach_access, label: loc.chalets, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChaletsPage())))),
-                                Expanded(child: _BottomItem(icon: Icons.campaign, label: loc.wanted, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WantedPage())))),
-                                Expanded(child: _BottomItem(icon: Icons.favorite, label: loc.favorites, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage())))),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 104,
-                      child: Center(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddPropertyPage())),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                loc.addProperty,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.2,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Material(
-                                elevation: 10,
-                                shadowColor: Colors.black38,
-                                shape: const CircleBorder(),
-                                color: const Color(0xFF101046),
-                                child: Container(
-                                  width: 60,
-                                  height: 60,
-                                  alignment: Alignment.center,
-                                  child: const Icon(Icons.add, color: Colors.white, size: 28),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            child: SafeArea(
+              top: false,
+              child: _HomeFloatingBottomNav(
+                loc: loc,
+                bottomInset: bottomInset,
               ),
             ),
           ),
@@ -389,47 +307,85 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// شريط بانحناء سلس (Bezier) في المنتصف — حدبة الجمل: الشريط ينخفض تحت الزر.
-class _CamelHumpBarClipper extends CustomClipper<Path> {
-  final double indentDepth;
-  final double indentWidth;
+/// كبسولة عائمة سفلية — إعلاناتي، التقييم، أضف عقار، مطلوب، المفضلة
+class _HomeFloatingBottomNav extends StatelessWidget {
+  final AppLocalizations loc;
+  final double bottomInset;
 
-  _CamelHumpBarClipper({this.indentDepth = 22, this.indentWidth = 56});
+  const _HomeFloatingBottomNav({
+    required this.loc,
+    required this.bottomInset,
+  });
 
   @override
-  Path getClip(Size size) {
-    const r = 30.0;
-    final cx = size.width / 2;
-    final path = Path();
-    path.moveTo(0, size.height - r);
-    path.arcToPoint(Offset(r, size.height), radius: const Radius.circular(r));
-    path.lineTo(size.width - r, size.height);
-    path.arcToPoint(Offset(size.width, size.height - r), radius: const Radius.circular(r));
-    path.lineTo(size.width, r);
-    path.arcToPoint(Offset(size.width - r, 0), radius: const Radius.circular(r));
-    path.lineTo(cx + indentWidth / 2, 0);
-    path.quadraticBezierTo(
-      cx,
-      indentDepth,
-      cx - indentWidth / 2,
-      0,
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 15, 20, 15 + bottomInset),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(35),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 15,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: _FloatingNavItem(
+                icon: Icons.list_outlined,
+                label: loc.myAds,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage())),
+              ),
+            ),
+            Expanded(
+              child: _FloatingNavItem(
+                icon: Icons.bar_chart_outlined,
+                label: loc.valuation,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ValuationPage())),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 4, right: 4, bottom: 2),
+              child: _FloatingNavCenterAdd(
+                label: loc.addProperty,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddPropertyPage())),
+              ),
+            ),
+            Expanded(
+              child: _FloatingNavItem(
+                icon: Icons.campaign_outlined,
+                label: loc.wanted,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WantedPage())),
+              ),
+            ),
+            Expanded(
+              child: _FloatingNavItem(
+                icon: Icons.favorite_border,
+                label: loc.favorites,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage())),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-    path.lineTo(r, 0);
-    path.arcToPoint(Offset(0, r), radius: const Radius.circular(r));
-    path.close();
-    return path;
   }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
-class _BottomItem extends StatelessWidget {
+class _FloatingNavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  const _BottomItem({
+  const _FloatingNavItem({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -437,6 +393,19 @@ class _BottomItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w500,
+          color: Colors.black87,
+          height: 1.15,
+        ) ??
+        const TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w500,
+          color: Colors.black87,
+          height: 1.15,
+        );
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -456,14 +425,71 @@ class _BottomItem extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  height: 1.2,
-                ),
+                style: textStyle,
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingNavCenterAdd extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _FloatingNavCenterAdd({
+    required this.label,
+    required this.onTap,
+  });
+
+  static const Color _navy = Color(0xFF101046);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: _navy,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.add, color: Colors.white, size: 26),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: _navy,
+                  ) ??
+                  const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: _navy,
+                  ),
+            ),
+          ],
         ),
       ),
     );
