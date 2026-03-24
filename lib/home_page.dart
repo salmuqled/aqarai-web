@@ -9,17 +9,39 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:aqarai_app/widgets/search_box.dart';
 
 import 'package:aqarai_app/pages/add_property_page.dart';
+import 'package:aqarai_app/pages/chalets_page.dart';
 import 'package:aqarai_app/pages/my_ads_page.dart';
 import 'package:aqarai_app/pages/valuation_page.dart';
 import 'package:aqarai_app/pages/wanted_page.dart';
 import 'package:aqarai_app/pages/admin_requests_page.dart';
 import 'package:aqarai_app/pages/favorites_page.dart';
 
-import 'package:aqarai_app/app/locale_notifier.dart';
+import 'package:aqarai_app/app/locale_notifier.dart' show setAppLocale;
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
 import 'package:aqarai_app/widgets/featured_carousel.dart';
 import 'package:aqarai_app/widgets/featured_wanted_carousel.dart';
+
+import 'package:flag/flag.dart';
+
+/// علم بجانب خيار اللغة في القائمة (كويت للعربية، بريطانيا للإنجليزية)
+Widget _languageFlagLeading(FlagsCode code) {
+  return SizedBox(
+    width: 40,
+    height: 28,
+    child: Center(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Flag.fromCode(
+          code,
+          height: 22,
+          width: 32,
+          fit: BoxFit.cover,
+        ),
+      ),
+    ),
+  );
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -111,17 +133,91 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void _openQuickMenu() {
+    final loc = AppLocalizations.of(context)!;
+    final currentCode = Localizations.localeOf(context).languageCode;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+                child: Text(
+                  loc.quickMenuTitle,
+                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.favorite_border),
+                title: Text(loc.favorites),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const FavoritesPage()),
+                  );
+                },
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                child: Text(
+                  loc.languageLabel,
+                  style: Theme.of(sheetContext).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+              ListTile(
+                leading: _languageFlagLeading(FlagsCode.KW),
+                title: Text(loc.languageArabic),
+                trailing: currentCode == 'ar'
+                    ? Icon(Icons.check, color: Theme.of(sheetContext).colorScheme.primary)
+                    : null,
+                onTap: () {
+                  setAppLocale(const Locale('ar'));
+                  Navigator.pop(sheetContext);
+                },
+              ),
+              ListTile(
+                leading: _languageFlagLeading(FlagsCode.GB),
+                title: Text(loc.languageEnglish),
+                trailing: currentCode == 'en'
+                    ? Icon(Icons.check, color: Theme.of(sheetContext).colorScheme.primary)
+                    : null,
+                onTap: () {
+                  setAppLocale(const Locale('en'));
+                  Navigator.pop(sheetContext);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).languageCode;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       backgroundColor: _bgColor,
       resizeToAvoidBottomInset: false,
       body: Stack(
         fit: StackFit.expand,
+        clipBehavior: Clip.none,
         children: [
           Positioned.fill(
             child: Image.asset(
@@ -152,7 +248,7 @@ class _HomePageState extends State<HomePage> {
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 130),
+                  padding: const EdgeInsets.only(bottom: 152),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -202,14 +298,11 @@ class _HomePageState extends State<HomePage> {
             bottom: 0,
             child: SafeArea(
               top: false,
-              child: _HomeFloatingBottomNav(
-                loc: loc,
-                bottomInset: bottomInset,
-              ),
+              child: _HomeFloatingBottomNav(loc: loc),
             ),
           ),
 
-          // أزرار فوق المحتوى حتى تستقبل الضغطات (زر اللغة + طلبات الأدمن)
+          // القائمة: المفضلة + اللغة
           SafeArea(
             child: Align(
               alignment: Alignment.topRight,
@@ -217,7 +310,7 @@ class _HomePageState extends State<HomePage> {
                 padding: const EdgeInsets.only(top: 14, right: 14),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: toggleAppLocale,
+                  onTap: _openQuickMenu,
                   child: Container(
                     width: 48,
                     height: 48,
@@ -230,7 +323,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     child: const Icon(
-                      Icons.language,
+                      Icons.menu,
                       color: Colors.white,
                       size: 24,
                     ),
@@ -307,74 +400,110 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// كبسولة عائمة سفلية — إعلاناتي، التقييم، أضف عقار، مطلوب، المفضلة
+/// كبسولة عائمة سفلية — زر أضف عقار بارز (نسام)، وباقي الأقسام في صف تحته داخل الكبسولة
 class _HomeFloatingBottomNav extends StatelessWidget {
   final AppLocalizations loc;
-  final double bottomInset;
 
-  const _HomeFloatingBottomNav({
-    required this.loc,
-    required this.bottomInset,
-  });
+  const _HomeFloatingBottomNav({required this.loc});
+
+  static const double _fabSize = 56;
+  /// مسافة فوق الكبسولة ليبرز الجزء العلوي من الزر دون قصّ
+  static const double _humpTopSpace = 26;
+  /// عرض الحيز المركزي (يتساوى مع موضع الـ FAB)
+  static const double _centerSlotWidth = _fabSize + 22;
 
   @override
   Widget build(BuildContext context) {
+    // الهامش السفلي فقط — SafeArea في HomePage يطبّق بالفعل مسافة الـ home indicator
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 15, 20, 15 + bottomInset),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(35),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 15,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: _FloatingNavItem(
-                icon: Icons.list_outlined,
-                label: loc.myAds,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage())),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: _humpTopSpace),
+              Container(
+                padding: const EdgeInsets.fromLTRB(4, 16, 4, 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(36),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                // مجموعتان متوازنتان: 2 | فراغ الـ FAB | 2 (المفضلة انتقلت لقائمة أعلى اليمين)
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _FloatingNavItem(
+                              icon: Icons.list_outlined,
+                              label: loc.myAds,
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage())),
+                            ),
+                          ),
+                          Expanded(
+                            child: _FloatingNavItem(
+                              icon: Icons.bar_chart_outlined,
+                              label: loc.valuation,
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ValuationPage())),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: _centerSlotWidth),
+                    Expanded(
+                      flex: 3,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _FloatingNavItem(
+                              icon: Icons.beach_access_outlined,
+                              label: loc.chalets,
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChaletsPage())),
+                            ),
+                          ),
+                          Expanded(
+                            child: _FloatingNavItem(
+                              icon: Icons.campaign_outlined,
+                              label: loc.wanted,
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WantedPage())),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: _FloatingNavItem(
-                icon: Icons.bar_chart_outlined,
-                label: loc.valuation,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ValuationPage())),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 4, right: 4, bottom: 2),
+            ],
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: _humpTopSpace - _fabSize / 2,
+            child: Center(
               child: _FloatingNavCenterAdd(
+                fabSize: _fabSize,
                 label: loc.addProperty,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddPropertyPage())),
               ),
             ),
-            Expanded(
-              child: _FloatingNavItem(
-                icon: Icons.campaign_outlined,
-                label: loc.wanted,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WantedPage())),
-              ),
-            ),
-            Expanded(
-              child: _FloatingNavItem(
-                icon: Icons.favorite_border,
-                label: loc.favorites,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage())),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -393,14 +522,16 @@ class _FloatingNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const iconSize = 24.0;
+    const fontSize = 10.0;
     final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontSize: 10.5,
+          fontSize: fontSize,
           fontWeight: FontWeight.w500,
           color: Colors.black87,
           height: 1.15,
         ) ??
         const TextStyle(
-          fontSize: 10.5,
+          fontSize: fontSize,
           fontWeight: FontWeight.w500,
           color: Colors.black87,
           height: 1.15,
@@ -418,7 +549,7 @@ class _FloatingNavItem extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(icon, color: Colors.black87, size: 24),
+              Icon(icon, color: Colors.black87, size: iconSize),
               const SizedBox(height: 4),
               Text(
                 label,
@@ -436,10 +567,12 @@ class _FloatingNavItem extends StatelessWidget {
 }
 
 class _FloatingNavCenterAdd extends StatelessWidget {
+  final double fabSize;
   final String label;
   final VoidCallback onTap;
 
   const _FloatingNavCenterAdd({
+    required this.fabSize,
     required this.label,
     required this.onTap,
   });
@@ -448,48 +581,58 @@ class _FloatingNavCenterAdd extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final iconSize = fabSize * 0.48;
     return Material(
       color: Colors.transparent,
+      elevation: 0,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: _navy,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+        borderRadius: BorderRadius.circular(fabSize),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: fabSize,
+                height: fabSize,
+                decoration: BoxDecoration(
+                  color: _navy,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.22),
+                      blurRadius: 14,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Icon(Icons.add, color: Colors.white, size: iconSize),
               ),
-              child: const Icon(Icons.add, color: Colors.white, size: 26),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: _navy,
-                  ) ??
-                  const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: _navy,
-                  ),
-            ),
-          ],
+              const SizedBox(height: 5),
+              SizedBox(
+                width: fabSize + 14,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                        height: 1.15,
+                      ) ??
+                      const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                        height: 1.15,
+                      ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -12,6 +12,7 @@ import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 // ⭐ نظام تغيير اللغة الموجود عندك
+import 'package:aqarai_app/app/app_theme.dart';
 import 'package:aqarai_app/app/locale_notifier.dart';
 
 Future<void> main() async {
@@ -34,6 +35,7 @@ class MyApp extends StatelessWidget {
       builder: (context, locale, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
+          theme: aqarAiLightTheme(),
 
           // ⭐ اللغة الحالية تأتي من appLocale
           locale: locale,

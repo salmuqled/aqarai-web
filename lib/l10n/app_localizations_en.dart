@@ -231,6 +231,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get publishing => 'Publishing...';
 
   @override
+  String get addPropertyTermsLead => 'I agree to the ';
+
+  @override
+  String get addPropertyTermsLink => 'Terms and Conditions';
+
+  @override
+  String get addPropertyTermsMustAccept => 'Please accept the terms and conditions before publishing.';
+
+  @override
+  String get addPropertyTermsDialogTitle => 'Property Listing Agreement — AqarAi';
+
+  @override
+  String get addPropertyTermsDialogBody => 'Property Listing Terms and Conditions — AqarAi Platform\n\nIntroduction:\nThese terms and conditions constitute a legally binding agreement between a user of the AqarAi platform (the advertiser) and the platform administration. By tapping \"I agree\" or \"Publish property\", the user acknowledges that they have read, understood, and agree to comply with all of the following provisions:\n\n1. Advertiser capacity and accuracy of data:\n• Ownership and agency: The advertiser warrants that they are the lawful owner of the listed property, or a licensed real estate office with valid authorization or a marketing agreement in effect from the owner.\n• Accuracy of information: The advertiser confirms that all property details (area, location, price, legal status) are fully accurate and reflect reality.\n• Images: Attached images must be genuine images of the same property. Stock images or images of other properties are strictly prohibited; the platform may remove the listing if misleading images are proven.\n\n2. Commissions and fees (brokerage policy):\n• Sale commission: Upon completion of a sale, the advertiser/seller undertakes to pay a commission of 1% of the total sold property value to AqarAi.\n• Rental commission: Upon completion of a rental, the advertiser/landlord undertakes to pay a commission equal to half of one month\'s rent once, to the platform.\n• Commission evasion: Any attempt to complete a transaction off-platform to avoid paying commission may subject the account holder to legal action and recovery of the due commission, as well as permanent account suspension.\n\n3. Featured listings and paid services:\n• \"Featured listing\" fees are for a technical service to increase visibility in designated areas of the app; the platform does not guarantee that a sale or lease will occur.\n• Amounts paid for featuring listings are non-refundable once the service is activated and the listing appears.\n\n4. Exchange and AI property valuation:\n• Exchange: The platform\'s responsibility is limited to connecting parties interested in exchange; it assumes no legal liability for the validity of exchanged properties or transfer procedures.\n• AI valuation: The user acknowledges that the appraisal service provided via artificial intelligence is indicative and approximate, based on current market data, and is not an official valuation approved by government or banking authorities.\n\n5. Platform disclaimer:\n• AqarAi is a technical intermediary only and assumes no liability for disputes between advertiser and buyer/tenant, or for property quality or hidden defects.\n• On-site inspection and verification of title deeds and official documents are solely the responsibility of the contracting parties.\n\n6. Amendment and removal:\n• AqarAi administration reserves the right to amend these terms at any time and to delete any listing or suspend any account that violates these policies without prior notice.';
+
+  @override
+  String get addPropertyTermsDialogClose => 'OK';
+
+  @override
   String get noWantedItems => 'No items found';
 
   @override
@@ -298,6 +316,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get favoritesEmpty => 'No saved properties.';
 
   @override
+  String get quickMenuTitle => 'Menu';
+
+  @override
+  String get languageLabel => 'Language';
+
+  @override
+  String get languageArabic => 'Arabic';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
   String get all => 'All';
 
   @override
@@ -308,6 +338,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get featuredAds => 'Featured';
+
+  @override
   String get featuredWanted => 'Featured Wanted';
 
   @override
@@ -463,9 +495,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get interestedDetails => 'Interested';
 
+  @override
   String get adLabel => 'Ad';
+
+  @override
   String get passwordResetSent => 'Password reset link has been sent to your email';
+
+  @override
   String get adFeaturedSevenDays => 'Ad featured for 7 days';
+
+  @override
   String get errorLabel => 'Error';
+
+  @override
   String get propertySentForReview => 'Property sent for review';
 }

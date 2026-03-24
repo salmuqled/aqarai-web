@@ -101,6 +101,19 @@ class _MyAdsPageState extends State<MyAdsPage> {
 
   String _price(num? p) => p == null ? '-' : _fmtNum.format(p);
 
+  /// عرض للبيع / للإيجار / البدل على بطاقة إعلاناتي
+  String _propertyServiceLabel(String? raw, AppLocalizations loc) {
+    switch ((raw ?? 'sale').toString().toLowerCase().trim()) {
+      case 'rent':
+        return loc.forRent;
+      case 'exchange':
+        return loc.forExchange;
+      case 'sale':
+      default:
+        return loc.forSale;
+    }
+  }
+
   String? _coverFrom(dynamic coverUrl, dynamic images) {
     String? pick(dynamic x) {
       final s = x?.toString().trim();
@@ -566,6 +579,7 @@ class _MyAdsPageState extends State<MyAdsPage> {
     final featuredUntil = d['featuredUntil'] as Timestamp?;
     final isFeaturedNow = featuredUntil != null &&
         featuredUntil.toDate().isAfter(DateTime.now());
+    final serviceLabel = _propertyServiceLabel(d['serviceType']?.toString(), loc);
 
     late String typeLabel;
     if (locale == 'ar') {
@@ -622,6 +636,15 @@ class _MyAdsPageState extends State<MyAdsPage> {
                         fontSize: 15,
                         color: Colors.green,
                         fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "${loc.serviceTypeLabel}: $serviceLabel",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _primaryBlue,
                       ),
                     ),
                     const SizedBox(height: 6),

@@ -1,6 +1,8 @@
 // lib/pages/add_property_page.dart
 
 import 'dart:io';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -60,6 +62,10 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   bool hasLaundryRoom = false;
   bool hasGarden = false;
 
+  bool _acceptedTerms = false;
+
+  late final TapGestureRecognizer _termsLinkTap;
+
   String? _lastLocaleCode;
 
   // ✅ توليد Code ثابت وآمن (دائم)
@@ -76,6 +82,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   @override
   void initState() {
     super.initState();
+    _termsLinkTap = TapGestureRecognizer()
+      ..onTap = () {
+        if (!mounted) return;
+        _showTermsDialog(context, AppLocalizations.of(context)!);
+      };
     WidgetsBinding.instance.addPostFrameCallback(
         (_) => _updateInterestedBuyersCount());
   }
@@ -91,6 +102,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     parkingCountController.dispose();
     sizeController.dispose();
     priceController.dispose();
+    _termsLinkTap.dispose();
     super.dispose();
   }
 
@@ -153,6 +165,30 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _showTermsDialog(BuildContext context, AppLocalizations loc) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.addPropertyTermsDialogTitle),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              loc.addPropertyTermsDialogBody,
+              style: Theme.of(ctx).textTheme.bodyMedium,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(loc.addPropertyTermsDialogClose),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _updateInterestedBuyersCount() async {
     if (selectedArea == null || selectedPropertyType == null) {
       if (mounted) setState(() => _interestedBuyersCount = null);
@@ -197,6 +233,10 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     }
     if (_normalizeDigits(priceController.text).isEmpty) {
       _toast(loc.propertyPrice);
+      return false;
+    }
+    if (!_acceptedTerms) {
+      _toast(loc.addPropertyTermsMustAccept);
       return false;
     }
 
@@ -410,6 +450,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
     final textDirection = isArabic ? TextDirection.rtl : TextDirection.ltr;
 
@@ -720,10 +761,49 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                   ),
                 ),
 
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _acceptedTerms,
+                      onChanged: _loading
+                          ? null
+                          : (v) => setState(() => _acceptedTerms = v ?? false),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Text.rich(
+                          TextSpan(
+                            style: theme.textTheme.bodyMedium,
+                            children: [
+                              TextSpan(text: loc.addPropertyTermsLead),
+                              TextSpan(
+                                text: loc.addPropertyTermsLink,
+                                style: TextStyle(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                recognizer: _termsLinkTap,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _loading ? null : _saveProperty,
+                  onPressed: (_loading || !_acceptedTerms)
+                      ? null
+                      : _saveProperty,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black87,
                     padding: const EdgeInsets.symmetric(vertical: 16),

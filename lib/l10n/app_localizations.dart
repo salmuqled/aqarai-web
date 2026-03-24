@@ -221,6 +221,10 @@ abstract class AppLocalizations {
   /// **'Wanted Requests'**
   String get wantedList;
 
+  /// Section title for user's wanted requests in My Ads
+  ///
+  /// In en, this message translates to:
+  /// **'My Wanted Requests'**
   String get myWantedRequests;
 
   /// Add wanted request
@@ -535,6 +539,42 @@ abstract class AppLocalizations {
   /// **'Publishing...'**
   String get publishing;
 
+  /// Before terms link on add property
+  ///
+  /// In en, this message translates to:
+  /// **'I agree to the '**
+  String get addPropertyTermsLead;
+
+  /// Terms link label
+  ///
+  /// In en, this message translates to:
+  /// **'Terms and Conditions'**
+  String get addPropertyTermsLink;
+
+  /// Toast when publishing without acceptance
+  ///
+  /// In en, this message translates to:
+  /// **'Please accept the terms and conditions before publishing.'**
+  String get addPropertyTermsMustAccept;
+
+  /// Terms dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Property Listing Agreement — AqarAi'**
+  String get addPropertyTermsDialogTitle;
+
+  /// Full property listing terms (English)
+  ///
+  /// In en, this message translates to:
+  /// **'Property Listing Terms and Conditions — AqarAi Platform\n\nIntroduction:\nThese terms and conditions constitute a legally binding agreement between a user of the AqarAi platform (the advertiser) and the platform administration. By tapping \"I agree\" or \"Publish property\", the user acknowledges that they have read, understood, and agree to comply with all of the following provisions:\n\n1. Advertiser capacity and accuracy of data:\n• Ownership and agency: The advertiser warrants that they are the lawful owner of the listed property, or a licensed real estate office with valid authorization or a marketing agreement in effect from the owner.\n• Accuracy of information: The advertiser confirms that all property details (area, location, price, legal status) are fully accurate and reflect reality.\n• Images: Attached images must be genuine images of the same property. Stock images or images of other properties are strictly prohibited; the platform may remove the listing if misleading images are proven.\n\n2. Commissions and fees (brokerage policy):\n• Sale commission: Upon completion of a sale, the advertiser/seller undertakes to pay a commission of 1% of the total sold property value to AqarAi.\n• Rental commission: Upon completion of a rental, the advertiser/landlord undertakes to pay a commission equal to half of one month\'s rent once, to the platform.\n• Commission evasion: Any attempt to complete a transaction off-platform to avoid paying commission may subject the account holder to legal action and recovery of the due commission, as well as permanent account suspension.\n\n3. Featured listings and paid services:\n• \"Featured listing\" fees are for a technical service to increase visibility in designated areas of the app; the platform does not guarantee that a sale or lease will occur.\n• Amounts paid for featuring listings are non-refundable once the service is activated and the listing appears.\n\n4. Exchange and AI property valuation:\n• Exchange: The platform\'s responsibility is limited to connecting parties interested in exchange; it assumes no legal liability for the validity of exchanged properties or transfer procedures.\n• AI valuation: The user acknowledges that the appraisal service provided via artificial intelligence is indicative and approximate, based on current market data, and is not an official valuation approved by government or banking authorities.\n\n5. Platform disclaimer:\n• AqarAi is a technical intermediary only and assumes no liability for disputes between advertiser and buyer/tenant, or for property quality or hidden defects.\n• On-site inspection and verification of title deeds and official documents are solely the responsibility of the contracting parties.\n\n6. Amendment and removal:\n• AqarAi administration reserves the right to amend these terms at any time and to delete any listing or suspend any account that violates these policies without prior notice.'**
+  String get addPropertyTermsDialogBody;
+
+  /// Close terms dialog
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get addPropertyTermsDialogClose;
+
   /// No items
   ///
   /// In en, this message translates to:
@@ -649,9 +689,41 @@ abstract class AppLocalizations {
   /// **'My Ads'**
   String get myAds;
 
+  /// No description provided for @favorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites'**
   String get favorites;
 
+  /// No description provided for @favoritesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved properties.'**
   String get favoritesEmpty;
+
+  /// Bottom sheet title for favorites and language
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get quickMenuTitle;
+
+  /// No description provided for @languageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get languageLabel;
+
+  /// No description provided for @languageArabic.
+  ///
+  /// In en, this message translates to:
+  /// **'Arabic'**
+  String get languageArabic;
+
+  /// No description provided for @languageEnglish.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageEnglish;
 
   /// No description provided for @all.
   ///
@@ -677,7 +749,10 @@ abstract class AppLocalizations {
   /// **'Featured'**
   String get featuredAds;
 
-  /// Featured wanted section title
+  /// Section title for featured wanted requests
+  ///
+  /// In en, this message translates to:
+  /// **'Featured Wanted'**
   String get featuredWanted;
 
   /// No description provided for @addedOn.
@@ -825,12 +900,21 @@ abstract class AppLocalizations {
   String get noAccount;
 
   /// Sign up with email button
+  ///
+  /// In en, this message translates to:
+  /// **'Sign up with email'**
   String get signUpWithEmail;
 
   /// Sign in with email link
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with email'**
   String get signInWithEmail;
 
   /// Already have account
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account?'**
   String get haveAccount;
 
   /// Password mismatch message
@@ -965,14 +1049,46 @@ abstract class AppLocalizations {
   /// **'Exchange'**
   String get exchange;
 
+  /// Button: interested in property
+  ///
+  /// In en, this message translates to:
+  /// **'I\'m interested'**
   String get imInterested;
 
+  /// Admin section for interested leads
+  ///
+  /// In en, this message translates to:
+  /// **'Interested'**
   String get interestedDetails;
 
+  /// Default ad title
+  ///
+  /// In en, this message translates to:
+  /// **'Ad'**
   String get adLabel;
+
+  /// Message after sending reset link
+  ///
+  /// In en, this message translates to:
+  /// **'Password reset link has been sent to your email'**
   String get passwordResetSent;
+
+  /// Message after featuring ad
+  ///
+  /// In en, this message translates to:
+  /// **'Ad featured for 7 days'**
   String get adFeaturedSevenDays;
+
+  /// Error word for display with details
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
   String get errorLabel;
+
+  /// Message after submitting property for review
+  ///
+  /// In en, this message translates to:
+  /// **'Property sent for review'**
   String get propertySentForReview;
 }
 
