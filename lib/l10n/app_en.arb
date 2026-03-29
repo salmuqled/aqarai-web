@@ -16,6 +16,12 @@
   "selectGovernorateAndArea": "Please select governorate and area first",
   "@selectGovernorateAndArea": { "description": "Alert: select governorate first" },
 
+  "smartAssistantCtaTitle": "Ask about any property in Kuwait",
+  "@smartAssistantCtaTitle": { "description": "Smart assistant banner title on home" },
+
+  "smartAssistantCtaSubtitle": "Your smart real estate assistant",
+  "@smartAssistantCtaSubtitle": { "description": "Subtitle under smart assistant banner" },
+
   "propertyType": "Property Type",
   "@propertyType": { "description": "Type of property" },
 
@@ -301,6 +307,14 @@
   "favoritesEmpty": "No saved properties.",
   "quickMenuTitle": "Menu",
   "@quickMenuTitle": { "description": "Bottom sheet title for favorites and language" },
+  "quickMenuLegal": "Privacy & Terms",
+  "@quickMenuLegal": { "description": "Open privacy policy and terms from quick menu" },
+  "legalScreenTitle": "Legal information",
+  "@legalScreenTitle": { "description": "Title for privacy and terms screen" },
+  "legalTabPrivacy": "Privacy Policy",
+  "@legalTabPrivacy": { "description": "Privacy policy tab" },
+  "legalTabTerms": "Terms of Service",
+  "@legalTabTerms": { "description": "Terms of service tab" },
   "languageLabel": "Language",
   "languageArabic": "Arabic",
   "languageEnglish": "English",

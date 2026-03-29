@@ -15,10 +15,13 @@ import 'package:aqarai_app/pages/valuation_page.dart';
 import 'package:aqarai_app/pages/wanted_page.dart';
 import 'package:aqarai_app/pages/admin_requests_page.dart';
 import 'package:aqarai_app/pages/favorites_page.dart';
+import 'package:aqarai_app/pages/assistant_page.dart';
+import 'package:aqarai_app/pages/legal_pages.dart';
 
 import 'package:aqarai_app/app/locale_notifier.dart' show setAppLocale;
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
+import 'package:aqarai_app/widgets/smart_assistant_cta.dart';
 import 'package:aqarai_app/widgets/featured_carousel.dart';
 import 'package:aqarai_app/widgets/featured_wanted_carousel.dart';
 
@@ -200,6 +203,18 @@ class _HomePageState extends State<HomePage> {
                   Navigator.pop(sheetContext);
                 },
               ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.gavel_outlined),
+                title: Text(loc.quickMenuLegal),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LegalScreen()),
+                  );
+                },
+              ),
             ],
           ),
         );
@@ -255,6 +270,21 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(height: 40),
 
                       const AqarSearchBox(),
+
+                      const SizedBox(height: 14),
+
+                      SmartAssistantCta(
+                        title: loc.smartAssistantCtaTitle,
+                        subtitle: loc.smartAssistantCtaSubtitle,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AssistantPage(),
+                            ),
+                          );
+                        },
+                      ),
 
                       const SizedBox(height: 20),
 

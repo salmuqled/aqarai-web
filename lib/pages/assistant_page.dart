@@ -35,9 +35,16 @@ import 'package:aqarai_app/services/ai_brain_service.dart';
 import 'package:aqarai_app/services/conversational_search_service.dart';
 import 'package:aqarai_app/services/user_interest_service.dart';
 import 'package:aqarai_app/services/notification_service.dart';
+import 'package:aqarai_app/services/user_activity_service.dart';
 import 'package:aqarai_app/widgets/chat_bubble.dart';
 import 'package:aqarai_app/widgets/listing_card.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
+
+/// إعلان يُعرض في نتائج المساعد (معتمد وظاهر للعميل).
+bool _listingVisibleForAssistantSearch(Map<String, dynamic> data) {
+  return listingDataIsPubliclyDiscoverable(data);
+}
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({super.key});
@@ -46,7 +53,8 @@ class AssistantPage extends StatefulWidget {
   State<AssistantPage> createState() => _AssistantPageState();
 }
 
-class _AssistantPageState extends State<AssistantPage> {
+class _AssistantPageState extends State<AssistantPage>
+    with WidgetsBindingObserver {
   final List<ChatMessage> _messages = [];
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -54,6 +62,13 @@ class _AssistantPageState extends State<AssistantPage> {
   bool _assistantTyping = false;
   bool _isAr = true;
   bool _fcmSetupDone = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(UserActivityService.recordActivity(reason: 'app_resume'));
+    }
+  }
 
   /// فلاتر البحث الحالية (من الـ Agent)
   Map<String, dynamic> _currentFilters = {};
@@ -83,8 +98,10 @@ class _AssistantPageState extends State<AssistantPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
+      unawaited(UserActivityService.recordActivity());
     });
   }
 
@@ -206,10 +223,19 @@ class _AssistantPageState extends State<AssistantPage> {
       final userBudgetForQuery = _currentFilters['budget'] is num
           ? (_currentFilters['budget'] as num).toDouble()
           : (_currentFilters['budget'] != null ? double.tryParse(_currentFilters['budget'].toString()) : null);
-      // عند وجود ميزانية نجلِب أكثر ثم نصفّي في الذاكرة (لتجنب الحاجة لفهرس مركب في Firestore).
-      final limit = (userBudgetForQuery != null && userBudgetForQuery > 0) ? 100 : 30;
-      final snapshot = await query.limit(limit).get();
-      var docs = snapshot.docs;
+      // استعلام Firestore مبسّط (منطقة + معتمد) ثم تصفية نوع الخدمة/العقار محلياً — نجلب عيّنة كافية.
+      final fetchLimit =
+          (userBudgetForQuery != null && userBudgetForQuery > 0) ? 150 : 100;
+      final snapshot = await query.limit(fetchLimit).get();
+      var docs = snapshot.docs
+          .where((d) =>
+              searchService.documentMatchesConversationFilters(d.data(), _currentFilters))
+          .where((d) => _listingVisibleForAssistantSearch(d.data()))
+          .toList();
+      const maxDocsAfterFilter = 50;
+      if (docs.length > maxDocsAfterFilter) {
+        docs = docs.sublist(0, maxDocsAfterFilter);
+      }
       if (userBudgetForQuery != null && userBudgetForQuery > 0) {
         docs = docs
             .where((d) {
@@ -276,7 +302,11 @@ class _AssistantPageState extends State<AssistantPage> {
         if (nearbyCodes != null && nearbyCodes.isNotEmpty) {
           final nearbyQuery = searchService.buildQueryNearbyFromMap(_currentFilters, nearbyCodes);
           final nearbySnapshot = await nearbyQuery.get();
-          final nearbyDocs = nearbySnapshot.docs;
+          final nearbyDocs = nearbySnapshot.docs
+              .where((d) =>
+                  searchService.documentMatchesConversationFilters(d.data(), _currentFilters))
+              .where((d) => _listingVisibleForAssistantSearch(d.data()))
+              .toList();
           if (nearbyDocs.isNotEmpty && mounted) {
             setState(() {
               _lastResults = List.from(nearbyDocs);
@@ -551,6 +581,7 @@ class _AssistantPageState extends State<AssistantPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -746,7 +777,10 @@ class _AssistantPageState extends State<AssistantPage> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => PropertyDetailsPage(propertyId: id),
+                                    builder: (_) => PropertyDetailsPage(
+                                      propertyId: id,
+                                      leadSource: DealLeadSource.aiChat,
+                                    ),
                                   ),
                                 );
                               },
@@ -789,7 +823,52 @@ class _AssistantPageState extends State<AssistantPage> {
   /// دائرة واحدة ناعمة (بخط واحد) ثم اللوقو بداخلها — بدون ClipOval مزدوج.
   static const double _avatarSize = 32;
 
+  /// صورة Google/Apple من [User.photoURL]؛ بدون صورة: حرف من الاسم/البريد؛ دخول ضيف: لوقو التطبيق.
   Widget _buildUserAvatar() {
+    final user = FirebaseAuth.instance.currentUser;
+    final url = user?.photoURL?.trim();
+    if (url != null && url.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          url,
+          width: _avatarSize,
+          height: _avatarSize,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return SizedBox(
+              width: _avatarSize,
+              height: _avatarSize,
+              child: const Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) => _userAvatarFallback(user),
+        ),
+      );
+    }
+    return _userAvatarFallback(user);
+  }
+
+  static String _userInitial(User? user) {
+    final d = user?.displayName?.trim();
+    if (d != null && d.isNotEmpty) {
+      return String.fromCharCode(d.runes.first);
+    }
+    final e = user?.email?.trim();
+    if (e != null && e.isNotEmpty) {
+      return e[0].toUpperCase();
+    }
+    return '?';
+  }
+
+  Widget _userAvatarFallback(User? user) {
+    final anonymous = user?.isAnonymous == true;
     return Container(
       width: _avatarSize,
       height: _avatarSize,
@@ -798,13 +877,23 @@ class _AssistantPageState extends State<AssistantPage> {
         color: Color(0xFF101046),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(5),
-        child: Image.asset(
-          'assets/images/aqarai_chat_logo.png',
-          fit: BoxFit.contain,
-        ),
-      ),
+      alignment: Alignment.center,
+      child: anonymous
+          ? Padding(
+              padding: const EdgeInsets.all(5),
+              child: Image.asset(
+                'assets/images/aqarai_chat_logo.png',
+                fit: BoxFit.contain,
+              ),
+            )
+          : Text(
+              _userInitial(user),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
     );
   }
 

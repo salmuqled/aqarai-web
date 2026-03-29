@@ -20,6 +20,15 @@ service cloud.firestore {
         || request.resource.data[field] == false;
     }
 
+    function propertyPublicDiscovery(data) {
+      return data.approved == true
+        && (!('hiddenFromPublic' in data) || data.hiddenFromPublic == false)
+        && (!('status' in data)
+            || data.status == ''
+            || data.status == 'active'
+            || data.status == 'approved');
+    }
+
     /* ============================================================
         Properties (العقارات)
     ============================================================ */
@@ -27,11 +36,10 @@ service cloud.firestore {
     match /properties/{propertyId} {
 
       // 👀 القراءة:
-      // - أي مستخدم يشوف العقار إذا approved = true
-      // - صاحب الإعلان يشوف إعلانه
-      // - الأدمن يشوف الكل
+      // - العامة: معتمد + غير مخفي + حالة نشطة (أو approved قديمة)
+      // - المالك والأدمن: دائماً
       allow read: if
-        resource.data.approved == true
+        propertyPublicDiscovery(resource.data)
         ||
         (isSignedIn() && resource.data.ownerId == request.auth.uid)
         ||
@@ -66,6 +74,135 @@ service cloud.firestore {
           isSignedIn()
           && resource.data.ownerId == request.auth.uid
         );
+    }
+
+    /* ============================================================
+        Closure requests — Phase 1 (إغلاق إعلانات عادية فقط)
+    ============================================================ */
+
+    match /closure_requests/{requestId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.ownerId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.propertyId is string
+        && request.resource.data.status == 'pending'
+        && get(/databases/$(database)/documents/properties/$(request.resource.data.propertyId)).data.ownerId == request.auth.uid;
+
+      allow update: if isAdmin();
+
+      allow delete: if false;
+    }
+
+    /* ============================================================
+        Property views (attribution: AI / search / featured / direct)
+    ============================================================ */
+
+    function propertyViewLeadSourceOk() {
+      return request.resource.data.leadSource in ['ai_chat', 'search', 'featured', 'direct'];
+    }
+
+    /// Listing owner may read all views on that property (multi-view attribution on closure).
+    function propertyViewReadableByListingOwner() {
+      return isSignedIn()
+        && resource.data.propertyId is string
+        && exists(/databases/$(database)/documents/properties/$(resource.data.propertyId))
+        && get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data.ownerId == request.auth.uid;
+    }
+
+    match /property_views/{docId} {
+      // Append-only analytics; readers: admin, viewer (own userId), or listing owner (attribution).
+      allow create: if propertyViewLeadSourceOk()
+        && request.resource.data.propertyId is string
+        && request.resource.data.keys().hasAll(['propertyId', 'leadSource', 'viewedAt'])
+        && (
+          (
+            isSignedIn()
+            && request.resource.data.userId == request.auth.uid
+            && !('anonymousId' in request.resource.data)
+          )
+          ||
+          (
+            request.auth == null
+            && request.resource.data.anonymousId is string
+            && request.resource.data.anonymousId.size() >= 16
+            && !('userId' in request.resource.data)
+          )
+        );
+
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid)
+        || propertyViewReadableByListingOwner();
+
+      allow update, delete: if false;
+    }
+
+    /* ============================================================
+        Deals (صفقات معتمدة — تقارير)
+    ============================================================ */
+
+    match /deals/{dealId} {
+      allow read, write: if isAdmin();
+    }
+
+    /* ============================================================
+        Analytics (تجميعات الأعمال — قراءة/كتابة أدمن فقط)
+    ============================================================ */
+
+    match /analytics/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    /* ============================================================
+        Notification logs (FCM campaigns — كتابة عبر Functions فقط)
+    ============================================================ */
+
+    match /notification_logs/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    /* ============================================================
+        Notification learning (أوزان عوامل التنبؤ — كتابة عبر Functions فقط)
+    ============================================================ */
+
+    match /notification_learning/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    /* ============================================================
+        Notification clicks (فتح من الإشعار — إنشاء من مستخدم مسجّل)
+    ============================================================ */
+
+    function notificationClickKeysOk() {
+      return request.resource.data.keys().hasOnly([
+        'userId',
+        'openedAt',
+        'clickedAt',
+        'notificationId',
+        'notificationTitle',
+        'variantId'
+      ]);
+    }
+
+    match /notification_clicks/{docId} {
+      allow create: if isSignedIn()
+        && notificationClickKeysOk()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'openedAt', 'clickedAt'])
+        && (!('notificationId' in request.resource.data)
+            || (request.resource.data.notificationId is string
+                && request.resource.data.notificationId.size() <= 200))
+        && (!('notificationTitle' in request.resource.data)
+            || (request.resource.data.notificationTitle is string
+                && request.resource.data.notificationTitle.size() <= 400))
+        && (!('variantId' in request.resource.data)
+            || (request.resource.data.variantId is string
+                && request.resource.data.variantId.size() <= 64));
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
 
     /* ============================================================
@@ -117,6 +254,45 @@ service cloud.firestore {
     /* ============================================================
         Users (ملف المستخدم — حفظ fcmToken للإشعارات)
     ============================================================ */
+
+    /* ============================================================
+        User activity (وقت/جمهور الإشعارات — تحديث ذاتي فقط)
+    ============================================================ */
+
+    match /user_activity/{uid} {
+      allow read: if isAdmin();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.userId == uid
+        && request.resource.data.lastActiveHour is int
+        && request.resource.data.lastActiveDay is int
+        && request.resource.data.lastSeenAt is timestamp
+        && request.resource.data.keys().hasAll([
+          'userId',
+          'lastSeenAt',
+          'lastActiveHour',
+          'lastActiveDay'
+        ]);
+      allow delete: if false;
+    }
+
+    /* ============================================================
+        Scheduled notification jobs (أدمن فقط — لا إرسال تلقائي من العميل)
+    ============================================================ */
+
+    match /scheduled_notification_jobs/{jobId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ============================================================
+        Activity stats (تجميع سيرفري — قراءة أدمن فقط)
+    ============================================================ */
+
+    match /activity_stats/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
 
     match /users/{userId} {
       allow read, create, update: if isSignedIn() && request.auth.uid == userId;

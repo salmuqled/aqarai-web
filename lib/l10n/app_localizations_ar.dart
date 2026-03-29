@@ -24,6 +24,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get selectGovernorateAndArea => 'يرجى اختيار المحافظة والمنطقة أولاً';
 
   @override
+  String get smartAssistantCtaTitle => 'اسأل عن أي عقار بالكويت';
+
+  @override
+  String get smartAssistantCtaSubtitle => 'مساعدك العقاري الذكي';
+
+  @override
   String get propertyType => 'نوع العقار';
 
   @override
@@ -317,6 +323,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get quickMenuTitle => 'قائمة';
+
+  @override
+  String get quickMenuLegal => 'الخصوصية والشروط';
+
+  @override
+  String get legalScreenTitle => 'المستندات القانونية';
+
+  @override
+  String get legalTabPrivacy => 'سياسة الخصوصية';
+
+  @override
+  String get legalTabTerms => 'شروط الاستخدام';
 
   @override
   String get languageLabel => 'اللغة';

@@ -332,6 +332,12 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "approved": false,
         "status": "active",
 
+        // Phase 1: تمييز الشاليه عن العادي (بدون حجوزات في التطبيق بعد)
+        "listingCategory":
+            selectedPropertyType == 'chalet' ? 'chalet' : 'normal',
+        "hiddenFromPublic": false,
+        "closeRequestSubmitted": false,
+
         "createdAt": FieldValue.serverTimestamp(),
         "updatedAt": FieldValue.serverTimestamp(),
       };

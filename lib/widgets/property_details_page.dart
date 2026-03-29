@@ -4,15 +4,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
+import 'package:aqarai_app/services/property_view_tracking_service.dart';
 
 class PropertyDetailsPage extends StatelessWidget {
   final String propertyId;
   final bool isAdminView;
 
+  /// How the user reached this screen (`property_views` + closure attribution).
+  final String leadSource;
+
   const PropertyDetailsPage({
     super.key,
     required this.propertyId,
     this.isAdminView = false,
+    this.leadSource = DealLeadSource.direct,
   });
 
   String _translateType(BuildContext context, String value) {
@@ -76,139 +82,153 @@ class PropertyDetailsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+    return _RecordPropertyViewOnce(
+      propertyId: propertyId,
+      leadSource: leadSource,
+      skipRecording: isAdminView,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF7F7F7),
 
-      appBar: AppBar(
-        title: Text(
-          loc.propertyDetails,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        appBar: AppBar(
+          title: Text(
+            loc.propertyDetails,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          centerTitle: true,
+          actions: [
+            if (FirebaseAuth.instance.currentUser != null && !isAdminView)
+              _FavoriteHeart(propertyId: propertyId),
+          ],
         ),
-        centerTitle: true,
-        actions: [
-          if (FirebaseAuth.instance.currentUser != null && !isAdminView)
-            _FavoriteHeart(propertyId: propertyId),
-        ],
-      ),
 
-      body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance
-            .collection('properties')
-            .doc(propertyId)
-            .get(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        body: FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('properties')
+              .doc(propertyId)
+              .get(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return Center(
-              child: Text(
-                loc.noWantedItems,
-                style: const TextStyle(fontSize: 18),
-              ),
-            );
-          }
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return Center(
+                child: Text(
+                  loc.noWantedItems,
+                  style: const TextStyle(fontSize: 18),
+                ),
+              );
+            }
 
-          final data = snapshot.data!.data() as Map<String, dynamic>;
+            final data = snapshot.data!.data() as Map<String, dynamic>;
 
-          final List<String> images = (data['images'] as List<dynamic>? ?? [])
-              .map((e) => e.toString())
-              .toList();
+            final List<String> images = (data['images'] as List<dynamic>? ?? [])
+                .map((e) => e.toString())
+                .toList();
 
-          final String type = data['type'] ?? '';
-          final String serviceType = data['serviceType'] ?? '';
-          final num price = (data['price'] ?? 0) as num;
-          final String governorate = data['governorate'] ?? data['governorateAr'] ?? data['governorateEn'] ?? '';
-          final bool isAr = Localizations.localeOf(context).languageCode == 'ar';
-          final String area = (isAr ? (data['areaAr'] ?? data['area']) : (data['areaEn'] ?? data['area'])) ?? '';
-          final String description = data['description'] ?? '';
-          final String status = data['status'] ?? '';
-          final Timestamp? createdAt = data['createdAt'] as Timestamp?;
+            final String type = data['type'] ?? '';
+            final String serviceType = data['serviceType'] ?? '';
+            final num price = (data['price'] ?? 0) as num;
+            final String governorate =
+                data['governorate'] ??
+                data['governorateAr'] ??
+                data['governorateEn'] ??
+                '';
+            final bool isAr =
+                Localizations.localeOf(context).languageCode == 'ar';
+            final String area =
+                (isAr
+                    ? (data['areaAr'] ?? data['area'])
+                    : (data['areaEn'] ?? data['area'])) ??
+                '';
+            final String description = data['description'] ?? '';
+            final String status = data['status'] ?? '';
+            final Timestamp? createdAt = data['createdAt'] as Timestamp?;
 
-          final String ownerName = data['fullName'] ?? "";
-          final String ownerPhone = data['ownerPhone'] ?? "";
+            final String ownerName = data['fullName'] ?? "";
+            final String ownerPhone = data['ownerPhone'] ?? "";
 
-          final int roomCount = (data['roomCount'] ?? 0) as int;
-          final int masterRoomCount = (data['masterRoomCount'] ?? 0) as int;
-          final int bathroomCount = (data['bathroomCount'] ?? 0) as int;
-          final int parkingCount = (data['parkingCount'] ?? 0) as int;
-          final double size = (data['size'] ?? 0).toDouble();
+            final int roomCount = (data['roomCount'] ?? 0) as int;
+            final int masterRoomCount = (data['masterRoomCount'] ?? 0) as int;
+            final int bathroomCount = (data['bathroomCount'] ?? 0) as int;
+            final int parkingCount = (data['parkingCount'] ?? 0) as int;
+            final double size = (data['size'] ?? 0).toDouble();
 
-          final bool hasElevator = data['hasElevator'] ?? false;
-          final bool hasCentralAC = data['hasCentralAC'] ?? false;
-          final bool hasSplitAC = data['hasSplitAC'] ?? false;
-          final bool hasMaidRoom = data['hasMaidRoom'] ?? false;
-          final bool hasDriverRoom = data['hasDriverRoom'] ?? false;
-          final bool hasLaundryRoom = data['hasLaundryRoom'] ?? false;
-          final bool hasGarden = data['hasGarden'] ?? false;
+            final bool hasElevator = data['hasElevator'] ?? false;
+            final bool hasCentralAC = data['hasCentralAC'] ?? false;
+            final bool hasSplitAC = data['hasSplitAC'] ?? false;
+            final bool hasMaidRoom = data['hasMaidRoom'] ?? false;
+            final bool hasDriverRoom = data['hasDriverRoom'] ?? false;
+            final bool hasLaundryRoom = data['hasLaundryRoom'] ?? false;
+            final bool hasGarden = data['hasGarden'] ?? false;
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildImageSlider(images),
-              const SizedBox(height: 16),
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildImageSlider(images),
+                const SizedBox(height: 16),
 
-              _buildInfoCard(
-                context,
-                price,
-                governorate,
-                area,
-                _translateType(context, type),
-                _translateService(context, serviceType),
-                _translateStatus(context, status),
-              ),
-
-              const SizedBox(height: 16),
-
-              _buildDescriptionCard(context, description),
-
-              const SizedBox(height: 16),
-
-              _buildFeaturesGrid(
-                context,
-                roomCount,
-                masterRoomCount,
-                bathroomCount,
-                parkingCount,
-                size,
-                hasElevator,
-                hasCentralAC,
-                hasSplitAC,
-                hasMaidRoom,
-                hasDriverRoom,
-                hasLaundryRoom,
-                hasGarden,
-              ),
-
-              const SizedBox(height: 16),
-
-              if (isAdminView)
-                _buildOwnerCard(context, ownerName, ownerPhone, propertyId),
-
-              const SizedBox(height: 16),
-
-              if (createdAt != null) _buildFooter(context, createdAt),
-
-              const SizedBox(height: 24),
-
-              if (!isAdminView)
-                _buildInterestedButton(
+                _buildInfoCard(
                   context,
-                  propertyId,
-                  type,
-                  data['areaAr'] ?? '',
-                  data['areaEn'] ?? '',
-                  serviceType,
                   price,
+                  governorate,
+                  area,
                   _translateType(context, type),
                   _translateService(context, serviceType),
-                  area,
+                  _translateStatus(context, status),
                 ),
-              const SizedBox(height: 32),
-            ],
-          );
-        },
+
+                const SizedBox(height: 16),
+
+                _buildDescriptionCard(context, description),
+
+                const SizedBox(height: 16),
+
+                _buildFeaturesGrid(
+                  context,
+                  roomCount,
+                  masterRoomCount,
+                  bathroomCount,
+                  parkingCount,
+                  size,
+                  hasElevator,
+                  hasCentralAC,
+                  hasSplitAC,
+                  hasMaidRoom,
+                  hasDriverRoom,
+                  hasLaundryRoom,
+                  hasGarden,
+                ),
+
+                const SizedBox(height: 16),
+
+                if (isAdminView)
+                  _buildOwnerCard(context, ownerName, ownerPhone, propertyId),
+
+                const SizedBox(height: 16),
+
+                if (createdAt != null) _buildFooter(context, createdAt),
+
+                const SizedBox(height: 24),
+
+                if (!isAdminView)
+                  _buildInterestedButton(
+                    context,
+                    propertyId,
+                    type,
+                    data['areaAr'] ?? '',
+                    data['areaEn'] ?? '',
+                    serviceType,
+                    price,
+                    _translateType(context, type),
+                    _translateService(context, serviceType),
+                    area,
+                  ),
+                const SizedBox(height: 32),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -284,9 +304,9 @@ class PropertyDetailsPage extends StatelessWidget {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(loc.noWantedItems)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(loc.noWantedItems)));
       }
     }
   }
@@ -597,6 +617,43 @@ class PropertyDetailsPage extends StatelessWidget {
   }
 }
 
+/// One Firestore write per open; skipped for admin preview so metrics stay user-facing.
+class _RecordPropertyViewOnce extends StatefulWidget {
+  final String propertyId;
+  final String leadSource;
+  final bool skipRecording;
+  final Widget child;
+
+  const _RecordPropertyViewOnce({
+    required this.propertyId,
+    required this.leadSource,
+    required this.skipRecording,
+    required this.child,
+  });
+
+  @override
+  State<_RecordPropertyViewOnce> createState() =>
+      _RecordPropertyViewOnceState();
+}
+
+class _RecordPropertyViewOnceState extends State<_RecordPropertyViewOnce> {
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.skipRecording) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        PropertyViewTrackingService.instance.recordView(
+          propertyId: widget.propertyId,
+          leadSource: widget.leadSource,
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 /// Heart icon that toggles favorite state for the current user.
 class _FavoriteHeart extends StatelessWidget {
   final String propertyId;
@@ -637,9 +694,7 @@ class _FavoriteHeart extends StatelessWidget {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(
-                      AppLocalizations.of(context)!.noWantedItems,
-                    ),
+                    content: Text(AppLocalizations.of(context)!.noWantedItems),
                   ),
                 );
               }

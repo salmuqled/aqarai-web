@@ -16,6 +16,12 @@
   "selectGovernorateAndArea": "يرجى اختيار المحافظة والمنطقة أولاً",
   "@selectGovernorateAndArea": { "description": "تنبيه اختيار المحافظة والمنطقة أولاً" },
 
+  "smartAssistantCtaTitle": "اسأل عن أي عقار بالكويت",
+  "@smartAssistantCtaTitle": { "description": "عنوان بانر المساعد الذكي في الرئيسية" },
+
+  "smartAssistantCtaSubtitle": "مساعدك العقاري الذكي",
+  "@smartAssistantCtaSubtitle": { "description": "سطر فرعي تحت بانر المساعد الذكي" },
+
   "propertyType": "نوع العقار",
   "@propertyType": { "description": "نوع العقار" },
 
@@ -301,6 +307,14 @@
   "favoritesEmpty": "لا توجد عقارات محفوظة.",
   "quickMenuTitle": "قائمة",
   "@quickMenuTitle": { "description": "عنوان الورقة السفلية: مفضلة ولغة" },
+  "quickMenuLegal": "الخصوصية والشروط",
+  "@quickMenuLegal": { "description": "فتح سياسة الخصوصية وشروط الاستخدام من القائمة السريعة" },
+  "legalScreenTitle": "المستندات القانونية",
+  "@legalScreenTitle": { "description": "عنوان شاشة الخصوصية والشروط" },
+  "legalTabPrivacy": "سياسة الخصوصية",
+  "@legalTabPrivacy": { "description": "تبويب سياسة الخصوصية" },
+  "legalTabTerms": "شروط الاستخدام",
+  "@legalTabTerms": { "description": "تبويب شروط الاستخدام" },
   "languageLabel": "اللغة",
   "languageArabic": "العربية",
   "languageEnglish": "English",

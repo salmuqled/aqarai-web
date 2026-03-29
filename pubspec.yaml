@@ -38,6 +38,8 @@ dependencies:
 
   http: ^1.2.2
   flag: ^7.0.2
+  shared_preferences: ^2.5.3
+  fl_chart: ^0.70.2
 
 dev_dependencies:
   flutter_test:

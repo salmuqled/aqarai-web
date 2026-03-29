@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:aqarai_app/firebase_options.dart';
 import 'package:aqarai_app/auth/login_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
+import 'package:aqarai_app/services/auth_service.dart';
 import 'package:aqarai_app/services/notification_service.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
@@ -66,8 +69,32 @@ class MyApp extends StatelessWidget {
 /// ----------------------------------------------------------------
 /// 🔐 AuthGate
 /// ----------------------------------------------------------------
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  StreamSubscription<User?>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // يجبر تحديث التوكن عند أي جلسة (بعد تعيين admin على السيرفر لازم يبان في Firestore).
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        unawaited(AuthService.refreshIdTokenClaims());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

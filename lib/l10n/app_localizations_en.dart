@@ -24,6 +24,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectGovernorateAndArea => 'Please select governorate and area first';
 
   @override
+  String get smartAssistantCtaTitle => 'Ask about any property in Kuwait';
+
+  @override
+  String get smartAssistantCtaSubtitle => 'Your smart real estate assistant';
+
+  @override
   String get propertyType => 'Property Type';
 
   @override
@@ -317,6 +323,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get quickMenuTitle => 'Menu';
+
+  @override
+  String get quickMenuLegal => 'Privacy & Terms';
+
+  @override
+  String get legalScreenTitle => 'Legal information';
+
+  @override
+  String get legalTabPrivacy => 'Privacy Policy';
+
+  @override
+  String get legalTabTerms => 'Terms of Service';
 
   @override
   String get languageLabel => 'Language';

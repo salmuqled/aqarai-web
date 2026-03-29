@@ -125,6 +125,18 @@ abstract class AppLocalizations {
   /// **'Please select governorate and area first'**
   String get selectGovernorateAndArea;
 
+  /// Smart assistant banner title on home
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about any property in Kuwait'**
+  String get smartAssistantCtaTitle;
+
+  /// Subtitle under smart assistant banner
+  ///
+  /// In en, this message translates to:
+  /// **'Your smart real estate assistant'**
+  String get smartAssistantCtaSubtitle;
+
   /// Type of property
   ///
   /// In en, this message translates to:
@@ -706,6 +718,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Menu'**
   String get quickMenuTitle;
+
+  /// Open privacy policy and terms from quick menu
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy & Terms'**
+  String get quickMenuLegal;
+
+  /// Title for privacy and terms screen
+  ///
+  /// In en, this message translates to:
+  /// **'Legal information'**
+  String get legalScreenTitle;
+
+  /// Privacy policy tab
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get legalTabPrivacy;
+
+  /// Terms of service tab
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Service'**
+  String get legalTabTerms;
 
   /// No description provided for @languageLabel.
   ///

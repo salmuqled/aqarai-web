@@ -1,4 +1,5 @@
 // lib/services/notification_service.dart
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -9,6 +10,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 
 // ✅ بدل main.dart
 import 'package:aqarai_app/app/navigation_keys.dart';
+import 'package:aqarai_app/services/notification_click_tracking_service.dart';
 
 // ✅ للتهيئة الآمنة داخل الهاندلر الخلفي
 import 'package:firebase_core/firebase_core.dart';
@@ -125,14 +127,20 @@ class NotificationService {
       }
     });
 
-    // 6) الهاندلرز
+    // 6) الهاندلرز — تتبع «فتح من الإشعار» فقط عند فتح التطبيق من التنبيه (ليس العرض في المقدّمة).
     FirebaseMessaging.onMessage.listen((m) => _handle(context, m));
-    FirebaseMessaging.onMessageOpenedApp.listen((m) => _handle(context, m));
+    FirebaseMessaging.onMessageOpenedApp.listen((m) {
+      unawaited(NotificationClickTrackingService.recordOpenFromNotification(m));
+      _handle(context, m);
+    });
 
     // 7) إذا تم فتح التطبيق من إشعار وهو مغلق مسبقًا
     final initialMsg = await _fcm.getInitialMessage();
     if (initialMsg != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(
+          NotificationClickTrackingService.recordOpenFromNotification(initialMsg),
+        );
         _handle(context, initialMsg);
       });
     }

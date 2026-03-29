@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
 
 class FavoritesPage extends StatelessWidget {
   const FavoritesPage({super.key});
@@ -128,12 +128,36 @@ class _FavoritePropertyTileState extends State<_FavoritePropertyTile> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<DocumentSnapshot>(
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       future: FirebaseFirestore.instance
           .collection('properties')
           .doc(widget.propertyId)
           .get(),
       builder: (context, snap) {
+        if (snap.hasError) {
+          final err = snap.error;
+          if (err is FirebaseException && err.code == 'permission-denied') {
+            if (!_cleanupTriggered) {
+              _cleanupTriggered = true;
+              final user = FirebaseAuth.instance.currentUser;
+              if (user != null) {
+                Future.microtask(() {
+                  FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .collection('favorites')
+                      .doc(widget.propertyId)
+                      .delete();
+                });
+              }
+            }
+            return const SizedBox.shrink();
+          }
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ListTile(title: Text('${snap.error}')),
+          );
+        }
         if (snap.connectionState == ConnectionState.waiting) {
           return const Card(
             margin: EdgeInsets.only(bottom: 12),
@@ -164,7 +188,7 @@ class _FavoritePropertyTileState extends State<_FavoritePropertyTile> {
           }
           return const SizedBox.shrink();
         }
-        final data = snap.data!.data() as Map<String, dynamic>;
+        final data = snap.data!.data()!;
         final type = data['type'] ?? '';
         final price = (data['price'] ?? 0) as num;
         final area = widget.isAr
@@ -187,7 +211,10 @@ class _FavoritePropertyTileState extends State<_FavoritePropertyTile> {
                 context,
                 MaterialPageRoute(
                   builder: (_) =>
-                      PropertyDetailsPage(propertyId: widget.propertyId),
+                      PropertyDetailsPage(
+                        propertyId: widget.propertyId,
+                        leadSource: DealLeadSource.direct,
+                      ),
                 ),
               );
             },

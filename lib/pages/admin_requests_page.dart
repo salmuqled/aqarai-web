@@ -8,9 +8,12 @@ import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:aqarai_app/services/firestore.dart';
+import 'package:aqarai_app/pages/admin_dashboard_page.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/pages/wanted_details_page.dart';
 import 'package:aqarai_app/pages/valuation_details_page.dart';
+import 'package:aqarai_app/services/property_closure_service.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
 
 const String kFunctionsRegion = 'us-central1';
 
@@ -31,6 +34,7 @@ enum AdminFilter {
   matches,
   expiry,
   interested,
+  closureRequests,
 }
 
 class AdminRequestsPage extends StatefulWidget {
@@ -300,8 +304,17 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         return _expiry();
       case AdminFilter.interested:
         return _interested();
+      case AdminFilter.closureRequests:
+        return _closureRequests();
     }
   }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _closureRequests() => firestore
+      .collection('closure_requests')
+      .where('status', isEqualTo: ClosureRequestStatus.pending)
+      .orderBy('requestedAt', descending: true)
+      .limit(100)
+      .snapshots();
 
   // ---------------- Approve / Reject ----------------
   Future<void> _approveListing(String id) async {
@@ -1451,10 +1464,148 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     );
   }
 
+  Widget _buildClosureRequestTile(
+    AppLocalizations loc,
+    Map<String, dynamic> d,
+    String requestId,
+    bool isAr,
+  ) {
+    final title = (d['title'] ?? '').toString();
+    final area = (d['areaAr'] ?? '').toString();
+    final gov = (d['governorateAr'] ?? '').toString();
+    final areaEn = (d['areaEn'] ?? '').toString();
+    final govEn = (d['governorateEn'] ?? '').toString();
+    final type = (d['propertyType'] ?? '').toString();
+    final svc = (d['serviceType'] ?? '').toString();
+    final req = (d['requestType'] ?? '').toString();
+    final price = _fmtPrice(d['listingPrice']);
+    final phone = (d['ownerPhone'] ?? '').toString();
+    final pid = (d['propertyId'] ?? '').toString();
+    final owner = (d['ownerId'] ?? '').toString();
+    final at = d['requestedAt'] as Timestamp?;
+
+    Future<void> approve() async {
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      try {
+        await PropertyClosureService().approveClosureRequest(
+          requestId: requestId,
+          adminUid: uid,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(isAr ? 'تم اعتماد الإغلاق' : 'Closure approved')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        }
+      }
+    }
+
+    Future<void> reject() async {
+      var note = '';
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(isAr ? 'رفض الطلب' : 'Reject'),
+          content: TextField(
+            decoration: InputDecoration(
+              hintText: isAr ? 'ملاحظة (اختياري)' : 'Note (optional)',
+            ),
+            onChanged: (v) => note = v,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(isAr ? 'إلغاء' : 'Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(isAr ? 'رفض' : 'Reject')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      try {
+        await PropertyClosureService().rejectClosureRequest(
+          requestId: requestId,
+          adminUid: uid,
+          adminNote: note.isEmpty ? null : note,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(isAr ? 'تم الرفض وإرجاع الإعلان' : 'Rejected; listing restored')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        }
+      }
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title.isNotEmpty)
+              Text(
+                '${isAr ? "العنوان" : "Title"}: $title',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
+            Text(
+              '$area • ${_translateType(context, type)}',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            if (areaEn.isNotEmpty || govEn.isNotEmpty)
+              Text('EN: $govEn · $areaEn', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+            Text('${isAr ? "المحافظة" : "Gov"}: $gov'),
+            Text('${isAr ? "الخدمة" : "Service"}: $svc → ${isAr ? "طلب إغلاق" : "close"}: $req'),
+            Text(
+              '${isAr ? "حالة الطلب" : "Request status"}: ${isAr ? "معلّق" : "Pending"}',
+            ),
+            Text('${loc.price}: $price KWD'),
+            Text('${isAr ? "المالك" : "Owner"}: $owner'),
+            if (phone.isNotEmpty) Text('☎ $phone'),
+            Text('${loc.addedOn}: ${_fmtDate(at)}'),
+            Text('propertyId: $pid'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: approve,
+                  icon: const Icon(Icons.check_circle, color: Colors.green),
+                  label: Text(isAr ? 'اعتماد الإغلاق' : 'Approve'),
+                ),
+                TextButton.icon(
+                  onPressed: reject,
+                  icon: const Icon(Icons.cancel, color: Colors.red),
+                  label: Text(isAr ? 'رفض' : 'Reject'),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PropertyDetailsPage(propertyId: pid, isAdminView: true),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.open_in_new),
+                  label: Text(isAr ? 'الإعلان' : 'Listing'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildItem(
     AppLocalizations loc,
     AdminFilter f,
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    bool isAr,
   ) {
     final d = doc.data();
     switch (f) {
@@ -1474,6 +1625,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         return _buildExpiryTile(loc, d);
       case AdminFilter.interested:
         return _buildInterestedTile(loc, d, doc.id);
+      case AdminFilter.closureRequests:
+        return _buildClosureRequestTile(loc, d, doc.id, isAr);
     }
   }
 
@@ -1484,7 +1637,24 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
 
     return Scaffold(
-      appBar: AppBar(title: Text(loc.adminFollowup), centerTitle: true),
+      appBar: AppBar(
+        title: Text(loc.adminFollowup),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: isAr ? 'لوحة التحليلات' : 'Analytics dashboard',
+            icon: const Icon(Icons.insights_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const AdminDashboardPage(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
 
       body: Column(
         children: [
@@ -1529,6 +1699,12 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                     loc.interestedDetails,
                     AdminFilter.interested,
                     _interested(),
+                  ),
+                  _badge(
+                    'Closure',
+                    'طلبات الإغلاق',
+                    AdminFilter.closureRequests,
+                    _closureRequests(),
                   ),
                 ],
               ),
@@ -1826,6 +2002,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       String emptyMsg;
       if (_current == AdminFilter.interested) {
         emptyMsg = isAr ? 'لا يوجد مهتمون' : 'No interested leads';
+      } else if (_current == AdminFilter.closureRequests) {
+        emptyMsg = isAr ? 'لا توجد طلبات إغلاق معلّقة' : 'No pending closure requests';
       } else if (_current == AdminFilter.wanted) {
         emptyMsg = isAr
             ? 'لا توجد طلبات مطلوب.\nإذا أضفت طلباً ولم يظهر، تحقق من الاتصال بالإنترنت وأعد المحاولة.'
@@ -1844,7 +2022,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       padding: const EdgeInsets.all(12),
       itemCount: docs.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => _buildItem(loc, _current, docs[i]),
+      itemBuilder: (_, i) => _buildItem(loc, _current, docs[i], isAr),
     );
   }
 

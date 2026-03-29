@@ -1,0 +1,8 @@
+{
+  "name": "aqarai-firebase-admin-scripts",
+  "private": true,
+  "description": "One-off Admin SDK scripts — do not commit serviceAccountKey.json",
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:aqarai_app/services/firestore.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
 
 class FeaturedCarousel extends StatelessWidget {
   final String serviceType;
@@ -134,7 +135,9 @@ class FeaturedCarousel extends StatelessWidget {
           );
         }
 
-        final docs = snapshot.data?.docs ?? [];
+        final docs = (snapshot.data?.docs ?? [])
+            .where((d) => listingDataIsPubliclyDiscoverable(d.data()))
+            .toList();
         if (docs.isEmpty) return const SizedBox.shrink();
 
         return Column(
@@ -206,7 +209,10 @@ class FeaturedCarousel extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) =>
-                              PropertyDetailsPage(propertyId: doc.id),
+                              PropertyDetailsPage(
+                                propertyId: doc.id,
+                                leadSource: DealLeadSource.featured,
+                              ),
                         ),
                       );
                     },

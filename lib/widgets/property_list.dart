@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/property_details_page.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
 
 class PropertyList extends StatelessWidget {
   // النصوص الظاهرة للمستخدم
@@ -18,6 +19,9 @@ class PropertyList extends StatelessWidget {
   // فلتر نوع الخدمة
   final String? serviceType;
 
+  /// Passed through to property details (search results list).
+  final String leadSource;
+
   const PropertyList({
     super.key,
     required this.governorateLabel,
@@ -26,6 +30,7 @@ class PropertyList extends StatelessWidget {
     required this.areaCode,
     this.typeFilter,
     this.serviceType,
+    this.leadSource = DealLeadSource.search,
   });
 
   @override
@@ -96,7 +101,10 @@ class PropertyList extends StatelessWidget {
             );
           }
 
-          final properties = snapshot.data!.docs;
+          final properties = snapshot.data!.docs
+              .where((doc) =>
+                  listingDataIsPubliclyDiscoverable(doc.data() as Map<String, dynamic>))
+              .toList();
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
@@ -153,7 +161,10 @@ class PropertyList extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => PropertyDetailsPage(propertyId: doc.id),
+                      builder: (_) => PropertyDetailsPage(
+                        propertyId: doc.id,
+                        leadSource: leadSource,
+                      ),
                     ),
                   );
                 },

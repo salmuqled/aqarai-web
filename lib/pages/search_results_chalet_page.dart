@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/listing_card.dart';
+import '../widgets/property_details_page.dart';
 import '../l10n/app_localizations.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
 
 class SearchResultsChaletPage extends StatelessWidget {
   final String? area;
@@ -60,7 +62,18 @@ class SearchResultsChaletPage extends StatelessWidget {
             );
           }
 
-          final docs = snap.data!.docs;
+          final docs = snap.data!.docs
+              .where((d) => listingDataIsPubliclyDiscoverable(d.data()))
+              .toList();
+
+          if (docs.isEmpty) {
+            return Center(
+              child: Text(
+                loc.noWantedItems,
+                style: const TextStyle(fontSize: 17, color: Colors.black54),
+              ),
+            );
+          }
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
@@ -70,7 +83,21 @@ class SearchResultsChaletPage extends StatelessWidget {
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: ListingCard(id: docs[i].id, data: data),
+                child: ListingCard(
+                  id: docs[i].id,
+                  data: data,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => PropertyDetailsPage(
+                          propertyId: docs[i].id,
+                          leadSource: DealLeadSource.search,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               );
             },
           );

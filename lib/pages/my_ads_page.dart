@@ -19,6 +19,8 @@ import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/pages/wanted_details_page.dart';
 import 'package:aqarai_app/pages/valuation_details_page.dart';
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
+import 'package:aqarai_app/services/property_closure_service.dart';
 
 enum AdsFilter { all, active, expired, featured, wanted, valuations }
 
@@ -100,6 +102,50 @@ class _MyAdsPageState extends State<MyAdsPage> {
   }
 
   String _price(num? p) => p == null ? '-' : _fmtNum.format(p);
+
+  Future<void> _confirmClosureAndSubmit(String propertyId, String serviceType) async {
+    if (!mounted) return;
+    final rt = closeRequestTypeForServiceType(serviceType);
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('مبروك'),
+        content: const Text(
+          'ألف مبروك، سعداء بهذا الخبر. بتأكيدك سيتم إنهاء الإعلان مؤقتاً وإرسال طلب مراجعة للإدارة لاعتماد الحالة.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('تراجع'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('تأكيد'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+
+    try {
+      await PropertyClosureService().submitClosureRequest(
+        propertyId: propertyId,
+        requestType: rt,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم إرسال الطلب — إعلانك بانتظار اعتماد الإدارة'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر الإرسال: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
 
   /// عرض للبيع / للإيجار / البدل على بطاقة إعلاناتي
   String _propertyServiceLabel(String? raw, AppLocalizations loc) {
@@ -580,6 +626,13 @@ class _MyAdsPageState extends State<MyAdsPage> {
     final isFeaturedNow = featuredUntil != null &&
         featuredUntil.toDate().isAfter(DateTime.now());
     final serviceLabel = _propertyServiceLabel(d['serviceType']?.toString(), loc);
+    final approved = d['approved'] == true;
+    final st = (d['status'] ?? ListingStatus.active).toString();
+    final canFeature = approved &&
+        !listingDataIsClosedDeal(d) &&
+        d['closeRequestSubmitted'] != true &&
+        (st == ListingStatus.active || st == ListingStatus.approvedLegacy);
+    final showClosureBtn = approved && listingDataCanSubmitClosure(d);
 
     late String typeLabel;
     if (locale == 'ar') {
@@ -603,7 +656,10 @@ class _MyAdsPageState extends State<MyAdsPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => PropertyDetailsPage(propertyId: id),
+            builder: (_) => PropertyDetailsPage(
+              propertyId: id,
+              leadSource: DealLeadSource.direct,
+            ),
           ),
         );
       },
@@ -647,6 +703,33 @@ class _MyAdsPageState extends State<MyAdsPage> {
                         color: _primaryBlue,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Chip(
+                        label: Text(
+                          listingStatusLabelAr(d),
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    if (showClosureBtn) ...[
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.tonal(
+                          onPressed: () => _confirmClosureAndSubmit(
+                            id,
+                            d['serviceType']?.toString() ?? 'sale',
+                          ),
+                          child: Text(
+                            closureButtonLabelAr(d['serviceType']?.toString() ?? 'sale'),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     Text(
                       "${loc.addedOn}: ${_fmtDate(createdAt)}\n"
@@ -661,6 +744,7 @@ class _MyAdsPageState extends State<MyAdsPage> {
                 child: _Actions(
                   loc: loc,
                   featured: isFeaturedNow,
+                  canFeature: canFeature,
                   onFeature: () => _makeFeatured(id),
                   onDelete: () => _hardDelete(id),
                 ),
@@ -964,12 +1048,14 @@ class _MyAdsPageState extends State<MyAdsPage> {
 class _Actions extends StatelessWidget {
   final AppLocalizations loc;
   final bool featured;
+  final bool canFeature;
   final VoidCallback onFeature;
   final VoidCallback onDelete;
 
   const _Actions({
     required this.loc,
     required this.featured,
+    required this.canFeature,
     required this.onFeature,
     required this.onDelete,
   });
@@ -979,12 +1065,13 @@ class _Actions extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        TextButton.icon(
-          onPressed: onFeature,
-          icon: const Icon(Icons.star),
-          style: TextButton.styleFrom(foregroundColor: Colors.blue),
-          label: Text(featured ? loc.extendFeature : loc.makeFeatured),
-        ),
+        if (canFeature)
+          TextButton.icon(
+            onPressed: onFeature,
+            icon: const Icon(Icons.star),
+            style: TextButton.styleFrom(foregroundColor: Colors.blue),
+            label: Text(featured ? loc.extendFeature : loc.makeFeatured),
+          ),
         TextButton.icon(
           onPressed: onDelete,
           icon: const Icon(Icons.delete_outline),

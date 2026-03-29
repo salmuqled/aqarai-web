@@ -208,32 +208,50 @@ class ConversationalSearchService {
     );
   }
 
-  /// يبني استعلام Firestore: approved==true, status=="active" + الفلاتر
+  /// يبني استعلام Firestore بسيطاً: approved + areaCode + ترتيب بالتاريخ.
+  /// باقي الفلاتر (نوع الخدمة، نوع العقار، المحافظة، الغرف) تُطبَّق في الذاكرة
+  /// لتجنّب فهارس مركبة كثيرة وأخطاء failed-precondition.
   Query<Map<String, dynamic>> buildQuery(ParsedFilters filters) {
     Query<Map<String, dynamic>> q = FirebaseFirestore.instance
         .collection('properties')
-        .where('approved', isEqualTo: true)
-        .where('status', isEqualTo: 'active');
+        .where('approved', isEqualTo: true);
 
-    if (filters.governorateCode != null && filters.governorateCode!.isNotEmpty && filters.governorateCode != 'chalet') {
-      q = q.where('governorateCode', isEqualTo: filters.governorateCode);
-    }
     if (filters.areaCode != null && filters.areaCode!.isNotEmpty) {
       q = q.where('areaCode', isEqualTo: filters.areaCode);
     }
-    if (filters.serviceType != null && filters.serviceType!.isNotEmpty) {
-      q = q.where('serviceType', isEqualTo: filters.serviceType);
-    }
-    if (filters.propertyType != null && filters.propertyType!.isNotEmpty) {
-      q = q.where('type', isEqualTo: filters.propertyType);
-    }
-    // لا نضيف فلتر السعر هنا لتجنب الحاجة لفهرس مركب (price + orderBy createdAt).
-    // التطبيق يصفّي حسب الميزانية في الذاكرة بعد جلب النتائج.
-    if (filters.bedrooms != null && filters.bedrooms! > 0) {
-      q = q.where('roomCount', isEqualTo: filters.bedrooms);
-    }
 
-    return q.orderBy('createdAt', descending: true).limit(100);
+    return q.orderBy('createdAt', descending: true);
+  }
+
+  /// تطابق الوثيقة مع فلاتر المحادثة (بعد الجلب من Firestore).
+  bool documentMatchesConversationFilters(
+    Map<String, dynamic> data,
+    Map<String, dynamic> filters,
+  ) {
+    final governorateCode = filters['governorateCode']?.toString().trim() ?? '';
+    if (governorateCode.isNotEmpty && governorateCode != 'chalet') {
+      if ((data['governorateCode']?.toString() ?? '') != governorateCode) {
+        return false;
+      }
+    }
+    final serviceType = filters['serviceType']?.toString().trim() ?? '';
+    if (serviceType.isNotEmpty) {
+      if ((data['serviceType']?.toString() ?? '') != serviceType) return false;
+    }
+    final type = filters['type']?.toString().trim() ?? '';
+    if (type.isNotEmpty) {
+      if ((data['type']?.toString() ?? '') != type) return false;
+    }
+    final bedrooms = filters['bedrooms'];
+    final br = bedrooms is int
+        ? bedrooms
+        : (bedrooms != null ? int.tryParse(bedrooms.toString()) : null);
+    if (br != null && br > 0) {
+      final rc = data['roomCount'];
+      final n = rc is int ? rc : int.tryParse(rc?.toString() ?? '') ?? -1;
+      if (n != br) return false;
+    }
+    return true;
   }
 
   /// يبني استعلام من خريطة فلاتر (من الـ Agent): areaCode, type, serviceType, budget, bedrooms
@@ -264,34 +282,17 @@ class ConversationalSearchService {
     if (nearbyAreaCodes.isEmpty) {
       return buildQueryFromMap(filters).limit(0);
     }
-    final type = filters['type']?.toString().trim();
-    final serviceType = filters['serviceType']?.toString().trim();
-    // budget يُطبّق في الذاكرة في التطبيق لتجنب الحاجة لفهرس مركب.
-    final bedrooms = filters['bedrooms'] is int
-        ? filters['bedrooms'] as int
-        : (filters['bedrooms'] != null ? int.tryParse(filters['bedrooms'].toString()) : null);
-    final governorateCode = filters['governorateCode']?.toString().trim();
 
     Query<Map<String, dynamic>> q = FirebaseFirestore.instance
         .collection('properties')
         .where('approved', isEqualTo: true)
-        .where('status', isEqualTo: 'active')
-        .where('areaCode', whereIn: nearbyAreaCodes.length > 10 ? nearbyAreaCodes.sublist(0, 10) : nearbyAreaCodes);
+        .where(
+          'areaCode',
+          whereIn: nearbyAreaCodes.length > 10
+              ? nearbyAreaCodes.sublist(0, 10)
+              : nearbyAreaCodes,
+        );
 
-    if (governorateCode != null && governorateCode.isNotEmpty && governorateCode != 'chalet') {
-      q = q.where('governorateCode', isEqualTo: governorateCode);
-    }
-    if (type != null && type.isNotEmpty) {
-      q = q.where('type', isEqualTo: type);
-    }
-    if (serviceType != null && serviceType.isNotEmpty) {
-      q = q.where('serviceType', isEqualTo: serviceType);
-    }
-    // فلتر السعر يُطبّق في الذاكرة في التطبيق لتجنب الحاجة لفهرس مركب.
-    if (bedrooms != null && bedrooms > 0) {
-      q = q.where('roomCount', isEqualTo: bedrooms);
-    }
-
-    return q.orderBy('createdAt', descending: true).limit(30);
+    return q.orderBy('createdAt', descending: true).limit(80);
   }
 }
