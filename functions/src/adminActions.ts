@@ -126,6 +126,14 @@ function parsePredictionMeta(raw: unknown): {
   return { predictedScore, factors, variantId };
 }
 
+function parseAutoDecisionLogId(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (s.length < 10 || s.length > 128) return null;
+  if (!/^[\w-]+$/.test(s)) return null;
+  return s;
+}
+
 function parseOptionalAreaHint(data: Record<string, unknown>): string | null {
   const ta =
     typeof data.trendingAreaAr === "string" ? data.trendingAreaAr.trim() : "";
@@ -153,6 +161,7 @@ async function writeNotificationLogAndIncrementTotals(args: {
   clientFactors?: Partial<FactorsMap> | null;
   variantId?: string | null;
   shortTextThreshold?: number;
+  autoDecisionLogId?: string | null;
 }): Promise<void> {
   const db = admin.firestore();
   const batch = db.batch();
@@ -198,6 +207,12 @@ async function writeNotificationLogAndIncrementTotals(args: {
     },
     { merge: true }
   );
+
+  const decId = args.autoDecisionLogId?.trim();
+  if (decId && decId.length >= 10 && decId.length <= 128) {
+    const decRef = db.collection("auto_decision_logs").doc(decId);
+    batch.update(decRef, { notificationId: args.notificationId });
+  }
 
   await batch.commit();
 }
@@ -506,6 +521,7 @@ export const sendGlobalNotification = onCall(
     const notificationId = admin.firestore().collection("notification_logs").doc().id;
     const pred = parsePredictionMeta(request.data?.predictionMeta);
     const areaHintSingle = parseOptionalAreaHint(reqData);
+    const autoDecisionLogId = parseAutoDecisionLogId(reqData.autoDecisionLogId);
 
     const snap = await admin
       .firestore()
@@ -538,6 +554,7 @@ export const sendGlobalNotification = onCall(
         clientFactors: pred.factors,
         variantId: pred.variantId ?? "broadcast",
         shortTextThreshold: DEFAULT_SHORT_THRESHOLD,
+        autoDecisionLogId,
       });
       return { success: true, sentCount: 0, notificationId };
     }
@@ -562,6 +579,7 @@ export const sendGlobalNotification = onCall(
       clientFactors: pred.factors,
       variantId: pred.variantId ?? "broadcast",
       shortTextThreshold: DEFAULT_SHORT_THRESHOLD,
+      autoDecisionLogId,
     });
 
     return { success: true, sentCount, notificationId };

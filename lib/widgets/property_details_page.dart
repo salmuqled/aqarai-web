@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
+import 'package:aqarai_app/services/admin_action_service.dart';
+import 'package:aqarai_app/services/caption_click_log_service.dart';
 import 'package:aqarai_app/services/property_view_tracking_service.dart';
 
 class PropertyDetailsPage extends StatelessWidget {
@@ -14,11 +16,15 @@ class PropertyDetailsPage extends StatelessWidget {
   /// How the user reached this screen (`property_views` + closure attribution).
   final String leadSource;
 
+  /// Instagram A/B caption id from link `?cid=` (optional).
+  final String? captionTrackingId;
+
   const PropertyDetailsPage({
     super.key,
     required this.propertyId,
     this.isAdminView = false,
     this.leadSource = DealLeadSource.direct,
+    this.captionTrackingId,
   });
 
   String _translateType(BuildContext context, String value) {
@@ -86,6 +92,7 @@ class PropertyDetailsPage extends StatelessWidget {
       propertyId: propertyId,
       leadSource: leadSource,
       skipRecording: isAdminView,
+      captionTrackingId: captionTrackingId,
       child: Scaffold(
         backgroundColor: const Color(0xFFF7F7F7),
 
@@ -147,6 +154,7 @@ class PropertyDetailsPage extends StatelessWidget {
 
             final String ownerName = data['fullName'] ?? "";
             final String ownerPhone = data['ownerPhone'] ?? "";
+            final String ownerId = (data['ownerId'] ?? '').toString().trim();
 
             final int roomCount = (data['roomCount'] ?? 0) as int;
             final int masterRoomCount = (data['masterRoomCount'] ?? 0) as int;
@@ -203,7 +211,13 @@ class PropertyDetailsPage extends StatelessWidget {
                 const SizedBox(height: 16),
 
                 if (isAdminView)
-                  _buildOwnerCard(context, ownerName, ownerPhone, propertyId),
+                  _buildOwnerCard(
+                    context,
+                    ownerName,
+                    ownerPhone,
+                    propertyId,
+                    ownerId,
+                  ),
 
                 const SizedBox(height: 16),
 
@@ -519,8 +533,10 @@ class PropertyDetailsPage extends StatelessWidget {
     String ownerName,
     String ownerPhone,
     String propertyId,
+    String ownerId,
   ) {
     final loc = AppLocalizations.of(context)!;
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -528,9 +544,42 @@ class PropertyDetailsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            loc.ownerOnlyAdmin,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  loc.ownerOnlyAdmin,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              if (ownerId.isNotEmpty)
+                PopupMenuButton<String>(
+                  tooltip: loc.moderationMenu,
+                  onSelected: (value) async {
+                    if (value == 'ban') {
+                      await confirmAndBanPropertyOwner(
+                        context,
+                        targetUid: ownerId,
+                        isAr: isAr,
+                      );
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem<String>(
+                      value: 'ban',
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.block, color: Colors.red.shade800),
+                        title: Text(loc.banUser),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -550,6 +599,14 @@ class PropertyDetailsPage extends StatelessWidget {
             "${loc.adIdLabel}: $propertyId",
             style: const TextStyle(fontSize: 14, color: Colors.grey),
           ),
+          if (ownerId.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'ownerId: $ownerId',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
           const SizedBox(height: 18),
 
           SizedBox(
@@ -622,12 +679,14 @@ class _RecordPropertyViewOnce extends StatefulWidget {
   final String propertyId;
   final String leadSource;
   final bool skipRecording;
+  final String? captionTrackingId;
   final Widget child;
 
   const _RecordPropertyViewOnce({
     required this.propertyId,
     required this.leadSource,
     required this.skipRecording,
+    this.captionTrackingId,
     required this.child,
   });
 
@@ -645,6 +704,24 @@ class _RecordPropertyViewOnceState extends State<_RecordPropertyViewOnce> {
         PropertyViewTrackingService.instance.recordView(
           propertyId: widget.propertyId,
           leadSource: widget.leadSource,
+        );
+      });
+    }
+    final cid = widget.captionTrackingId?.trim();
+    if (cid != null && cid.isNotEmpty && !widget.skipRecording) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        var area = '';
+        try {
+          final d = await FirebaseFirestore.instance
+              .collection('properties')
+              .doc(widget.propertyId)
+              .get();
+          area = (d.data()?['areaAr'] ?? '').toString();
+        } catch (_) {}
+        await CaptionClickLogService.logClick(
+          captionId: cid,
+          propertyId: widget.propertyId,
+          area: area,
         );
       });
     }
@@ -702,6 +779,39 @@ class _FavoriteHeart extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+Future<void> confirmAndBanPropertyOwner(
+  BuildContext context, {
+  required String targetUid,
+  required bool isAr,
+}) async {
+  final loc = AppLocalizations.of(context)!;
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(loc.banUserConfirmTitle),
+      content: Text(loc.banUserConfirmMessage),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text(loc.cancel),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.red.shade800),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(loc.banUser),
+        ),
+      ],
+    ),
+  );
+  if (confirm == true && context.mounted) {
+    await AdminActionService.banUser(
+      context: context,
+      targetUid: targetUid,
+      isAr: isAr,
     );
   }
 }

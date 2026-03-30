@@ -17,6 +17,7 @@ import 'package:aqarai_app/pages/admin_requests_page.dart';
 import 'package:aqarai_app/pages/favorites_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
 import 'package:aqarai_app/pages/legal_pages.dart';
+import 'package:aqarai_app/pages/contact_us_page.dart';
 
 import 'package:aqarai_app/app/locale_notifier.dart' show setAppLocale;
 import 'package:aqarai_app/l10n/app_localizations.dart';
@@ -204,6 +205,17 @@ class _HomePageState extends State<HomePage> {
                 },
               ),
               const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.support_agent_outlined),
+                title: Text(loc.contactUsTitle),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ContactUsPage()),
+                  );
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.gavel_outlined),
                 title: Text(loc.quickMenuLegal),

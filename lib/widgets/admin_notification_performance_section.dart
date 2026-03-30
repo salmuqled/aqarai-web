@@ -55,6 +55,17 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
   final AdminAnalyticsService analytics;
   final bool isAr;
 
+  static String _firestoreErrorMessage(Object? error, bool isAr) {
+    final s = error?.toString() ?? '';
+    if (s.contains('permission-denied') ||
+        s.contains('Missing or insufficient permissions')) {
+      return isAr
+          ? 'رفض Firestore: تأكد من نشر قواعد firestore.rules الحالية (تشمل notification_learning) ومن صلاحية admin ثم سجّل الخروج وأعد الدخول.'
+          : 'Firestore permission denied: deploy latest firestore.rules (includes notification_learning), ensure admin claim, sign out and back in.';
+    }
+    return s;
+  }
+
   static int _asInt(dynamic v) {
     if (v is int) return v;
     return int.tryParse('$v') ?? 0;
@@ -93,7 +104,7 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
               builder: (context, totSnap) {
                 if (totSnap.hasError) {
                   return Text(
-                    totSnap.error.toString(),
+                    _firestoreErrorMessage(totSnap.error, isAr),
                     style: TextStyle(color: Colors.red.shade800, fontSize: 13),
                   );
                 }
@@ -151,7 +162,7 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                       builder: (context, learnSnap) {
                         if (learnSnap.hasError) {
                           return Text(
-                            learnSnap.error.toString(),
+                            _firestoreErrorMessage(learnSnap.error, isAr),
                             style: TextStyle(
                               color: Colors.red.shade800,
                               fontSize: 12,
@@ -278,7 +289,7 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                       builder: (context, convSnap) {
                         if (convSnap.hasError) {
                           return Text(
-                            convSnap.error.toString(),
+                            _firestoreErrorMessage(convSnap.error, isAr),
                             style: TextStyle(
                               color: Colors.red.shade800,
                               fontSize: 12,
@@ -421,7 +432,7 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                       builder: (context, abSnap) {
                         if (abSnap.hasError) {
                           return Text(
-                            abSnap.error.toString(),
+                            _firestoreErrorMessage(abSnap.error, isAr),
                             style: TextStyle(
                               color: Colors.red.shade800,
                               fontSize: 12,
@@ -520,7 +531,7 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                       builder: (context, logSnap) {
                         if (logSnap.hasError) {
                           return Text(
-                            logSnap.error.toString(),
+                            _firestoreErrorMessage(logSnap.error, isAr),
                             style: TextStyle(
                               color: Colors.red.shade800,
                               fontSize: 12,

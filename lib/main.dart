@@ -10,6 +10,7 @@ import 'package:aqarai_app/auth/login_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
 import 'package:aqarai_app/services/auth_service.dart';
 import 'package:aqarai_app/services/notification_service.dart';
+import 'package:aqarai_app/widgets/banned_user_session_gate.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -111,7 +112,9 @@ class _AuthGateState extends State<AuthGate> {
           return const LoginPage();
         }
 
-        return const AssistantPage();
+        return const BannedUserSessionGate(
+          child: AssistantPage(),
+        );
       },
     );
   }

@@ -155,6 +155,79 @@ service cloud.firestore {
     }
 
     /* ============================================================
+        Admin settings (global — hybrid marketing, etc.)
+    ============================================================ */
+
+    match /admin_settings/global {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    /* ============================================================
+        System alerts (scheduled job creates — admin read / mark read)
+    ============================================================ */
+
+    match /system_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create, delete: if false;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['read', 'readAt']);
+    }
+
+    match /admin_caption_selections/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /caption_usage_logs/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /caption_clicks/{docId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.captionId is string
+        && request.resource.data.propertyId is string
+        && (!('userId' in request.resource.data)
+            || request.resource.data.userId == request.auth.uid);
+    }
+
+    match /caption_learning/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    /* ============================================================
+        Auto decision logs (توصيات التسويق — أدمن فقط)
+    ============================================================ */
+
+    match /auto_decision_logs/{docId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.suggestedCaptionId is string
+        && request.resource.data.chosenCaptionId is string
+        && request.resource.data.override is bool
+        && request.resource.data.suggestedAudience is string
+        && request.resource.data.chosenAudience is string
+        && request.resource.data.suggestedTime is int
+        && request.resource.data.chosenTime is int
+        && request.resource.data.confidence is number
+        && request.resource.data.expectedCtr is number
+        && request.resource.data.adminUid is string
+        && request.resource.data.decisionLevel is string
+        && request.resource.data.autoExecuted is bool;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['autoExecuted']);
+      allow delete: if false;
+    }
+
+    match /auto_decision_learning/{docId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ============================================================
         Notification logs (FCM campaigns — كتابة عبر Functions فقط)
     ============================================================ */
 
@@ -294,9 +367,63 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    function userCreateNotBanned() {
+      let r = request.resource.data;
+      return !(('isBanned' in r && r.isBanned == true)
+        || ('status' in r && r.status == 'banned'));
+    }
+
+    // Non-admin self-updates: cannot change ban state or moderation metadata.
+    function selfUserModerationFieldsOk() {
+      let r = request.resource.data;
+      let o = resource.data;
+      let bannedBefore = ('isBanned' in o && o.isBanned == true)
+        || ('status' in o && o.status == 'banned');
+      let bannedAfter = ('isBanned' in r && r.isBanned == true)
+        || ('status' in r && r.status == 'banned');
+      return bannedBefore == bannedAfter
+        && (('bannedAt' in r) == ('bannedAt' in o))
+        && (!('bannedAt' in r && 'bannedAt' in o) || r.bannedAt == o.bannedAt)
+        && (('bannedBy' in r) == ('bannedBy' in o))
+        && (!('bannedBy' in r && 'bannedBy' in o) || r.bannedBy == o.bannedBy);
+    }
+
     match /users/{userId} {
-      allow read, create, update: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && userCreateNotBanned();
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && request.auth.uid == userId
+            && selfUserModerationFieldsOk());
       allow delete: if false;
+    }
+
+    /* ============================================================
+        Support tickets (شكاوى وتواصل — إنشاء من المستخدم، إدارة من الأدمن)
+    ============================================================ */
+
+    match /support_tickets/{ticketId} {
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'open'
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() > 0
+        && request.resource.data.subject.size() <= 500
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 8000
+        && request.resource.data.category is string
+        && request.resource.data.userName is string
+        && request.resource.data.userName.size() <= 200
+        && request.resource.data.userPhone is string
+        && request.resource.data.userPhone.size() <= 80;
+
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+      allow update, delete: if isAdmin();
     }
 
     match /users/{userId}/favorites/{favoriteId} {

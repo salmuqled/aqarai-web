@@ -527,4 +527,592 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get propertySentForReview => 'تم إرسال العقار للمراجعة';
+
+  @override
+  String get moderationMenu => 'الإشراف';
+
+  @override
+  String get banUser => 'حظر المستخدم';
+
+  @override
+  String get banUserConfirmTitle => 'تأكيد حظر هذا المستخدم؟';
+
+  @override
+  String get banUserConfirmMessage => 'سيتم تسجيل خروجه ومنعه من الدخول ومنع نشر إعلانات جديدة (تعطيل حساب Firebase وتحديث بيانات المستخدم).';
+
+  @override
+  String get banUserSuccess => 'تم حظر المستخدم.';
+
+  @override
+  String get cannotPostBanned => 'حسابك مقيّد ولا يمكنك نشر إعلانات.';
+
+  @override
+  String get accountSuspendedTitle => 'الحساب مقيّد';
+
+  @override
+  String get accountSuspendedBody => 'لا يُسمح لهذا الحساب باستخدام التطبيق. تواصل مع الدعم إن كان ذلك خطأ.';
+
+  @override
+  String get loginUserDisabled => 'تم تعطيل هذا الحساب.';
+
+  @override
+  String get contactUsTitle => 'تواصل معنا';
+
+  @override
+  String get supportFormIntro => 'أرسل ملاحظة، أبلغ عن مشكلة، أو اسأل عن إعلان. نقرأ كل الرسائل.';
+
+  @override
+  String get supportSubjectLabel => 'الموضوع';
+
+  @override
+  String get supportSubjectHint => 'ملخص قصير';
+
+  @override
+  String get supportCategoryLabel => 'التصنيف';
+
+  @override
+  String get supportMessageLabel => 'الرسالة';
+
+  @override
+  String get supportMessageHint => 'صف المشكلة أو استفسارك…';
+
+  @override
+  String get supportSubmit => 'إرسال';
+
+  @override
+  String get supportMessageSent => 'تم إرسال رسالتك بنجاح. سنعود إليك قريباً.';
+
+  @override
+  String get supportFillRequired => 'يرجى إدخال الموضوع والرسالة.';
+
+  @override
+  String get supportCategoryGeneral => 'عام';
+
+  @override
+  String get supportCategoryBug => 'خلل / تقني';
+
+  @override
+  String get supportCategoryPropertyInquiry => 'استفسار عن عقار';
+
+  @override
+  String get supportCategoryPayment => 'دفع';
+
+  @override
+  String get supportTabEn => 'Support';
+
+  @override
+  String get supportTabAr => 'الدعم';
+
+  @override
+  String get supportTicketStatusOpen => 'مفتوحة';
+
+  @override
+  String get supportTicketStatusInProgress => 'قيد المعالجة';
+
+  @override
+  String get supportTicketStatusResolved => 'تم الحل';
+
+  @override
+  String get supportMarkInProgress => 'تعيين قيد المعالجة';
+
+  @override
+  String get supportMarkResolved => 'تعيين تم الحل';
+
+  @override
+  String get supportDeleteTicket => 'حذف التذكرة';
+
+  @override
+  String get supportDeleteTicketConfirm => 'حذف هذه التذكرة من القائمة؟ لا يمكن التراجع.';
+
+  @override
+  String get supportNoTickets => 'لا توجد تذاكر دعم بعد.';
+
+  @override
+  String get supportUserLine => 'المستخدم';
+
+  @override
+  String get supportTicketUpdated => 'تم تحديث التذكرة.';
+
+  @override
+  String get supportTicketDeleted => 'تم حذف التذكرة.';
+
+  @override
+  String get instagramPostDialogTitle => 'صورة منشور إنستغرام';
+
+  @override
+  String get instagramPostDialogHint => 'يُرسم النص على الخادم فوق قالب 1080×1080. الصورة لا تُعرض داخل التطبيق—افتح الرابط في المتصفح.';
+
+  @override
+  String get instagramPostFieldTitle => 'العنوان';
+
+  @override
+  String get instagramPostFieldSubtitle => 'العنوان الفرعي';
+
+  @override
+  String get instagramPostGenerate => 'إنشاء';
+
+  @override
+  String get instagramPostFillBoth => 'أدخل العنوان والنص الفرعي.';
+
+  @override
+  String get instagramPostGenerating => 'جاري إنشاء الصورة…';
+
+  @override
+  String get instagramPostFailed => 'تعذّر إنشاء الصورة. تحقق من القالب في Storage وحاول مرة أخرى.';
+
+  @override
+  String get instagramPostSuccessTitle => 'الصورة جاهزة';
+
+  @override
+  String get instagramPostSuccessBody => '📎 تم إنشاء الصورة. افتحها في المتصفح أو انسخ الرابط. لا تُعرض داخل التطبيق.';
+
+  @override
+  String get instagramPostOpenBrowser => 'فتح في المتصفح';
+
+  @override
+  String get instagramPostCopyLink => 'نسخ الرابط';
+
+  @override
+  String get instagramPostLinkCopied => 'تم نسخ الرابط.';
+
+  @override
+  String get instagramPostOpenFailed => 'تعذّر فتح الرابط.';
+
+  @override
+  String get instagramPostAppBarTooltip => 'إنشاء صورة إنستغرام';
+
+  @override
+  String get instagramPostFieldArea => 'المنطقة (للكابشن)';
+
+  @override
+  String get instagramPostFieldPropertyType => 'نوع العقار (للكابشن)';
+
+  @override
+  String get instagramPostFillAllFields => 'أدخل العنوان والنص الفرعي والمنطقة ونوع العقار.';
+
+  @override
+  String get instagramPostCreatedHeadline => '📎 تم إنشاء البوست';
+
+  @override
+  String get instagramPostCaptionPreviewLabel => 'كابشن مقترح';
+
+  @override
+  String get instagramPostOpenImage => 'فتح الصورة';
+
+  @override
+  String get instagramPostCopyCaption => 'نسخ الكابشن';
+
+  @override
+  String get instagramPostOpenInstagram => 'فتح إنستغرام';
+
+  @override
+  String get instagramCaptionCopied => 'تم نسخ الكابشن';
+
+  @override
+  String get instagramOpenAppFailed => 'تعذّر فتح إنستغرام.';
+
+  @override
+  String get instagramPostNoImageUrl => 'لا يوجد رابط صورة — فتح الصورة غير متاح.';
+
+  @override
+  String get instagramDemandLevelLabel => 'مستوى الطلب (للكابشن)';
+
+  @override
+  String get instagramDemandHigh => 'عالي';
+
+  @override
+  String get instagramDemandMedium => 'متوسط';
+
+  @override
+  String get instagramDemandLow => 'منخفض';
+
+  @override
+  String get instagramRecentDealsLabel => 'صفقات أُغلقت مؤخراً (اختياري)';
+
+  @override
+  String get instagramRecentDealsHint => '0 إن لم يُعرف';
+
+  @override
+  String get instagramAreaAnalyticsHeadline => '💡 تحليل السوق';
+
+  @override
+  String instagramAreaAnalyticsDemand(String level) {
+    return '📊 الطلب: $level';
+  }
+
+  @override
+  String instagramAreaAnalyticsDeals(int count) {
+    return '📈 عدد الصفقات: $count';
+  }
+
+  @override
+  String get instagramAreaAnalyticsLoading => 'جاري تحميل بيانات السوق…';
+
+  @override
+  String get instagramAreaAnalyticsError => 'تعذّر تحميل التحليل. تُستخدم القيم الافتراضية — يمكنك التعديل أدناه.';
+
+  @override
+  String get instagramAreaAnalyticsRefresh => 'تحديث التحليل';
+
+  @override
+  String get instagramAreaAnalyticsEnterArea => 'أدخل اسم المنطقة لعرض إحصائيات الصفقات (7 أيام).';
+
+  @override
+  String get instagramDemandOverrideHint => 'يُملأ تلقائياً من البيانات — يمكنك التعديل';
+
+  @override
+  String get instagramPostGenerateCarousel => 'كاروسيل (4 صور)';
+
+  @override
+  String get instagramPostGeneratingCarousel => 'جاري إنشاء الكاروسيل…';
+
+  @override
+  String get instagramPostCarouselFailed => 'تعذّر إنشاء الكاروسيل. تحقق من القالب في Storage.';
+
+  @override
+  String instagramPostCarouselHeadline(int count) {
+    return '📎 تم إنشاء البوست ($count صور)';
+  }
+
+  @override
+  String get instagramPostOpenImages => 'فتح الصور';
+
+  @override
+  String instagramCarouselSlideLabel(int slideNumber) {
+    return 'الشريحة $slideNumber';
+  }
+
+  @override
+  String get instagramPostCarouselFillFields => 'أدخل العنوان والمنطقة ونوع العقار للكاروسيل.';
+
+  @override
+  String get instagramCaptionVariantBestTitle => '💡 أفضل كابشن مقترح';
+
+  @override
+  String get instagramCaptionVariantRowA => 'المتغير أ · إلحاحي';
+
+  @override
+  String get instagramCaptionVariantRowB => 'المتغير ب · قيمة';
+
+  @override
+  String get instagramCaptionVariantRowC => 'المتغير ج · سوق مستقر';
+
+  @override
+  String get instagramCaptionVariantUseBest => 'استخدام الأفضل';
+
+  @override
+  String get instagramCaptionVariantManualPick => 'اختيار يدوي';
+
+  @override
+  String get instagramCaptionVariantManualHint => 'اضغط على بطاقة أدناه، ثم انسخ الكابشن.';
+
+  @override
+  String instagramCaptionVariantScore(String score) {
+    return 'النتيجة: $score';
+  }
+
+  @override
+  String get instagramPostPropertyIdOptional => 'معرّف العقار (رابط التتبع، اختياري)';
+
+  @override
+  String get instagramPostPropertyIdHint => 'معرّف مستند Firestore — يضيف ?id=…&cid=A|B|C';
+
+  @override
+  String get autoDecisionTitle => '💡 توصية ذكية';
+
+  @override
+  String autoDecisionBestTime(String time) {
+    return '🕒 أفضل وقت: $time';
+  }
+
+  @override
+  String autoDecisionAudience(String segment) {
+    return '🎯 الجمهور: $segment';
+  }
+
+  @override
+  String autoDecisionCaptionVariant(String id) {
+    return '🔥 الكابشن: المتغير $id';
+  }
+
+  @override
+  String autoDecisionExpectedCtr(int percent) {
+    return '📊 CTR متوقع: $percent٪';
+  }
+
+  @override
+  String autoDecisionConfidence(int percent) {
+    return '📈 الثقة: $percent٪';
+  }
+
+  @override
+  String get autoDecisionReasonLabel => 'السبب:';
+
+  @override
+  String get autoDecisionAudienceActive => 'المستخدمين النشطين';
+
+  @override
+  String get autoDecisionAudienceWarm => 'مستخدمون دافئون';
+
+  @override
+  String get autoDecisionAudienceCold => 'مستخدمون باردون';
+
+  @override
+  String get autoDecisionAudienceAll => 'جميع المستخدمين';
+
+  @override
+  String get autoDecisionApproveSchedule => 'موافق وجدولة';
+
+  @override
+  String get autoDecisionSendNow => 'إرسال الآن';
+
+  @override
+  String get autoDecisionEdit => 'تعديل';
+
+  @override
+  String get hybridAutoTitle => '🔥 تنفيذ تلقائي مقترح';
+
+  @override
+  String get hybridAutoSubtitle => 'هذا القرار عالي الثقة.';
+
+  @override
+  String get hybridReviewTitle => '💡 مراجعة مطلوبة';
+
+  @override
+  String get hybridManualTitle => '⚠️ يحتاج تدخل';
+
+  @override
+  String get hybridManualSubtitle => 'الثقة أقل من عتبة المراجعة — عدّل قبل الإرسال.';
+
+  @override
+  String get hybridRunNow => 'تشغيل الآن';
+
+  @override
+  String hybridAutoCountdown(int seconds) {
+    return 'إرسال تلقائي خلال $seconds ث (إلغاء لإيقاف)';
+  }
+
+  @override
+  String get hybridAutoShieldPausedTitle => '🛑 Auto mode paused';
+
+  @override
+  String get hybridAutoShieldPausedBody => 'تم إيقاف التنفيذ التلقائي بسبب الأداء';
+
+  @override
+  String get hybridEditOnly => 'تعديل فقط';
+
+  @override
+  String get hybridSettingsTitle => 'التسويق الهجين';
+
+  @override
+  String get hybridSettingsTooltip => 'إعدادات التسويق الهجين';
+
+  @override
+  String get hybridSettingsAutoExec => 'تفعيل التنفيذ التلقائي (للثقة العالية فقط)';
+
+  @override
+  String get hybridSettingsAutoThreshold => 'عتبة التنفيذ التلقائي (ثقة عالية)';
+
+  @override
+  String get hybridSettingsReviewThreshold => 'عتبة المراجعة (متوسطة)';
+
+  @override
+  String get hybridSettingsSave => 'حفظ';
+
+  @override
+  String get adminDecisionAccuracyTitle => '📊 دقة القرارات';
+
+  @override
+  String get adminDecisionAccuracySubtitle => 'مقبول مقابل معدّل بعد التوصية الذكية (مسار إنستغرام).';
+
+  @override
+  String adminDecisionAcceptedPct(String pct) {
+    return '👍 مقبول: $pct٪';
+  }
+
+  @override
+  String adminDecisionModifiedPct(String pct) {
+    return '✏️ معدّل: $pct٪';
+  }
+
+  @override
+  String adminDecisionMostOverridden(String part) {
+    return 'الأكثر تعديلاً: $part';
+  }
+
+  @override
+  String get adminDecisionPartTime => 'الوقت';
+
+  @override
+  String get adminDecisionPartCaption => 'الكابشن';
+
+  @override
+  String get adminDecisionPartAudience => 'الجمهور';
+
+  @override
+  String adminDecisionPatternTrust(String pct) {
+    return 'ثقة النمط: $pct٪';
+  }
+
+  @override
+  String get adminDecisionNoLogs => 'لا توجد قرارات مسجّلة بعد.';
+
+  @override
+  String get adminDecisionSystemTrustTitle => '📊 ثقة النظام';
+
+  @override
+  String adminDecisionTrustCaptionLine(String pct) {
+    return '🔥 الكابشن: $pct٪';
+  }
+
+  @override
+  String adminDecisionTrustTimeLine(String pct) {
+    return '🕒 الوقت: $pct٪';
+  }
+
+  @override
+  String adminDecisionTrustAudienceLine(String pct) {
+    return '🎯 الجمهور: $pct٪';
+  }
+
+  @override
+  String adminDecisionWeakestLine(String part) {
+    return 'يحتاج انتباه: $part';
+  }
+
+  @override
+  String get adminDecisionOutcomeTitle => '📊 تعلّم من النتائج';
+
+  @override
+  String get adminDecisionOutcomeSubtitle => 'بعد الإرسال: فحص CTR تقريباً بعد 6 ساعات، التقييم الكامل بعد 24 ساعة (مقارنة بـ CTR المتوقع في سجل القرار).';
+
+  @override
+  String adminDecisionOutcomeBeat(String pct) {
+    return '🔥 تجاوز التوقع: $pct٪';
+  }
+
+  @override
+  String adminDecisionOutcomeMiss(String pct) {
+    return '📉 أقل من المتوقع: $pct٪';
+  }
+
+  @override
+  String get adminDecisionOutcomeWaiting => 'لا يوجد تقييم نتيجة مكتمل بعد (يحتاج إشعار مربوط + نافزة زمنية).';
+
+  @override
+  String get adminCaptionPerformanceTitle => '📊 أداء الكابشن';
+
+  @override
+  String get adminCaptionPerformanceSubtitle => 'عيّنة: سجلات الاستخدام + النقرات (إشارة تعلّم لترتيب المتغيرات).';
+
+  @override
+  String adminCaptionPerformanceRow(String variant, int clicks, String ctrPercent) {
+    return 'المتغير $variant ← $clicks نقرة · CTR $ctrPercent٪';
+  }
+
+  @override
+  String get adminCaptionLearningTitle => '📊 رؤى التعلّم';
+
+  @override
+  String get adminCaptionLearningSubtitle => 'أوزان العوامل في تسجيل المتغيرات (يحدّثها جدول كل 6 ساعات من الاستخدام والنقرات).';
+
+  @override
+  String get adminCaptionLearningFactorEmoji => 'الإيموجي';
+
+  @override
+  String get adminCaptionLearningFactorArea => 'المنطقة';
+
+  @override
+  String get adminCaptionLearningFactorUrgency => 'الإلحاح';
+
+  @override
+  String get adminCaptionLearningFactorShort => 'نص قصير';
+
+  @override
+  String get adminControlCenterTitle => 'مركز التحكم';
+
+  @override
+  String get adminControlCenterSystemStatus => 'حالة النظام';
+
+  @override
+  String get adminControlCenterTrust => 'الثقة (التسويق التلقائي)';
+
+  @override
+  String get adminControlCenterPerformance => 'الأداء';
+
+  @override
+  String get adminControlCenterControls => 'التحكم';
+
+  @override
+  String get adminControlCenterAutoModeOn => 'الوضع التلقائي: مفعّل';
+
+  @override
+  String get adminControlCenterAutoModeOff => 'الوضع التلقائي: معطّل';
+
+  @override
+  String get adminControlCenterShieldActive => 'الدرع: مفعّل';
+
+  @override
+  String get adminControlCenterShieldInactive => 'الدرع: غير مفعّل';
+
+  @override
+  String get adminControlCenterAvgTrust => 'متوسط الثقة';
+
+  @override
+  String get adminControlCenterLastDelta => 'آخر فرق النتيجة';
+
+  @override
+  String get adminControlCenterLastDeltaNone => '—';
+
+  @override
+  String get adminControlCenterCtrTrend => 'اتجاه CTR (آخر حملات)';
+
+  @override
+  String get adminControlCenterTotalConversions => 'إجمالي التحويلات (عيّنة)';
+
+  @override
+  String get adminControlCenterBestCaption => 'أفضل كابشن (حسب CTR)';
+
+  @override
+  String adminControlCenterBestCaptionValue(String variant, String ctr) {
+    return 'المتغير $variant · CTR $ctr';
+  }
+
+  @override
+  String get adminControlCenterNoPerformanceData => 'لا سجلات إشعارات بعد.';
+
+  @override
+  String get adminControlCenterResetLearning => 'إعادة ضبط التعلّم';
+
+  @override
+  String get adminControlCenterResetLearningTitle => 'إعادة ضبط التعلّم؟';
+
+  @override
+  String get adminControlCenterResetLearningBody => 'سيتم تصفير الثقة والعدادات وحالة الدرع ولقطة نتيجة التعلّم على الخادم. لا يمكن التراجع.';
+
+  @override
+  String get adminControlCenterDisableShield => 'إيقاف الدرع';
+
+  @override
+  String get adminControlCenterSaved => 'تم الحفظ';
+
+  @override
+  String get adminControlCenterDone => 'تم';
+
+  @override
+  String get adminControlCenterFailed => 'حدث خطأ';
+
+  @override
+  String get adminSystemAlertsTitle => 'تنبيهات النظام';
+
+  @override
+  String adminSystemAlertsUnread(int count) {
+    return '$count غير مقروء';
+  }
+
+  @override
+  String get adminSystemAlertsEmpty => 'لا توجد تنبيهات نشطة.';
+
+  @override
+  String get adminSystemAlertsMarkRead => 'تعليم كمقروء';
 }

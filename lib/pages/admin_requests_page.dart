@@ -13,7 +13,9 @@ import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/pages/wanted_details_page.dart';
 import 'package:aqarai_app/pages/valuation_details_page.dart';
 import 'package:aqarai_app/services/property_closure_service.dart';
+import 'package:aqarai_app/services/admin_action_service.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
+import 'package:aqarai_app/models/support_ticket.dart';
 
 const String kFunctionsRegion = 'us-central1';
 
@@ -35,6 +37,7 @@ enum AdminFilter {
   expiry,
   interested,
   closureRequests,
+  support,
 }
 
 class AdminRequestsPage extends StatefulWidget {
@@ -306,8 +309,16 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         return _interested();
       case AdminFilter.closureRequests:
         return _closureRequests();
+      case AdminFilter.support:
+        return _supportTickets();
     }
   }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _supportTickets() => firestore
+      .collection('support_tickets')
+      .orderBy('createdAt', descending: true)
+      .limit(100)
+      .snapshots();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _closureRequests() => firestore
       .collection('closure_requests')
@@ -1627,7 +1638,228 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         return _buildInterestedTile(loc, d, doc.id);
       case AdminFilter.closureRequests:
         return _buildClosureRequestTile(loc, d, doc.id, isAr);
+      case AdminFilter.support:
+        return _buildSupportTicketTile(loc, d, doc.id, isAr);
     }
+  }
+
+  String _supportCategoryLabel(AppLocalizations loc, String key) {
+    switch (key) {
+      case SupportTicketCategory.general:
+        return loc.supportCategoryGeneral;
+      case SupportTicketCategory.bug:
+        return loc.supportCategoryBug;
+      case SupportTicketCategory.propertyInquiry:
+        return loc.supportCategoryPropertyInquiry;
+      case SupportTicketCategory.payment:
+        return loc.supportCategoryPayment;
+      default:
+        return key;
+    }
+  }
+
+  String _supportStatusLabel(AppLocalizations loc, String status) {
+    switch (status) {
+      case SupportTicketStatus.inProgress:
+        return loc.supportTicketStatusInProgress;
+      case SupportTicketStatus.resolved:
+        return loc.supportTicketStatusResolved;
+      default:
+        return loc.supportTicketStatusOpen;
+    }
+  }
+
+  Color _supportStatusColor(String status) {
+    switch (status) {
+      case SupportTicketStatus.resolved:
+        return Colors.green.shade700;
+      case SupportTicketStatus.inProgress:
+        return Colors.orange.shade800;
+      default:
+        return Colors.blue.shade800;
+    }
+  }
+
+  Widget _buildSupportTicketTile(
+    AppLocalizations loc,
+    Map<String, dynamic> d,
+    String ticketId,
+    bool isAr,
+  ) {
+    final subject = (d['subject'] ?? '').toString();
+    final message = (d['message'] ?? '').toString();
+    final userName = (d['userName'] ?? '').toString();
+    final userPhone = (d['userPhone'] ?? '').toString();
+    final userId = (d['userId'] ?? '').toString();
+    final category = (d['category'] ?? '').toString();
+    final status =
+        (d['status'] ?? SupportTicketStatus.open).toString();
+    final createdAt = d['createdAt'] as Timestamp?;
+
+    Future<void> setStatus(String newStatus) async {
+      try {
+        await AdminActionService.updateSupportTicketStatus(
+          ticketId: ticketId,
+          status: newStatus,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(loc.supportTicketUpdated)),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${loc.errorLabel}: $e'),
+            backgroundColor: Colors.red.shade800,
+          ),
+        );
+      }
+    }
+
+    Future<void> removeTicket() async {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(loc.supportDeleteTicket),
+          content: Text(loc.supportDeleteTicketConfirm),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(loc.cancel),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(loc.delete),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      try {
+        await AdminActionService.deleteSupportTicket(ticketId);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(loc.supportTicketDeleted)),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${loc.errorLabel}: $e'),
+            backgroundColor: Colors.red.shade800,
+          ),
+        );
+      }
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    subject.isEmpty ? '—' : subject,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _supportStatusColor(status),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _supportStatusLabel(loc, status),
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${loc.supportCategoryLabel}: ${_supportCategoryLabel(loc, category)}',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${loc.supportUserLine}: $userName',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+            ),
+            if (userPhone.isNotEmpty)
+              Text(
+                '☎ $userPhone',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+              ),
+            Text(
+              'uid: $userId',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+            Text(
+              '${loc.addedOn}: ${_fmtDate(createdAt)}',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+            const Divider(height: 20),
+            SelectableText(
+              message.isEmpty ? '—' : message,
+              style: const TextStyle(fontSize: 14, height: 1.35),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (userPhone.isNotEmpty) ...[
+                  FilledButton.tonalIcon(
+                    onPressed: () => _callPhone(userPhone),
+                    icon: const Icon(Icons.call, size: 18),
+                    label: Text(isAr ? 'اتصال' : 'Call'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _openWhatsApp(userPhone),
+                    icon: const Icon(Icons.chat, size: 18),
+                    label: Text(isAr ? 'واتساب' : 'WhatsApp'),
+                  ),
+                ],
+                if (status != SupportTicketStatus.inProgress)
+                  TextButton.icon(
+                    onPressed: () => setStatus(SupportTicketStatus.inProgress),
+                    icon: const Icon(Icons.hourglass_top, size: 18),
+                    label: Text(loc.supportMarkInProgress),
+                  ),
+                if (status != SupportTicketStatus.resolved)
+                  TextButton.icon(
+                    onPressed: () => setStatus(SupportTicketStatus.resolved),
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: Text(loc.supportMarkResolved),
+                  ),
+                TextButton.icon(
+                  onPressed: removeTicket,
+                  icon: Icon(Icons.delete_outline, color: Colors.red.shade700),
+                  label: Text(
+                    loc.supportDeleteTicket,
+                    style: TextStyle(color: Colors.red.shade700),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ---------------- UI ----------------
@@ -1705,6 +1937,12 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                     'طلبات الإغلاق',
                     AdminFilter.closureRequests,
                     _closureRequests(),
+                  ),
+                  _badge(
+                    loc.supportTabEn,
+                    loc.supportTabAr,
+                    AdminFilter.support,
+                    _supportTickets(),
                   ),
                 ],
               ),
@@ -2008,6 +2246,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         emptyMsg = isAr
             ? 'لا توجد طلبات مطلوب.\nإذا أضفت طلباً ولم يظهر، تحقق من الاتصال بالإنترنت وأعد المحاولة.'
             : 'No wanted requests.\nIf you added one and it\'s missing, check internet and try again.';
+      } else if (_current == AdminFilter.support) {
+        emptyMsg = loc.supportNoTickets;
       } else {
         emptyMsg = loc.noWantedItems;
       }

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:aqarai_app/auth/signup_page.dart';
 import 'package:aqarai_app/auth/email_login_page.dart';
-import 'package:aqarai_app/l10n/app_localizations.dart';
 
 /// شاشة ترحيب احترافية — بدون مربعات بريد/كلمة مرور، أزرار فقط (مثل HeyGen)
 class LoginPage extends StatefulWidget {
@@ -42,6 +42,13 @@ class _LoginPageState extends State<LoginPage> {
       );
       await FirebaseAuth.instance.signInWithCredential(credential);
       _onSuccess();
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      final t = AppLocalizations.of(context)!;
+      final msg = e.code == 'user-disabled'
+          ? '${t.loginUserDisabled} (Google)'
+          : 'Google: ${e.message ?? e.code}';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -68,6 +75,13 @@ class _LoginPageState extends State<LoginPage> {
       );
       await FirebaseAuth.instance.signInWithCredential(oAuth);
       _onSuccess();
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      final t = AppLocalizations.of(context)!;
+      final msg = e.code == 'user-disabled'
+          ? '${t.loginUserDisabled} (Apple)'
+          : 'Apple: ${e.message ?? e.code}';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

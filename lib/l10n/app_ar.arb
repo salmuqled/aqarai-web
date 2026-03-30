@@ -465,6 +465,528 @@
   "@errorLabel": { "description": "كلمة خطأ للعرض مع التفاصيل" },
 
   "propertySentForReview": "تم إرسال العقار للمراجعة",
-  "@propertySentForReview": { "description": "رسالة بعد إرسال عقار للمراجعة" }
+  "@propertySentForReview": { "description": "رسالة بعد إرسال عقار للمراجعة" },
+
+  "moderationMenu": "الإشراف",
+  "@moderationMenu": { "description": "قائمة إشراف الأدمن" },
+
+  "banUser": "حظر المستخدم",
+  "@banUser": { "description": "إجراء حظر المستخدم" },
+
+  "banUserConfirmTitle": "تأكيد حظر هذا المستخدم؟",
+  "@banUserConfirmTitle": { "description": "عنوان حوار تأكيد الحظر" },
+
+  "banUserConfirmMessage": "سيتم تسجيل خروجه ومنعه من الدخول ومنع نشر إعلانات جديدة (تعطيل حساب Firebase وتحديث بيانات المستخدم).",
+  "@banUserConfirmMessage": { "description": "نص حوار تأكيد الحظر" },
+
+  "banUserSuccess": "تم حظر المستخدم.",
+  "@banUserSuccess": { "description": "بعد نجاح الحظر" },
+
+  "cannotPostBanned": "حسابك مقيّد ولا يمكنك نشر إعلانات.",
+  "@cannotPostBanned": { "description": "منع النشر للمستخدم المحظور" },
+
+  "accountSuspendedTitle": "الحساب مقيّد",
+  "@accountSuspendedTitle": { "description": "عنوان عند إنهاء جلسة محظور" },
+
+  "accountSuspendedBody": "لا يُسمح لهذا الحساب باستخدام التطبيق. تواصل مع الدعم إن كان ذلك خطأ.",
+  "@accountSuspendedBody": { "description": "نص عند إنهاء جلسة محظور" },
+
+  "loginUserDisabled": "تم تعطيل هذا الحساب.",
+  "@loginUserDisabled": { "description": "Firebase user-disabled عند تسجيل الدخول" },
+
+  "contactUsTitle": "تواصل معنا",
+  "@contactUsTitle": { "description": "عنوان صفحة الدعم" },
+
+  "supportFormIntro": "أرسل ملاحظة، أبلغ عن مشكلة، أو اسأل عن إعلان. نقرأ كل الرسائل.",
+  "@supportFormIntro": { "description": "مقدمة نموذج التواصل" },
+
+  "supportSubjectLabel": "الموضوع",
+  "@supportSubjectLabel": { "description": "حقل موضوع التذكرة" },
+
+  "supportSubjectHint": "ملخص قصير",
+  "@supportSubjectHint": { "description": "تلميح الموضوع" },
+
+  "supportCategoryLabel": "التصنيف",
+  "@supportCategoryLabel": { "description": "تصنيف التذكرة" },
+
+  "supportMessageLabel": "الرسالة",
+  "@supportMessageLabel": { "description": "نص التذكرة" },
+
+  "supportMessageHint": "صف المشكلة أو استفسارك…",
+  "@supportMessageHint": { "description": "تلميح الرسالة" },
+
+  "supportSubmit": "إرسال",
+  "@supportSubmit": { "description": "إرسال تذكرة الدعم" },
+
+  "supportMessageSent": "تم إرسال رسالتك بنجاح. سنعود إليك قريباً.",
+  "@supportMessageSent": { "description": "بعد إرسال التذكرة" },
+
+  "supportFillRequired": "يرجى إدخال الموضوع والرسالة.",
+  "@supportFillRequired": { "description": "تحقق من النموذج" },
+
+  "supportCategoryGeneral": "عام",
+  "@supportCategoryGeneral": { "description": "تصنيف دعم" },
+
+  "supportCategoryBug": "خلل / تقني",
+  "@supportCategoryBug": { "description": "تصنيف دعم" },
+
+  "supportCategoryPropertyInquiry": "استفسار عن عقار",
+  "@supportCategoryPropertyInquiry": { "description": "تصنيف دعم" },
+
+  "supportCategoryPayment": "دفع",
+  "@supportCategoryPayment": { "description": "تصنيف دعم" },
+
+  "supportTabEn": "Support",
+  "@supportTabEn": { "description": "تبويب أدمن EN" },
+
+  "supportTabAr": "الدعم",
+  "@supportTabAr": { "description": "تبويب أدمن AR" },
+
+  "supportTicketStatusOpen": "مفتوحة",
+  "@supportTicketStatusOpen": { "description": "حالة تذكرة" },
+
+  "supportTicketStatusInProgress": "قيد المعالجة",
+  "@supportTicketStatusInProgress": { "description": "حالة تذكرة" },
+
+  "supportTicketStatusResolved": "تم الحل",
+  "@supportTicketStatusResolved": { "description": "حالة تذكرة" },
+
+  "supportMarkInProgress": "تعيين قيد المعالجة",
+  "@supportMarkInProgress": { "description": "إجراء أدمن" },
+
+  "supportMarkResolved": "تعيين تم الحل",
+  "@supportMarkResolved": { "description": "إجراء أدمن" },
+
+  "supportDeleteTicket": "حذف التذكرة",
+  "@supportDeleteTicket": { "description": "حذف من الأدمن" },
+
+  "supportDeleteTicketConfirm": "حذف هذه التذكرة من القائمة؟ لا يمكن التراجع.",
+  "@supportDeleteTicketConfirm": { "description": "تأكيد حذف التذكرة" },
+
+  "supportNoTickets": "لا توجد تذاكر دعم بعد.",
+  "@supportNoTickets": { "description": "قائمة دعم فارغة" },
+
+  "supportUserLine": "المستخدم",
+  "@supportUserLine": { "description": "تسمية اسم المستخدم" },
+
+  "supportTicketUpdated": "تم تحديث التذكرة.",
+  "@supportTicketUpdated": { "description": "بعد تغيير الحالة" },
+
+  "supportTicketDeleted": "تم حذف التذكرة.",
+  "@supportTicketDeleted": { "description": "بعد حذف التذكرة" },
+
+  "instagramPostDialogTitle": "صورة منشور إنستغرام",
+  "@instagramPostDialogTitle": { "description": "حوار توليد المنشور" },
+
+  "instagramPostDialogHint": "يُرسم النص على الخادم فوق قالب 1080×1080. الصورة لا تُعرض داخل التطبيق—افتح الرابط في المتصفح.",
+  "@instagramPostDialogHint": { "description": "شرح القالب وعدم المعاينة" },
+
+  "instagramPostFieldTitle": "العنوان",
+  "@instagramPostFieldTitle": { "description": "عنوان على الصورة" },
+
+  "instagramPostFieldSubtitle": "العنوان الفرعي",
+  "@instagramPostFieldSubtitle": { "description": "نص ثانوي" },
+
+  "instagramPostGenerate": "إنشاء",
+  "@instagramPostGenerate": { "description": "استدعاء الدالة" },
+
+  "instagramPostFillBoth": "أدخل العنوان والنص الفرعي.",
+  "@instagramPostFillBoth": { "description": "تحقق" },
+
+  "instagramPostGenerating": "جاري إنشاء الصورة…",
+  "@instagramPostGenerating": { "description": "تحميل" },
+
+  "instagramPostFailed": "تعذّر إنشاء الصورة. تحقق من القالب في Storage وحاول مرة أخرى.",
+  "@instagramPostFailed": { "description": "فشل الدالة" },
+
+  "instagramPostSuccessTitle": "الصورة جاهزة",
+  "@instagramPostSuccessTitle": { "description": "بعد النجاح" },
+
+  "instagramPostSuccessBody": "📎 تم إنشاء الصورة. افتحها في المتصفح أو انسخ الرابط. لا تُعرض داخل التطبيق.",
+  "@instagramPostSuccessBody": { "description": "نجاح بدون معاينة" },
+
+  "instagramPostOpenBrowser": "فتح في المتصفح",
+  "@instagramPostOpenBrowser": { "description": "فتح الرابط" },
+
+  "instagramPostCopyLink": "نسخ الرابط",
+  "@instagramPostCopyLink": { "description": "الحافظة" },
+
+  "instagramPostLinkCopied": "تم نسخ الرابط.",
+  "@instagramPostLinkCopied": { "description": "شريط تنبيه" },
+
+  "instagramPostOpenFailed": "تعذّر فتح الرابط.",
+  "@instagramPostOpenFailed": { "description": "فشل url_launcher" },
+
+  "instagramPostAppBarTooltip": "إنشاء صورة إنستغرام",
+  "@instagramPostAppBarTooltip": { "description": "أيقونة لوحة الأدمن" },
+
+  "instagramPostFieldArea": "المنطقة (للكابشن)",
+  "@instagramPostFieldArea": { "description": "حقل المنطقة" },
+
+  "instagramPostFieldPropertyType": "نوع العقار (للكابشن)",
+  "@instagramPostFieldPropertyType": { "description": "نوع العقار للكابشن" },
+
+  "instagramPostFillAllFields": "أدخل العنوان والنص الفرعي والمنطقة ونوع العقار.",
+  "@instagramPostFillAllFields": { "description": "تحقق من كل الحقول" },
+
+  "instagramPostCreatedHeadline": "📎 تم إنشاء البوست",
+  "@instagramPostCreatedHeadline": { "description": "جاهز للنشر اليدوي" },
+
+  "instagramPostCaptionPreviewLabel": "كابشن مقترح",
+  "@instagramPostCaptionPreviewLabel": { "description": "عنوان معاينة الكابشن" },
+
+  "instagramPostOpenImage": "فتح الصورة",
+  "@instagramPostOpenImage": { "description": "المتصفح" },
+
+  "instagramPostCopyCaption": "نسخ الكابشن",
+  "@instagramPostCopyCaption": { "description": "الحافظة" },
+
+  "instagramPostOpenInstagram": "فتح إنستغرام",
+  "@instagramPostOpenInstagram": { "description": "تطبيق أو الويب" },
+
+  "instagramCaptionCopied": "تم نسخ الكابشن",
+  "@instagramCaptionCopied": { "description": "بعد النسخ" },
+
+  "instagramOpenAppFailed": "تعذّر فتح إنستغرام.",
+  "@instagramOpenAppFailed": { "description": "فشل التشغيل" },
+
+  "instagramPostNoImageUrl": "لا يوجد رابط صورة — فتح الصورة غير متاح.",
+  "@instagramPostNoImageUrl": { "description": "تعطيل الزر" },
+
+  "instagramDemandLevelLabel": "مستوى الطلب (للكابشن)",
+  "@instagramDemandLevelLabel": { "description": "عنوان مستوى الطلب" },
+
+  "instagramDemandHigh": "عالي",
+  "@instagramDemandHigh": { "description": "طلب عالي" },
+
+  "instagramDemandMedium": "متوسط",
+  "@instagramDemandMedium": { "description": "طلب متوسط" },
+
+  "instagramDemandLow": "منخفض",
+  "@instagramDemandLow": { "description": "طلب منخفض" },
+
+  "instagramRecentDealsLabel": "صفقات أُغلقت مؤخراً (اختياري)",
+  "@instagramRecentDealsLabel": { "description": "عدد الصفقات للكابشن" },
+
+  "instagramRecentDealsHint": "0 إن لم يُعرف",
+  "@instagramRecentDealsHint": { "description": "تلميح حقل الصفقات" },
+
+  "instagramAreaAnalyticsHeadline": "💡 تحليل السوق",
+  "@instagramAreaAnalyticsHeadline": { "description": "عنوان بطاقة التحليل" },
+
+  "instagramAreaAnalyticsDemand": "📊 الطلب: {level}",
+  "@instagramAreaAnalyticsDemand": {
+    "description": "سطر الطلب مع التسمية",
+    "placeholders": { "level": { "type": "String" } }
+  },
+
+  "instagramAreaAnalyticsDeals": "📈 عدد الصفقات: {count}",
+  "@instagramAreaAnalyticsDeals": {
+    "description": "عدد الصفقات خلال 7 أيام",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "instagramAreaAnalyticsLoading": "جاري تحميل بيانات السوق…",
+  "@instagramAreaAnalyticsLoading": { "description": "تحميل التحليل" },
+
+  "instagramAreaAnalyticsError": "تعذّر تحميل التحليل. تُستخدم القيم الافتراضية — يمكنك التعديل أدناه.",
+  "@instagramAreaAnalyticsError": { "description": "فشل جلب التحليل" },
+
+  "instagramAreaAnalyticsRefresh": "تحديث التحليل",
+  "@instagramAreaAnalyticsRefresh": { "description": "زر إعادة التحميل" },
+
+  "instagramAreaAnalyticsEnterArea": "أدخل اسم المنطقة لعرض إحصائيات الصفقات (7 أيام).",
+  "@instagramAreaAnalyticsEnterArea": { "description": "تلميح عند فراغ المنطقة" },
+
+  "instagramDemandOverrideHint": "يُملأ تلقائياً من البيانات — يمكنك التعديل",
+  "@instagramDemandOverrideHint": { "description": "شرح الحقول القابلة للتعديل" },
+
+  "instagramPostGenerateCarousel": "كاروسيل (4 صور)",
+  "@instagramPostGenerateCarousel": { "description": "توليد 4 شرائح" },
+
+  "instagramPostGeneratingCarousel": "جاري إنشاء الكاروسيل…",
+  "@instagramPostGeneratingCarousel": { "description": "تحميل الكاروسيل" },
+
+  "instagramPostCarouselFailed": "تعذّر إنشاء الكاروسيل. تحقق من القالب في Storage.",
+  "@instagramPostCarouselFailed": { "description": "فشل دالة الكاروسيل" },
+
+  "instagramPostCarouselHeadline": "📎 تم إنشاء البوست ({count} صور)",
+  "@instagramPostCarouselHeadline": {
+    "description": "عنوان نجاح الكاروسيل",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "instagramPostOpenImages": "فتح الصور",
+  "@instagramPostOpenImages": { "description": "فتح شرائح الكاروسيل" },
+
+  "instagramCarouselSlideLabel": "الشريحة {slideNumber}",
+  "@instagramCarouselSlideLabel": {
+    "description": "صف اختيار الشريحة",
+    "placeholders": { "slideNumber": { "type": "int" } }
+  },
+
+  "instagramPostCarouselFillFields": "أدخل العنوان والمنطقة ونوع العقار للكاروسيل.",
+  "@instagramPostCarouselFillFields": { "description": "تحقق كاروسيل بدون إلزام العنوان الفرعي" },
+
+  "instagramCaptionVariantBestTitle": "💡 أفضل كابشن مقترح",
+  "@instagramCaptionVariantBestTitle": { "description": "عنوان قسم A/B" },
+
+  "instagramCaptionVariantRowA": "المتغير أ · إلحاحي",
+  "@instagramCaptionVariantRowA": { "description": "تسمية المتغير أ" },
+
+  "instagramCaptionVariantRowB": "المتغير ب · قيمة",
+  "@instagramCaptionVariantRowB": { "description": "تسمية المتغير ب" },
+
+  "instagramCaptionVariantRowC": "المتغير ج · سوق مستقر",
+  "@instagramCaptionVariantRowC": { "description": "تسمية المتغير ج" },
+
+  "instagramCaptionVariantUseBest": "استخدام الأفضل",
+  "@instagramCaptionVariantUseBest": { "description": "نسخ أفضل كابشن" },
+
+  "instagramCaptionVariantManualPick": "اختيار يدوي",
+  "@instagramCaptionVariantManualPick": { "description": "تلميح البطاقات" },
+
+  "instagramCaptionVariantManualHint": "اضغط على بطاقة أدناه، ثم انسخ الكابشن.",
+  "@instagramCaptionVariantManualHint": { "description": "شريط الاختيار اليدوي" },
+
+  "instagramCaptionVariantScore": "النتيجة: {score}",
+  "@instagramCaptionVariantScore": {
+    "description": "درجة الكابشن التقريبية",
+    "placeholders": { "score": { "type": "String" } }
+  },
+
+  "instagramPostPropertyIdOptional": "معرّف العقار (رابط التتبع، اختياري)",
+  "@instagramPostPropertyIdOptional": { "description": "لـ ?id= في رابط الكابشن" },
+
+  "instagramPostPropertyIdHint": "معرّف مستند Firestore — يضيف ?id=…&cid=A|B|C",
+  "@instagramPostPropertyIdHint": { "description": "تلميح التتبع" },
+
+  "autoDecisionTitle": "💡 توصية ذكية",
+  "@autoDecisionTitle": { "description": "عنوان حوار التوصية التسويقية" },
+
+  "autoDecisionBestTime": "🕒 أفضل وقت: {time}",
+  "@autoDecisionBestTime": {
+    "description": "ساعة الإرسال المقترحة",
+    "placeholders": { "time": { "type": "String" } }
+  },
+
+  "autoDecisionAudience": "🎯 الجمهور: {segment}",
+  "@autoDecisionAudience": {
+    "description": "شريحة الإشعار",
+    "placeholders": { "segment": { "type": "String" } }
+  },
+
+  "autoDecisionCaptionVariant": "🔥 الكابشن: المتغير {id}",
+  "@autoDecisionCaptionVariant": {
+    "description": "متغير أ/ب/ج",
+    "placeholders": { "id": { "type": "String" } }
+  },
+
+  "autoDecisionExpectedCtr": "📊 CTR متوقع: {percent}٪",
+  "@autoDecisionExpectedCtr": {
+    "description": "نسبة نقر متوقعة تقريبية",
+    "placeholders": { "percent": { "type": "int" } }
+  },
+
+  "autoDecisionConfidence": "📈 الثقة: {percent}٪",
+  "@autoDecisionConfidence": {
+    "description": "ثقة النموذج",
+    "placeholders": { "percent": { "type": "int" } }
+  },
+
+  "autoDecisionReasonLabel": "السبب:",
+  "@autoDecisionReasonLabel": { "description": "قبل نص الشرح" },
+
+  "autoDecisionAudienceActive": "المستخدمين النشطين",
+  "@autoDecisionAudienceActive": { "description": "تسمية شريحة" },
+  "autoDecisionAudienceWarm": "مستخدمون دافئون",
+  "@autoDecisionAudienceWarm": { "description": "تسمية شريحة" },
+  "autoDecisionAudienceCold": "مستخدمون باردون",
+  "@autoDecisionAudienceCold": { "description": "تسمية شريحة" },
+  "autoDecisionAudienceAll": "جميع المستخدمين",
+  "@autoDecisionAudienceAll": { "description": "تسمية شريحة" },
+
+  "autoDecisionApproveSchedule": "موافق وجدولة",
+  "@autoDecisionApproveSchedule": { "description": "جدولة بالوقت المقترح" },
+  "autoDecisionSendNow": "إرسال الآن",
+  "@autoDecisionSendNow": { "description": "بث فوري" },
+  "autoDecisionEdit": "تعديل",
+  "@autoDecisionEdit": { "description": "معاينة يدوية" },
+
+  "hybridAutoTitle": "🔥 تنفيذ تلقائي مقترح",
+  "@hybridAutoTitle": { "description": "عنوان ثقة عالية" },
+  "hybridAutoSubtitle": "هذا القرار عالي الثقة.",
+  "@hybridAutoSubtitle": { "description": "شرح الثقة العالية" },
+  "hybridReviewTitle": "💡 مراجعة مطلوبة",
+  "@hybridReviewTitle": { "description": "عنوان ثقة متوسطة" },
+  "hybridManualTitle": "⚠️ يحتاج تدخل",
+  "@hybridManualTitle": { "description": "عنوان ثقة منخفضة" },
+  "hybridManualSubtitle": "الثقة أقل من عتبة المراجعة — عدّل قبل الإرسال.",
+  "@hybridManualSubtitle": { "description": "شرح يدوي" },
+  "hybridRunNow": "تشغيل الآن",
+  "@hybridRunNow": { "description": "إرسال فوري (طبقة auto)" },
+  "hybridAutoCountdown": "إرسال تلقائي خلال {seconds} ث (إلغاء لإيقاف)",
+  "@hybridAutoCountdown": {
+    "placeholders": { "seconds": { "type": "int" } }
+  },
+  "hybridAutoShieldPausedTitle": "🛑 Auto mode paused",
+  "@hybridAutoShieldPausedTitle": { "description": "عنوان درع الإيقاف" },
+  "hybridAutoShieldPausedBody": "تم إيقاف التنفيذ التلقائي بسبب الأداء",
+  "@hybridAutoShieldPausedBody": { "description": "شرح درع الإيقاف" },
+  "hybridEditOnly": "تعديل فقط",
+  "@hybridEditOnly": { "description": "زر المستوى اليدوي" },
+
+  "hybridSettingsTitle": "التسويق الهجين",
+  "@hybridSettingsTitle": { "description": "عنوان الإعدادات" },
+  "hybridSettingsTooltip": "إعدادات التسويق الهجين",
+  "@hybridSettingsTooltip": { "description": "تلميح الشريط" },
+  "hybridSettingsAutoExec": "تفعيل التنفيذ التلقائي (للثقة العالية فقط)",
+  "@hybridSettingsAutoExec": { "description": "افتراضيًا معطّل" },
+  "hybridSettingsAutoThreshold": "عتبة التنفيذ التلقائي (ثقة عالية)",
+  "@hybridSettingsAutoThreshold": { "description": "شريط" },
+  "hybridSettingsReviewThreshold": "عتبة المراجعة (متوسطة)",
+  "@hybridSettingsReviewThreshold": { "description": "شريط" },
+  "hybridSettingsSave": "حفظ",
+  "@hybridSettingsSave": { "description": "حفظ التفضيلات" },
+
+  "adminDecisionAccuracyTitle": "📊 دقة القرارات",
+  "@adminDecisionAccuracyTitle": { "description": "توصية ذكية مقابل إجراء الأدمن" },
+  "adminDecisionAccuracySubtitle": "مقبول مقابل معدّل بعد التوصية الذكية (مسار إنستغرام).",
+  "@adminDecisionAccuracySubtitle": { "description": "شرح تحت العنوان" },
+  "adminDecisionAcceptedPct": "👍 مقبول: {pct}٪",
+  "@adminDecisionAcceptedPct": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionModifiedPct": "✏️ معدّل: {pct}٪",
+  "@adminDecisionModifiedPct": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionMostOverridden": "الأكثر تعديلاً: {part}",
+  "@adminDecisionMostOverridden": {
+    "placeholders": { "part": { "type": "String" } }
+  },
+  "adminDecisionPartTime": "الوقت",
+  "adminDecisionPartCaption": "الكابشن",
+  "adminDecisionPartAudience": "الجمهور",
+  "adminDecisionPatternTrust": "ثقة النمط: {pct}٪",
+  "@adminDecisionPatternTrust": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionNoLogs": "لا توجد قرارات مسجّلة بعد.",
+  "@adminDecisionNoLogs": { "description": "حالة فارغة" },
+
+  "adminDecisionSystemTrustTitle": "📊 ثقة النظام",
+  "@adminDecisionSystemTrustTitle": { "description": "عنوان الثقة لكل بُعد" },
+  "adminDecisionTrustCaptionLine": "🔥 الكابشن: {pct}٪",
+  "@adminDecisionTrustCaptionLine": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionTrustTimeLine": "🕒 الوقت: {pct}٪",
+  "@adminDecisionTrustTimeLine": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionTrustAudienceLine": "🎯 الجمهور: {pct}٪",
+  "@adminDecisionTrustAudienceLine": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionWeakestLine": "يحتاج انتباه: {part}",
+  "@adminDecisionWeakestLine": {
+    "placeholders": { "part": { "type": "String" } }
+  },
+
+  "adminDecisionOutcomeTitle": "📊 تعلّم من النتائج",
+  "@adminDecisionOutcomeTitle": { "description": "مقارنة CTR بالتوقع" },
+  "adminDecisionOutcomeSubtitle": "بعد الإرسال: فحص CTR تقريباً بعد 6 ساعات، التقييم الكامل بعد 24 ساعة (مقارنة بـ CTR المتوقع في سجل القرار).",
+  "@adminDecisionOutcomeSubtitle": { "description": "شرح" },
+  "adminDecisionOutcomeBeat": "🔥 تجاوز التوقع: {pct}٪",
+  "@adminDecisionOutcomeBeat": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionOutcomeMiss": "📉 أقل من المتوقع: {pct}٪",
+  "@adminDecisionOutcomeMiss": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionOutcomeWaiting": "لا يوجد تقييم نتيجة مكتمل بعد (يحتاج إشعار مربوط + نافزة زمنية).",
+  "@adminDecisionOutcomeWaiting": { "description": "حالة فارغة" },
+
+  "adminCaptionPerformanceTitle": "📊 أداء الكابشن",
+  "@adminCaptionPerformanceTitle": { "description": "قسم لوحة التحكم" },
+
+  "adminCaptionPerformanceSubtitle": "عيّنة: سجلات الاستخدام + النقرات (إشارة تعلّم لترتيب المتغيرات).",
+  "@adminCaptionPerformanceSubtitle": { "description": "شرح المقاييس" },
+
+  "adminCaptionPerformanceRow": "المتغير {variant} ← {clicks} نقرة · CTR {ctrPercent}٪",
+  "@adminCaptionPerformanceRow": {
+    "description": "صف متغير كابشن",
+    "placeholders": {
+      "variant": { "type": "String" },
+      "clicks": { "type": "int" },
+      "ctrPercent": { "type": "String" }
+    }
+  },
+
+  "adminCaptionLearningTitle": "📊 رؤى التعلّم",
+  "@adminCaptionLearningTitle": { "description": "قسم تعلّم الكابشن" },
+
+  "adminCaptionLearningSubtitle": "أوزان العوامل في تسجيل المتغيرات (يحدّثها جدول كل 6 ساعات من الاستخدام والنقرات).",
+  "@adminCaptionLearningSubtitle": { "description": "شرح التعلّم" },
+
+  "adminCaptionLearningFactorEmoji": "الإيموجي",
+  "@adminCaptionLearningFactorEmoji": { "description": "عامل" },
+
+  "adminCaptionLearningFactorArea": "المنطقة",
+  "@adminCaptionLearningFactorArea": { "description": "عامل" },
+
+  "adminCaptionLearningFactorUrgency": "الإلحاح",
+  "@adminCaptionLearningFactorUrgency": { "description": "عامل" },
+
+  "adminCaptionLearningFactorShort": "نص قصير",
+  "@adminCaptionLearningFactorShort": { "description": "عامل" },
+
+  "adminControlCenterTitle": "مركز التحكم",
+  "@adminControlCenterTitle": { "description": "لوحة التسويق" },
+  "adminControlCenterSystemStatus": "حالة النظام",
+  "@adminControlCenterSystemStatus": { "description": "قسم" },
+  "adminControlCenterTrust": "الثقة (التسويق التلقائي)",
+  "@adminControlCenterTrust": { "description": "قسم" },
+  "adminControlCenterPerformance": "الأداء",
+  "@adminControlCenterPerformance": { "description": "قسم" },
+  "adminControlCenterControls": "التحكم",
+  "@adminControlCenterControls": { "description": "قسم" },
+  "adminControlCenterAutoModeOn": "الوضع التلقائي: مفعّل",
+  "adminControlCenterAutoModeOff": "الوضع التلقائي: معطّل",
+  "adminControlCenterShieldActive": "الدرع: مفعّل",
+  "adminControlCenterShieldInactive": "الدرع: غير مفعّل",
+  "adminControlCenterAvgTrust": "متوسط الثقة",
+  "adminControlCenterLastDelta": "آخر فرق النتيجة",
+  "adminControlCenterLastDeltaNone": "—",
+  "adminControlCenterCtrTrend": "اتجاه CTR (آخر حملات)",
+  "adminControlCenterTotalConversions": "إجمالي التحويلات (عيّنة)",
+  "adminControlCenterBestCaption": "أفضل كابشن (حسب CTR)",
+  "adminControlCenterBestCaptionValue": "المتغير {variant} · CTR {ctr}",
+  "@adminControlCenterBestCaptionValue": {
+    "placeholders": {
+      "variant": { "type": "String" },
+      "ctr": { "type": "String" }
+    }
+  },
+  "adminControlCenterNoPerformanceData": "لا سجلات إشعارات بعد.",
+  "adminControlCenterResetLearning": "إعادة ضبط التعلّم",
+  "adminControlCenterResetLearningTitle": "إعادة ضبط التعلّم؟",
+  "adminControlCenterResetLearningBody": "سيتم تصفير الثقة والعدادات وحالة الدرع ولقطة نتيجة التعلّم على الخادم. لا يمكن التراجع.",
+  "adminControlCenterDisableShield": "إيقاف الدرع",
+  "adminControlCenterSaved": "تم الحفظ",
+  "adminControlCenterDone": "تم",
+  "adminControlCenterFailed": "حدث خطأ",
+
+  "adminSystemAlertsTitle": "تنبيهات النظام",
+  "@adminSystemAlertsTitle": { "description": "قسم مركز التحكم" },
+  "adminSystemAlertsUnread": "{count} غير مقروء",
+  "@adminSystemAlertsUnread": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "adminSystemAlertsEmpty": "لا توجد تنبيهات نشطة.",
+  "@adminSystemAlertsEmpty": { "description": "فارغ" },
+  "adminSystemAlertsMarkRead": "تعليم كمقروء"
 
 }

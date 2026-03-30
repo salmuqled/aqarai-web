@@ -29,6 +29,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:aqarai_app/home_page.dart';
 import 'package:aqarai_app/services/ai_brain_service.dart';
@@ -55,6 +56,8 @@ class AssistantPage extends StatefulWidget {
 
 class _AssistantPageState extends State<AssistantPage>
     with WidgetsBindingObserver {
+  static bool _webCaptionLinkHandled = false;
+
   final List<ChatMessage> _messages = [];
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -102,7 +105,28 @@ class _AssistantPageState extends State<AssistantPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
       unawaited(UserActivityService.recordActivity());
+      _tryOpenPropertyFromWebCaptionLink();
     });
+  }
+
+  /// Web: `?id=propertyId&cid=A` opens details once (Instagram / bio link).
+  void _tryOpenPropertyFromWebCaptionLink() {
+    if (!kIsWeb || _webCaptionLinkHandled) return;
+    final u = Uri.base;
+    final id = u.queryParameters['id']?.trim();
+    final cid = u.queryParameters['cid']?.trim();
+    if (id == null || id.isEmpty || !mounted) return;
+    _webCaptionLinkHandled = true;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PropertyDetailsPage(
+          propertyId: id,
+          captionTrackingId:
+              (cid != null && cid.isNotEmpty) ? cid : null,
+          leadSource: DealLeadSource.direct,
+        ),
+      ),
+    );
   }
 
   @override

@@ -484,6 +484,22 @@
       ]
     },
     {
+      "collectionGroup": "deals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "areaAr", "order": "ASCENDING"},
+        {"fieldPath": "closedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "property_views",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "propertyId", "order": "ASCENDING"},
+        {"fieldPath": "viewedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "scheduled_notification_jobs",
       "queryScope": "COLLECTION",
       "fields": [

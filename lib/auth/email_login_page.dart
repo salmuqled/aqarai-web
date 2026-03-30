@@ -42,8 +42,12 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+      final t = AppLocalizations.of(context)!;
+      final msg = e.code == 'user-disabled'
+          ? t.loginUserDisabled
+          : (e.message ?? e.code);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? e.code)),
+        SnackBar(content: Text(msg)),
       );
     } catch (e) {
       if (!mounted) return;

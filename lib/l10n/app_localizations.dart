@@ -1126,6 +1126,1086 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Property sent for review'**
   String get propertySentForReview;
+
+  /// Admin moderation menu label
+  ///
+  /// In en, this message translates to:
+  /// **'Moderation'**
+  String get moderationMenu;
+
+  /// Ban user action
+  ///
+  /// In en, this message translates to:
+  /// **'Ban user'**
+  String get banUser;
+
+  /// Confirm ban dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Ban this user?'**
+  String get banUserConfirmTitle;
+
+  /// Confirm ban dialog body
+  ///
+  /// In en, this message translates to:
+  /// **'They will be signed out, unable to log in, and cannot post new listings. This uses Firebase Auth disable and Firestore flags.'**
+  String get banUserConfirmMessage;
+
+  /// After successful ban
+  ///
+  /// In en, this message translates to:
+  /// **'User has been banned.'**
+  String get banUserSuccess;
+
+  /// Add property blocked for banned user
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is restricted. You cannot post listings.'**
+  String get cannotPostBanned;
+
+  /// Title when banned user session ends
+  ///
+  /// In en, this message translates to:
+  /// **'Account restricted'**
+  String get accountSuspendedTitle;
+
+  /// Body when banned user session ends
+  ///
+  /// In en, this message translates to:
+  /// **'This account is no longer allowed to use the app. Contact support if you think this is a mistake.'**
+  String get accountSuspendedBody;
+
+  /// Firebase Auth user-disabled on sign-in
+  ///
+  /// In en, this message translates to:
+  /// **'This account has been disabled.'**
+  String get loginUserDisabled;
+
+  /// Support / contact page title
+  ///
+  /// In en, this message translates to:
+  /// **'Contact us'**
+  String get contactUsTitle;
+
+  /// Intro on contact form
+  ///
+  /// In en, this message translates to:
+  /// **'Send us feedback, report a problem, or ask about a listing. We read every message.'**
+  String get supportFormIntro;
+
+  /// Ticket subject field
+  ///
+  /// In en, this message translates to:
+  /// **'Subject'**
+  String get supportSubjectLabel;
+
+  /// Subject hint
+  ///
+  /// In en, this message translates to:
+  /// **'Short summary'**
+  String get supportSubjectHint;
+
+  /// Ticket category
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get supportCategoryLabel;
+
+  /// Ticket body
+  ///
+  /// In en, this message translates to:
+  /// **'Message'**
+  String get supportMessageLabel;
+
+  /// Message hint
+  ///
+  /// In en, this message translates to:
+  /// **'Describe your issue or question…'**
+  String get supportMessageHint;
+
+  /// Submit support ticket
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get supportSubmit;
+
+  /// After ticket submitted
+  ///
+  /// In en, this message translates to:
+  /// **'Message sent successfully. We will get back to you soon.'**
+  String get supportMessageSent;
+
+  /// Validation on contact form
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter subject and message.'**
+  String get supportFillRequired;
+
+  /// Support category
+  ///
+  /// In en, this message translates to:
+  /// **'General'**
+  String get supportCategoryGeneral;
+
+  /// Support category
+  ///
+  /// In en, this message translates to:
+  /// **'Bug / technical issue'**
+  String get supportCategoryBug;
+
+  /// Support category
+  ///
+  /// In en, this message translates to:
+  /// **'Property inquiry'**
+  String get supportCategoryPropertyInquiry;
+
+  /// Support category
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get supportCategoryPayment;
+
+  /// Admin tab EN
+  ///
+  /// In en, this message translates to:
+  /// **'Support'**
+  String get supportTabEn;
+
+  /// Admin tab AR
+  ///
+  /// In en, this message translates to:
+  /// **'الدعم'**
+  String get supportTabAr;
+
+  /// Ticket status
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get supportTicketStatusOpen;
+
+  /// Ticket status
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get supportTicketStatusInProgress;
+
+  /// Ticket status
+  ///
+  /// In en, this message translates to:
+  /// **'Resolved'**
+  String get supportTicketStatusResolved;
+
+  /// Admin ticket action
+  ///
+  /// In en, this message translates to:
+  /// **'Mark in progress'**
+  String get supportMarkInProgress;
+
+  /// Admin ticket action
+  ///
+  /// In en, this message translates to:
+  /// **'Mark resolved'**
+  String get supportMarkResolved;
+
+  /// Admin delete ticket
+  ///
+  /// In en, this message translates to:
+  /// **'Delete ticket'**
+  String get supportDeleteTicket;
+
+  /// Confirm delete ticket
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this ticket from the list? This cannot be undone.'**
+  String get supportDeleteTicketConfirm;
+
+  /// Empty admin support list
+  ///
+  /// In en, this message translates to:
+  /// **'No support tickets yet.'**
+  String get supportNoTickets;
+
+  /// Label before user name on ticket
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get supportUserLine;
+
+  /// After admin status change
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket updated.'**
+  String get supportTicketUpdated;
+
+  /// After admin deleted ticket
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket deleted.'**
+  String get supportTicketDeleted;
+
+  /// Admin generate post dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Instagram post image'**
+  String get instagramPostDialogTitle;
+
+  /// Explain template + no preview
+  ///
+  /// In en, this message translates to:
+  /// **'Text is drawn on the server over your 1080×1080 template. The image is not shown in the app—open the link in a browser.'**
+  String get instagramPostDialogHint;
+
+  /// Overlay title
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get instagramPostFieldTitle;
+
+  /// Overlay subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Subtitle'**
+  String get instagramPostFieldSubtitle;
+
+  /// Trigger Cloud Function
+  ///
+  /// In en, this message translates to:
+  /// **'Generate'**
+  String get instagramPostGenerate;
+
+  /// Validation
+  ///
+  /// In en, this message translates to:
+  /// **'Enter title and subtitle.'**
+  String get instagramPostFillBoth;
+
+  /// Loading
+  ///
+  /// In en, this message translates to:
+  /// **'Generating image…'**
+  String get instagramPostGenerating;
+
+  /// Callable error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not generate image. Check template in Storage and try again.'**
+  String get instagramPostFailed;
+
+  /// After success
+  ///
+  /// In en, this message translates to:
+  /// **'Image ready'**
+  String get instagramPostSuccessTitle;
+
+  /// Success message no preview
+  ///
+  /// In en, this message translates to:
+  /// **'📎 Image created. Open in browser or copy the link. Nothing is shown inside the app.'**
+  String get instagramPostSuccessBody;
+
+  /// Launch URL
+  ///
+  /// In en, this message translates to:
+  /// **'Open in browser'**
+  String get instagramPostOpenBrowser;
+
+  /// Clipboard
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get instagramPostCopyLink;
+
+  /// Snackbar
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied.'**
+  String get instagramPostLinkCopied;
+
+  /// url_launcher failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open link.'**
+  String get instagramPostOpenFailed;
+
+  /// Admin dashboard icon
+  ///
+  /// In en, this message translates to:
+  /// **'Generate Instagram image'**
+  String get instagramPostAppBarTooltip;
+
+  /// Caption area field
+  ///
+  /// In en, this message translates to:
+  /// **'Area (for caption)'**
+  String get instagramPostFieldArea;
+
+  /// Caption property type
+  ///
+  /// In en, this message translates to:
+  /// **'Property type (for caption)'**
+  String get instagramPostFieldPropertyType;
+
+  /// Validation all fields
+  ///
+  /// In en, this message translates to:
+  /// **'Enter title, subtitle, area, and property type.'**
+  String get instagramPostFillAllFields;
+
+  /// After image+caption ready
+  ///
+  /// In en, this message translates to:
+  /// **'📎 Post ready'**
+  String get instagramPostCreatedHeadline;
+
+  /// Caption section label
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested caption'**
+  String get instagramPostCaptionPreviewLabel;
+
+  /// Open image URL in browser
+  ///
+  /// In en, this message translates to:
+  /// **'Open image'**
+  String get instagramPostOpenImage;
+
+  /// Clipboard caption
+  ///
+  /// In en, this message translates to:
+  /// **'Copy caption'**
+  String get instagramPostCopyCaption;
+
+  /// Deep link or web
+  ///
+  /// In en, this message translates to:
+  /// **'Open Instagram'**
+  String get instagramPostOpenInstagram;
+
+  /// Snackbar after copy caption
+  ///
+  /// In en, this message translates to:
+  /// **'Caption copied'**
+  String get instagramCaptionCopied;
+
+  /// Launch failure
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open Instagram.'**
+  String get instagramOpenAppFailed;
+
+  /// Missing URL hint
+  ///
+  /// In en, this message translates to:
+  /// **'No image URL — open image is disabled.'**
+  String get instagramPostNoImageUrl;
+
+  /// Demand level field label
+  ///
+  /// In en, this message translates to:
+  /// **'Market demand (for caption)'**
+  String get instagramDemandLevelLabel;
+
+  /// High demand segment
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get instagramDemandHigh;
+
+  /// Medium demand segment
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get instagramDemandMedium;
+
+  /// Low demand segment
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get instagramDemandLow;
+
+  /// Deals count for caption
+  ///
+  /// In en, this message translates to:
+  /// **'Recent closed deals (optional)'**
+  String get instagramRecentDealsLabel;
+
+  /// Deals field hint
+  ///
+  /// In en, this message translates to:
+  /// **'0 if unknown'**
+  String get instagramRecentDealsHint;
+
+  /// Area analytics card title
+  ///
+  /// In en, this message translates to:
+  /// **'💡 Market insight'**
+  String get instagramAreaAnalyticsHeadline;
+
+  /// Demand line with localized level label
+  ///
+  /// In en, this message translates to:
+  /// **'📊 Demand: {level}'**
+  String instagramAreaAnalyticsDemand(String level);
+
+  /// Recent closed deals count
+  ///
+  /// In en, this message translates to:
+  /// **'📈 Deals (7 days): {count}'**
+  String instagramAreaAnalyticsDeals(int count);
+
+  /// Analytics loading
+  ///
+  /// In en, this message translates to:
+  /// **'Loading market data…'**
+  String get instagramAreaAnalyticsLoading;
+
+  /// Analytics fetch failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load analytics. Defaults are used — you can override below.'**
+  String get instagramAreaAnalyticsError;
+
+  /// Reload area analytics button
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh insight'**
+  String get instagramAreaAnalyticsRefresh;
+
+  /// Hint when area empty
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an area name to load 7-day deal stats.'**
+  String get instagramAreaAnalyticsEnterArea;
+
+  /// Caption fields override subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-filled from data — adjust if needed'**
+  String get instagramDemandOverrideHint;
+
+  /// Generate 4-slide carousel
+  ///
+  /// In en, this message translates to:
+  /// **'Carousel (4 images)'**
+  String get instagramPostGenerateCarousel;
+
+  /// Loading carousel
+  ///
+  /// In en, this message translates to:
+  /// **'Generating carousel…'**
+  String get instagramPostGeneratingCarousel;
+
+  /// Carousel callable error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not generate carousel. Check template in Storage and try again.'**
+  String get instagramPostCarouselFailed;
+
+  /// Carousel success headline
+  ///
+  /// In en, this message translates to:
+  /// **'📎 Post ready ({count} images)'**
+  String instagramPostCarouselHeadline(int count);
+
+  /// Open carousel slides
+  ///
+  /// In en, this message translates to:
+  /// **'Open images'**
+  String get instagramPostOpenImages;
+
+  /// Carousel slide picker row
+  ///
+  /// In en, this message translates to:
+  /// **'Slide {slideNumber}'**
+  String instagramCarouselSlideLabel(int slideNumber);
+
+  /// Carousel validation (subtitle optional)
+  ///
+  /// In en, this message translates to:
+  /// **'Enter title, area, and property type for the carousel.'**
+  String get instagramPostCarouselFillFields;
+
+  /// A/B caption section title
+  ///
+  /// In en, this message translates to:
+  /// **'💡 Best suggested caption'**
+  String get instagramCaptionVariantBestTitle;
+
+  /// Caption variant A label
+  ///
+  /// In en, this message translates to:
+  /// **'Variant A · Urgency'**
+  String get instagramCaptionVariantRowA;
+
+  /// Caption variant B label
+  ///
+  /// In en, this message translates to:
+  /// **'Variant B · Value'**
+  String get instagramCaptionVariantRowB;
+
+  /// Caption variant C label
+  ///
+  /// In en, this message translates to:
+  /// **'Variant C · Steady market'**
+  String get instagramCaptionVariantRowC;
+
+  /// Apply and copy top-scored caption
+  ///
+  /// In en, this message translates to:
+  /// **'Use best'**
+  String get instagramCaptionVariantUseBest;
+
+  /// Hint to use cards
+  ///
+  /// In en, this message translates to:
+  /// **'Pick manually'**
+  String get instagramCaptionVariantManualPick;
+
+  /// Snackbar for manual pick
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a card below, then Copy caption.'**
+  String get instagramCaptionVariantManualHint;
+
+  /// Heuristic caption score
+  ///
+  /// In en, this message translates to:
+  /// **'Score: {score}'**
+  String instagramCaptionVariantScore(String score);
+
+  /// For ?id= in caption URL
+  ///
+  /// In en, this message translates to:
+  /// **'Property ID (tracking link, optional)'**
+  String get instagramPostPropertyIdOptional;
+
+  /// Hint for tracking field
+  ///
+  /// In en, this message translates to:
+  /// **'Firestore document id — adds ?id=…&cid=A|B|C'**
+  String get instagramPostPropertyIdHint;
+
+  /// Marketing auto-decision dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'💡 Smart recommendation'**
+  String get autoDecisionTitle;
+
+  /// Suggested send hour
+  ///
+  /// In en, this message translates to:
+  /// **'🕒 Best time: {time}'**
+  String autoDecisionBestTime(String time);
+
+  /// Suggested FCM segment
+  ///
+  /// In en, this message translates to:
+  /// **'🎯 Audience: {segment}'**
+  String autoDecisionAudience(String segment);
+
+  /// Chosen A/B/C caption
+  ///
+  /// In en, this message translates to:
+  /// **'🔥 Caption: Variant {id}'**
+  String autoDecisionCaptionVariant(String id);
+
+  /// Rough expected click rate
+  ///
+  /// In en, this message translates to:
+  /// **'📊 Expected CTR: {percent}%'**
+  String autoDecisionExpectedCtr(int percent);
+
+  /// Model confidence
+  ///
+  /// In en, this message translates to:
+  /// **'📈 Confidence: {percent}%'**
+  String autoDecisionConfidence(int percent);
+
+  /// Label before explanation string
+  ///
+  /// In en, this message translates to:
+  /// **'Reason:'**
+  String get autoDecisionReasonLabel;
+
+  /// Segment label
+  ///
+  /// In en, this message translates to:
+  /// **'Active users'**
+  String get autoDecisionAudienceActive;
+
+  /// Segment label
+  ///
+  /// In en, this message translates to:
+  /// **'Warm users'**
+  String get autoDecisionAudienceWarm;
+
+  /// Segment label
+  ///
+  /// In en, this message translates to:
+  /// **'Cold users'**
+  String get autoDecisionAudienceCold;
+
+  /// Segment label
+  ///
+  /// In en, this message translates to:
+  /// **'All users'**
+  String get autoDecisionAudienceAll;
+
+  /// Queue at suggested time
+  ///
+  /// In en, this message translates to:
+  /// **'Approve & schedule'**
+  String get autoDecisionApproveSchedule;
+
+  /// Immediate broadcast
+  ///
+  /// In en, this message translates to:
+  /// **'Send now'**
+  String get autoDecisionSendNow;
+
+  /// Open manual preview
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get autoDecisionEdit;
+
+  /// High-confidence hybrid dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'🔥 Auto-run suggested'**
+  String get hybridAutoTitle;
+
+  /// High-confidence explainer
+  ///
+  /// In en, this message translates to:
+  /// **'This decision has high confidence.'**
+  String get hybridAutoSubtitle;
+
+  /// Medium-confidence title
+  ///
+  /// In en, this message translates to:
+  /// **'💡 Review required'**
+  String get hybridReviewTitle;
+
+  /// Low-confidence title
+  ///
+  /// In en, this message translates to:
+  /// **'⚠️ Needs your input'**
+  String get hybridManualTitle;
+
+  /// Low-confidence explainer
+  ///
+  /// In en, this message translates to:
+  /// **'Confidence is below the review threshold — edit before sending.'**
+  String get hybridManualSubtitle;
+
+  /// Send push immediately (auto tier)
+  ///
+  /// In en, this message translates to:
+  /// **'Run now'**
+  String get hybridRunNow;
+
+  /// No description provided for @hybridAutoCountdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-send in {seconds}s (cancel to stop)'**
+  String hybridAutoCountdown(int seconds);
+
+  /// Banner when auto shield blocks execution
+  ///
+  /// In en, this message translates to:
+  /// **'🛑 Auto mode paused'**
+  String get hybridAutoShieldPausedTitle;
+
+  /// Explains auto shield
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic execution has been paused due to performance.'**
+  String get hybridAutoShieldPausedBody;
+
+  /// Manual tier single action
+  ///
+  /// In en, this message translates to:
+  /// **'Edit only'**
+  String get hybridEditOnly;
+
+  /// Settings dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Hybrid marketing'**
+  String get hybridSettingsTitle;
+
+  /// App bar icon
+  ///
+  /// In en, this message translates to:
+  /// **'Hybrid marketing settings'**
+  String get hybridSettingsTooltip;
+
+  /// Toggle off by default
+  ///
+  /// In en, this message translates to:
+  /// **'Enable automatic send (high confidence only)'**
+  String get hybridSettingsAutoExec;
+
+  /// Slider label
+  ///
+  /// In en, this message translates to:
+  /// **'Auto threshold (high confidence)'**
+  String get hybridSettingsAutoThreshold;
+
+  /// Slider label
+  ///
+  /// In en, this message translates to:
+  /// **'Review threshold (medium)'**
+  String get hybridSettingsReviewThreshold;
+
+  /// Persist prefs
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get hybridSettingsSave;
+
+  /// Auto marketing recommendation vs admin action
+  ///
+  /// In en, this message translates to:
+  /// **'📊 Decision accuracy'**
+  String get adminDecisionAccuracyTitle;
+
+  /// Explainer under title
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted vs modified smart recommendations (Instagram flow).'**
+  String get adminDecisionAccuracySubtitle;
+
+  /// No description provided for @adminDecisionAcceptedPct.
+  ///
+  /// In en, this message translates to:
+  /// **'👍 Accepted: {pct}%'**
+  String adminDecisionAcceptedPct(String pct);
+
+  /// No description provided for @adminDecisionModifiedPct.
+  ///
+  /// In en, this message translates to:
+  /// **'✏️ Modified: {pct}%'**
+  String adminDecisionModifiedPct(String pct);
+
+  /// No description provided for @adminDecisionMostOverridden.
+  ///
+  /// In en, this message translates to:
+  /// **'Most edited: {part}'**
+  String adminDecisionMostOverridden(String part);
+
+  /// No description provided for @adminDecisionPartTime.
+  ///
+  /// In en, this message translates to:
+  /// **'time'**
+  String get adminDecisionPartTime;
+
+  /// No description provided for @adminDecisionPartCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'caption'**
+  String get adminDecisionPartCaption;
+
+  /// No description provided for @adminDecisionPartAudience.
+  ///
+  /// In en, this message translates to:
+  /// **'audience'**
+  String get adminDecisionPartAudience;
+
+  /// No description provided for @adminDecisionPatternTrust.
+  ///
+  /// In en, this message translates to:
+  /// **'Pattern trust: {pct}%'**
+  String adminDecisionPatternTrust(String pct);
+
+  /// Empty state
+  ///
+  /// In en, this message translates to:
+  /// **'No decisions logged yet.'**
+  String get adminDecisionNoLogs;
+
+  /// Per-dimension trust heading
+  ///
+  /// In en, this message translates to:
+  /// **'📊 System trust'**
+  String get adminDecisionSystemTrustTitle;
+
+  /// No description provided for @adminDecisionTrustCaptionLine.
+  ///
+  /// In en, this message translates to:
+  /// **'🔥 Caption: {pct}%'**
+  String adminDecisionTrustCaptionLine(String pct);
+
+  /// No description provided for @adminDecisionTrustTimeLine.
+  ///
+  /// In en, this message translates to:
+  /// **'🕒 Time: {pct}%'**
+  String adminDecisionTrustTimeLine(String pct);
+
+  /// No description provided for @adminDecisionTrustAudienceLine.
+  ///
+  /// In en, this message translates to:
+  /// **'🎯 Audience: {pct}%'**
+  String adminDecisionTrustAudienceLine(String pct);
+
+  /// No description provided for @adminDecisionWeakestLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention: {part}'**
+  String adminDecisionWeakestLine(String part);
+
+  /// CTR outcome vs model expectation
+  ///
+  /// In en, this message translates to:
+  /// **'📊 Outcome learning'**
+  String get adminDecisionOutcomeTitle;
+
+  /// Explainer
+  ///
+  /// In en, this message translates to:
+  /// **'After send: CTR check at ~6h, full outcome at ~24h (vs expected CTR on the decision log).'**
+  String get adminDecisionOutcomeSubtitle;
+
+  /// No description provided for @adminDecisionOutcomeBeat.
+  ///
+  /// In en, this message translates to:
+  /// **'🔥 Beat expectation: {pct}%'**
+  String adminDecisionOutcomeBeat(String pct);
+
+  /// No description provided for @adminDecisionOutcomeMiss.
+  ///
+  /// In en, this message translates to:
+  /// **'📉 Below expectation: {pct}%'**
+  String adminDecisionOutcomeMiss(String pct);
+
+  /// Empty outcome state
+  ///
+  /// In en, this message translates to:
+  /// **'No completed outcome evaluation yet (needs linked push + time window).'**
+  String get adminDecisionOutcomeWaiting;
+
+  /// Dashboard section
+  ///
+  /// In en, this message translates to:
+  /// **'📊 Caption performance'**
+  String get adminCaptionPerformanceTitle;
+
+  /// Caption metrics explainer
+  ///
+  /// In en, this message translates to:
+  /// **'Sample: last usage logs + click logs (learning signal for variant scores).'**
+  String get adminCaptionPerformanceSubtitle;
+
+  /// One caption variant row
+  ///
+  /// In en, this message translates to:
+  /// **'Variant {variant} → {clicks} clicks · CTR {ctrPercent}%'**
+  String adminCaptionPerformanceRow(String variant, int clicks, String ctrPercent);
+
+  /// Caption learning section
+  ///
+  /// In en, this message translates to:
+  /// **'📊 Learning insights'**
+  String get adminCaptionLearningTitle;
+
+  /// Learning explainer
+  ///
+  /// In en, this message translates to:
+  /// **'Factor weights used in variant scoring (updated by scheduled job from usage + clicks).'**
+  String get adminCaptionLearningSubtitle;
+
+  /// Factor label
+  ///
+  /// In en, this message translates to:
+  /// **'emoji'**
+  String get adminCaptionLearningFactorEmoji;
+
+  /// Factor label
+  ///
+  /// In en, this message translates to:
+  /// **'area'**
+  String get adminCaptionLearningFactorArea;
+
+  /// Factor label
+  ///
+  /// In en, this message translates to:
+  /// **'urgency'**
+  String get adminCaptionLearningFactorUrgency;
+
+  /// Factor label
+  ///
+  /// In en, this message translates to:
+  /// **'short text'**
+  String get adminCaptionLearningFactorShort;
+
+  /// Marketing admin hub
+  ///
+  /// In en, this message translates to:
+  /// **'Control center'**
+  String get adminControlCenterTitle;
+
+  /// Section
+  ///
+  /// In en, this message translates to:
+  /// **'System status'**
+  String get adminControlCenterSystemStatus;
+
+  /// Section
+  ///
+  /// In en, this message translates to:
+  /// **'Trust (auto marketing)'**
+  String get adminControlCenterTrust;
+
+  /// Section
+  ///
+  /// In en, this message translates to:
+  /// **'Performance'**
+  String get adminControlCenterPerformance;
+
+  /// Section
+  ///
+  /// In en, this message translates to:
+  /// **'Controls'**
+  String get adminControlCenterControls;
+
+  /// No description provided for @adminControlCenterAutoModeOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto mode: On'**
+  String get adminControlCenterAutoModeOn;
+
+  /// No description provided for @adminControlCenterAutoModeOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto mode: Off'**
+  String get adminControlCenterAutoModeOff;
+
+  /// No description provided for @adminControlCenterShieldActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Shield: Active'**
+  String get adminControlCenterShieldActive;
+
+  /// No description provided for @adminControlCenterShieldInactive.
+  ///
+  /// In en, this message translates to:
+  /// **'Shield: Inactive'**
+  String get adminControlCenterShieldInactive;
+
+  /// No description provided for @adminControlCenterAvgTrust.
+  ///
+  /// In en, this message translates to:
+  /// **'Avg trust'**
+  String get adminControlCenterAvgTrust;
+
+  /// No description provided for @adminControlCenterLastDelta.
+  ///
+  /// In en, this message translates to:
+  /// **'Last outcome Δ'**
+  String get adminControlCenterLastDelta;
+
+  /// No description provided for @adminControlCenterLastDeltaNone.
+  ///
+  /// In en, this message translates to:
+  /// **'—'**
+  String get adminControlCenterLastDeltaNone;
+
+  /// No description provided for @adminControlCenterCtrTrend.
+  ///
+  /// In en, this message translates to:
+  /// **'CTR trend (recent campaigns)'**
+  String get adminControlCenterCtrTrend;
+
+  /// No description provided for @adminControlCenterTotalConversions.
+  ///
+  /// In en, this message translates to:
+  /// **'Total conversions (sample)'**
+  String get adminControlCenterTotalConversions;
+
+  /// No description provided for @adminControlCenterBestCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Best caption (by CTR)'**
+  String get adminControlCenterBestCaption;
+
+  /// No description provided for @adminControlCenterBestCaptionValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Variant {variant} · CTR {ctr}'**
+  String adminControlCenterBestCaptionValue(String variant, String ctr);
+
+  /// No description provided for @adminControlCenterNoPerformanceData.
+  ///
+  /// In en, this message translates to:
+  /// **'No notification logs yet.'**
+  String get adminControlCenterNoPerformanceData;
+
+  /// No description provided for @adminControlCenterResetLearning.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset learning'**
+  String get adminControlCenterResetLearning;
+
+  /// No description provided for @adminControlCenterResetLearningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset learning?'**
+  String get adminControlCenterResetLearningTitle;
+
+  /// No description provided for @adminControlCenterResetLearningBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust scores, decision counters, shield state, and outcome snapshot on the server will be reset. This cannot be undone.'**
+  String get adminControlCenterResetLearningBody;
+
+  /// No description provided for @adminControlCenterDisableShield.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable shield'**
+  String get adminControlCenterDisableShield;
+
+  /// No description provided for @adminControlCenterSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get adminControlCenterSaved;
+
+  /// No description provided for @adminControlCenterDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get adminControlCenterDone;
+
+  /// No description provided for @adminControlCenterFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong'**
+  String get adminControlCenterFailed;
+
+  /// Control center section
+  ///
+  /// In en, this message translates to:
+  /// **'System alerts'**
+  String get adminSystemAlertsTitle;
+
+  /// No description provided for @adminSystemAlertsUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} unread'**
+  String adminSystemAlertsUnread(int count);
+
+  /// Empty alerts
+  ///
+  /// In en, this message translates to:
+  /// **'No active alerts.'**
+  String get adminSystemAlertsEmpty;
+
+  /// No description provided for @adminSystemAlertsMarkRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark read'**
+  String get adminSystemAlertsMarkRead;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

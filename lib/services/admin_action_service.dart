@@ -1,6 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
+import 'package:aqarai_app/l10n/app_localizations.dart';
+import 'package:aqarai_app/models/support_ticket.dart';
 import 'package:aqarai_app/models/notification_learning_factors.dart';
 import 'package:aqarai_app/models/personalized_trending_payload.dart';
 import 'package:aqarai_app/services/notification_prediction_service.dart';
@@ -46,6 +49,7 @@ abstract final class AdminActionService {
     NotificationPredictionLogMeta? predictionLog,
     String? trendingAreaAr,
     String? audienceSegment,
+    String? autoDecisionLogId,
   }) async {
     if (!context.mounted) return;
 
@@ -98,6 +102,10 @@ abstract final class AdminActionService {
       final aud = audienceSegment?.trim().toLowerCase();
       if (aud != null && aud.isNotEmpty && aud != 'all') {
         payload['audienceSegment'] = aud;
+      }
+      final adId = autoDecisionLogId?.trim();
+      if (adId != null && adId.isNotEmpty) {
+        payload['autoDecisionLogId'] = adId;
       }
       final result = await callable.call<Map<String, dynamic>>(payload);
 
@@ -168,6 +176,7 @@ abstract final class AdminActionService {
     NotificationPredictionLogMeta? predictionLog,
     String? trendingAreaAr,
     String? audienceSegment,
+    String? autoDecisionLogId,
   }) async {
     if (!context.mounted) return;
 
@@ -220,6 +229,10 @@ abstract final class AdminActionService {
       final aud = audienceSegment?.trim().toLowerCase();
       if (aud != null && aud.isNotEmpty) {
         payload['audienceSegment'] = aud;
+      }
+      final adId = autoDecisionLogId?.trim();
+      if (adId != null && adId.isNotEmpty) {
+        payload['autoDecisionLogId'] = adId;
       }
       await callable.call<Map<String, dynamic>>(payload);
       closeLoading();
@@ -540,6 +553,101 @@ abstract final class AdminActionService {
     }
   }
 
+  /// Disables the account server-side (Auth + Firestore `users/{uid}` ban fields).
+  static Future<void> banUser({
+    required BuildContext context,
+    required String targetUid,
+    required bool isAr,
+  }) async {
+    if (!context.mounted) return;
+    final trimmed = targetUid.trim();
+    if (trimmed.isEmpty) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (ctx) {
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            content: Row(
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Text(isAr ? 'جاري الحظر…' : 'Banning user…'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    void closeLoading() {
+      if (!context.mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+
+    try {
+      final callable = _funcs().httpsCallable('banUser');
+      await callable.call<Map<String, dynamic>>({'targetUid': trimmed});
+      closeLoading();
+      if (!context.mounted) return;
+      final loc = AppLocalizations.of(context);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(loc?.banUserSuccess ?? (isAr ? 'تم حظر المستخدم.' : 'User has been banned.')),
+        ),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      closeLoading();
+      if (!context.mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red.shade800,
+          content: Text(_mapFunctionsError(e, isAr)),
+        ),
+      );
+    } catch (e) {
+      closeLoading();
+      if (!context.mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red.shade800,
+          content: Text(
+            isAr ? 'فشل الحظر: $e' : 'Ban failed: $e',
+          ),
+        ),
+      );
+    }
+  }
+
+  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// Admin-only (Firestore rules). Sets `status` and `updatedAt`.
+  static Future<void> updateSupportTicketStatus({
+    required String ticketId,
+    required String status,
+  }) async {
+    if (!SupportTicketStatus.isValid(status)) {
+      throw ArgumentError('Invalid support ticket status');
+    }
+    await _firestore.collection('support_tickets').doc(ticketId).update({
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Admin-only (Firestore rules).
+  static Future<void> deleteSupportTicket(String ticketId) async {
+    await _firestore.collection('support_tickets').doc(ticketId).delete();
+  }
+
   static String _mapFunctionsError(
     FirebaseFunctionsException e,
     bool isAr,
@@ -553,6 +661,8 @@ abstract final class AdminActionService {
         return isAr ? 'سجّل الدخول أولاً.' : 'Please sign in.';
       case 'invalid-argument':
         return e.message ?? (isAr ? 'بيانات غير صالحة.' : 'Invalid input.');
+      case 'not-found':
+        return isAr ? 'المستخدم غير موجود.' : 'User not found.';
       default:
         return e.message ?? e.code;
     }

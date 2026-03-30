@@ -27,6 +27,14 @@ function assertAdmin(request: {
   return request.auth.uid;
 }
 
+function parseAutoDecisionLogId(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (s.length < 10 || s.length > 128) return null;
+  if (!/^[\w-]+$/.test(s)) return null;
+  return s;
+}
+
 function parseSource(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const s = raw.trim();
@@ -87,6 +95,7 @@ async function writeScheduledLog(args: {
   source: string | null;
   predictedScore: number | null;
   variantId: string | null;
+  autoDecisionLogId?: string | null;
 }): Promise<void> {
   const db = admin.firestore();
   const batch = db.batch();
@@ -129,6 +138,12 @@ async function writeScheduledLog(args: {
     },
     { merge: true }
   );
+
+  const decId = args.autoDecisionLogId?.trim();
+  if (decId && decId.length >= 10 && decId.length <= 128) {
+    const decRef = db.collection("auto_decision_logs").doc(decId);
+    batch.update(decRef, { notificationId: args.notificationId });
+  }
 
   await batch.commit();
 }
@@ -177,6 +192,8 @@ async function deliverClaimedJob(
   }
 
   const source = parseSource(d.source);
+  const autoDecisionLogId =
+    typeof d.autoDecisionLogId === "string" ? d.autoDecisionLogId.trim() : "";
   let predictedScore: number | null = null;
   let variantId: string | null = null;
   const pm = d.predictionMeta;
@@ -199,6 +216,7 @@ async function deliverClaimedJob(
       source,
       predictedScore,
       variantId,
+      autoDecisionLogId: autoDecisionLogId || null,
     });
     await ref.update({
       status: "sent",
@@ -225,6 +243,7 @@ async function deliverClaimedJob(
     source,
     predictedScore,
     variantId,
+    autoDecisionLogId: autoDecisionLogId || null,
   });
 
   await ref.update({
@@ -271,6 +290,8 @@ export const queueScheduledNotification = onCall(
     const db = admin.firestore();
     const notificationId = db.collection("notification_logs").doc().id;
 
+    const autoDecisionLogId = parseAutoDecisionLogId(data.autoDecisionLogId);
+
     const job: Record<string, unknown> = {
       status: "pending",
       scheduledAt: admin.firestore.Timestamp.fromMillis(scheduledAtMs),
@@ -293,6 +314,9 @@ export const queueScheduledNotification = onCall(
       createdBy: adminUid,
       createdAt: FieldValue.serverTimestamp(),
     };
+    if (autoDecisionLogId) {
+      job.autoDecisionLogId = autoDecisionLogId;
+    }
 
     const ref = await db.collection(JOBS).add(job);
     return { ok: true, jobId: ref.id, notificationId };

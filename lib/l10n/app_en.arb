@@ -465,6 +465,528 @@
   "@errorLabel": { "description": "Error word for display with details" },
 
   "propertySentForReview": "Property sent for review",
-  "@propertySentForReview": { "description": "Message after submitting property for review" }
+  "@propertySentForReview": { "description": "Message after submitting property for review" },
+
+  "moderationMenu": "Moderation",
+  "@moderationMenu": { "description": "Admin moderation menu label" },
+
+  "banUser": "Ban user",
+  "@banUser": { "description": "Ban user action" },
+
+  "banUserConfirmTitle": "Ban this user?",
+  "@banUserConfirmTitle": { "description": "Confirm ban dialog title" },
+
+  "banUserConfirmMessage": "They will be signed out, unable to log in, and cannot post new listings. This uses Firebase Auth disable and Firestore flags.",
+  "@banUserConfirmMessage": { "description": "Confirm ban dialog body" },
+
+  "banUserSuccess": "User has been banned.",
+  "@banUserSuccess": { "description": "After successful ban" },
+
+  "cannotPostBanned": "Your account is restricted. You cannot post listings.",
+  "@cannotPostBanned": { "description": "Add property blocked for banned user" },
+
+  "accountSuspendedTitle": "Account restricted",
+  "@accountSuspendedTitle": { "description": "Title when banned user session ends" },
+
+  "accountSuspendedBody": "This account is no longer allowed to use the app. Contact support if you think this is a mistake.",
+  "@accountSuspendedBody": { "description": "Body when banned user session ends" },
+
+  "loginUserDisabled": "This account has been disabled.",
+  "@loginUserDisabled": { "description": "Firebase Auth user-disabled on sign-in" },
+
+  "contactUsTitle": "Contact us",
+  "@contactUsTitle": { "description": "Support / contact page title" },
+
+  "supportFormIntro": "Send us feedback, report a problem, or ask about a listing. We read every message.",
+  "@supportFormIntro": { "description": "Intro on contact form" },
+
+  "supportSubjectLabel": "Subject",
+  "@supportSubjectLabel": { "description": "Ticket subject field" },
+
+  "supportSubjectHint": "Short summary",
+  "@supportSubjectHint": { "description": "Subject hint" },
+
+  "supportCategoryLabel": "Category",
+  "@supportCategoryLabel": { "description": "Ticket category" },
+
+  "supportMessageLabel": "Message",
+  "@supportMessageLabel": { "description": "Ticket body" },
+
+  "supportMessageHint": "Describe your issue or question…",
+  "@supportMessageHint": { "description": "Message hint" },
+
+  "supportSubmit": "Submit",
+  "@supportSubmit": { "description": "Submit support ticket" },
+
+  "supportMessageSent": "Message sent successfully. We will get back to you soon.",
+  "@supportMessageSent": { "description": "After ticket submitted" },
+
+  "supportFillRequired": "Please enter subject and message.",
+  "@supportFillRequired": { "description": "Validation on contact form" },
+
+  "supportCategoryGeneral": "General",
+  "@supportCategoryGeneral": { "description": "Support category" },
+
+  "supportCategoryBug": "Bug / technical issue",
+  "@supportCategoryBug": { "description": "Support category" },
+
+  "supportCategoryPropertyInquiry": "Property inquiry",
+  "@supportCategoryPropertyInquiry": { "description": "Support category" },
+
+  "supportCategoryPayment": "Payment",
+  "@supportCategoryPayment": { "description": "Support category" },
+
+  "supportTabEn": "Support",
+  "@supportTabEn": { "description": "Admin tab EN" },
+
+  "supportTabAr": "الدعم",
+  "@supportTabAr": { "description": "Admin tab AR" },
+
+  "supportTicketStatusOpen": "Open",
+  "@supportTicketStatusOpen": { "description": "Ticket status" },
+
+  "supportTicketStatusInProgress": "In progress",
+  "@supportTicketStatusInProgress": { "description": "Ticket status" },
+
+  "supportTicketStatusResolved": "Resolved",
+  "@supportTicketStatusResolved": { "description": "Ticket status" },
+
+  "supportMarkInProgress": "Mark in progress",
+  "@supportMarkInProgress": { "description": "Admin ticket action" },
+
+  "supportMarkResolved": "Mark resolved",
+  "@supportMarkResolved": { "description": "Admin ticket action" },
+
+  "supportDeleteTicket": "Delete ticket",
+  "@supportDeleteTicket": { "description": "Admin delete ticket" },
+
+  "supportDeleteTicketConfirm": "Remove this ticket from the list? This cannot be undone.",
+  "@supportDeleteTicketConfirm": { "description": "Confirm delete ticket" },
+
+  "supportNoTickets": "No support tickets yet.",
+  "@supportNoTickets": { "description": "Empty admin support list" },
+
+  "supportUserLine": "User",
+  "@supportUserLine": { "description": "Label before user name on ticket" },
+
+  "supportTicketUpdated": "Ticket updated.",
+  "@supportTicketUpdated": { "description": "After admin status change" },
+
+  "supportTicketDeleted": "Ticket deleted.",
+  "@supportTicketDeleted": { "description": "After admin deleted ticket" },
+
+  "instagramPostDialogTitle": "Instagram post image",
+  "@instagramPostDialogTitle": { "description": "Admin generate post dialog" },
+
+  "instagramPostDialogHint": "Text is drawn on the server over your 1080×1080 template. The image is not shown in the app—open the link in a browser.",
+  "@instagramPostDialogHint": { "description": "Explain template + no preview" },
+
+  "instagramPostFieldTitle": "Title",
+  "@instagramPostFieldTitle": { "description": "Overlay title" },
+
+  "instagramPostFieldSubtitle": "Subtitle",
+  "@instagramPostFieldSubtitle": { "description": "Overlay subtitle" },
+
+  "instagramPostGenerate": "Generate",
+  "@instagramPostGenerate": { "description": "Trigger Cloud Function" },
+
+  "instagramPostFillBoth": "Enter title and subtitle.",
+  "@instagramPostFillBoth": { "description": "Validation" },
+
+  "instagramPostGenerating": "Generating image…",
+  "@instagramPostGenerating": { "description": "Loading" },
+
+  "instagramPostFailed": "Could not generate image. Check template in Storage and try again.",
+  "@instagramPostFailed": { "description": "Callable error" },
+
+  "instagramPostSuccessTitle": "Image ready",
+  "@instagramPostSuccessTitle": { "description": "After success" },
+
+  "instagramPostSuccessBody": "📎 Image created. Open in browser or copy the link. Nothing is shown inside the app.",
+  "@instagramPostSuccessBody": { "description": "Success message no preview" },
+
+  "instagramPostOpenBrowser": "Open in browser",
+  "@instagramPostOpenBrowser": { "description": "Launch URL" },
+
+  "instagramPostCopyLink": "Copy link",
+  "@instagramPostCopyLink": { "description": "Clipboard" },
+
+  "instagramPostLinkCopied": "Link copied.",
+  "@instagramPostLinkCopied": { "description": "Snackbar" },
+
+  "instagramPostOpenFailed": "Could not open link.",
+  "@instagramPostOpenFailed": { "description": "url_launcher failed" },
+
+  "instagramPostAppBarTooltip": "Generate Instagram image",
+  "@instagramPostAppBarTooltip": { "description": "Admin dashboard icon" },
+
+  "instagramPostFieldArea": "Area (for caption)",
+  "@instagramPostFieldArea": { "description": "Caption area field" },
+
+  "instagramPostFieldPropertyType": "Property type (for caption)",
+  "@instagramPostFieldPropertyType": { "description": "Caption property type" },
+
+  "instagramPostFillAllFields": "Enter title, subtitle, area, and property type.",
+  "@instagramPostFillAllFields": { "description": "Validation all fields" },
+
+  "instagramPostCreatedHeadline": "📎 Post ready",
+  "@instagramPostCreatedHeadline": { "description": "After image+caption ready" },
+
+  "instagramPostCaptionPreviewLabel": "Suggested caption",
+  "@instagramPostCaptionPreviewLabel": { "description": "Caption section label" },
+
+  "instagramPostOpenImage": "Open image",
+  "@instagramPostOpenImage": { "description": "Open image URL in browser" },
+
+  "instagramPostCopyCaption": "Copy caption",
+  "@instagramPostCopyCaption": { "description": "Clipboard caption" },
+
+  "instagramPostOpenInstagram": "Open Instagram",
+  "@instagramPostOpenInstagram": { "description": "Deep link or web" },
+
+  "instagramCaptionCopied": "Caption copied",
+  "@instagramCaptionCopied": { "description": "Snackbar after copy caption" },
+
+  "instagramOpenAppFailed": "Could not open Instagram.",
+  "@instagramOpenAppFailed": { "description": "Launch failure" },
+
+  "instagramPostNoImageUrl": "No image URL — open image is disabled.",
+  "@instagramPostNoImageUrl": { "description": "Missing URL hint" },
+
+  "instagramDemandLevelLabel": "Market demand (for caption)",
+  "@instagramDemandLevelLabel": { "description": "Demand level field label" },
+
+  "instagramDemandHigh": "High",
+  "@instagramDemandHigh": { "description": "High demand segment" },
+
+  "instagramDemandMedium": "Medium",
+  "@instagramDemandMedium": { "description": "Medium demand segment" },
+
+  "instagramDemandLow": "Low",
+  "@instagramDemandLow": { "description": "Low demand segment" },
+
+  "instagramRecentDealsLabel": "Recent closed deals (optional)",
+  "@instagramRecentDealsLabel": { "description": "Deals count for caption" },
+
+  "instagramRecentDealsHint": "0 if unknown",
+  "@instagramRecentDealsHint": { "description": "Deals field hint" },
+
+  "instagramAreaAnalyticsHeadline": "💡 Market insight",
+  "@instagramAreaAnalyticsHeadline": { "description": "Area analytics card title" },
+
+  "instagramAreaAnalyticsDemand": "📊 Demand: {level}",
+  "@instagramAreaAnalyticsDemand": {
+    "description": "Demand line with localized level label",
+    "placeholders": { "level": { "type": "String" } }
+  },
+
+  "instagramAreaAnalyticsDeals": "📈 Deals (7 days): {count}",
+  "@instagramAreaAnalyticsDeals": {
+    "description": "Recent closed deals count",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "instagramAreaAnalyticsLoading": "Loading market data…",
+  "@instagramAreaAnalyticsLoading": { "description": "Analytics loading" },
+
+  "instagramAreaAnalyticsError": "Could not load analytics. Defaults are used — you can override below.",
+  "@instagramAreaAnalyticsError": { "description": "Analytics fetch failed" },
+
+  "instagramAreaAnalyticsRefresh": "Refresh insight",
+  "@instagramAreaAnalyticsRefresh": { "description": "Reload area analytics button" },
+
+  "instagramAreaAnalyticsEnterArea": "Enter an area name to load 7-day deal stats.",
+  "@instagramAreaAnalyticsEnterArea": { "description": "Hint when area empty" },
+
+  "instagramDemandOverrideHint": "Auto-filled from data — adjust if needed",
+  "@instagramDemandOverrideHint": { "description": "Caption fields override subtitle" },
+
+  "instagramPostGenerateCarousel": "Carousel (4 images)",
+  "@instagramPostGenerateCarousel": { "description": "Generate 4-slide carousel" },
+
+  "instagramPostGeneratingCarousel": "Generating carousel…",
+  "@instagramPostGeneratingCarousel": { "description": "Loading carousel" },
+
+  "instagramPostCarouselFailed": "Could not generate carousel. Check template in Storage and try again.",
+  "@instagramPostCarouselFailed": { "description": "Carousel callable error" },
+
+  "instagramPostCarouselHeadline": "📎 Post ready ({count} images)",
+  "@instagramPostCarouselHeadline": {
+    "description": "Carousel success headline",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "instagramPostOpenImages": "Open images",
+  "@instagramPostOpenImages": { "description": "Open carousel slides" },
+
+  "instagramCarouselSlideLabel": "Slide {slideNumber}",
+  "@instagramCarouselSlideLabel": {
+    "description": "Carousel slide picker row",
+    "placeholders": { "slideNumber": { "type": "int" } }
+  },
+
+  "instagramPostCarouselFillFields": "Enter title, area, and property type for the carousel.",
+  "@instagramPostCarouselFillFields": { "description": "Carousel validation (subtitle optional)" },
+
+  "instagramCaptionVariantBestTitle": "💡 Best suggested caption",
+  "@instagramCaptionVariantBestTitle": { "description": "A/B caption section title" },
+
+  "instagramCaptionVariantRowA": "Variant A · Urgency",
+  "@instagramCaptionVariantRowA": { "description": "Caption variant A label" },
+
+  "instagramCaptionVariantRowB": "Variant B · Value",
+  "@instagramCaptionVariantRowB": { "description": "Caption variant B label" },
+
+  "instagramCaptionVariantRowC": "Variant C · Steady market",
+  "@instagramCaptionVariantRowC": { "description": "Caption variant C label" },
+
+  "instagramCaptionVariantUseBest": "Use best",
+  "@instagramCaptionVariantUseBest": { "description": "Apply and copy top-scored caption" },
+
+  "instagramCaptionVariantManualPick": "Pick manually",
+  "@instagramCaptionVariantManualPick": { "description": "Hint to use cards" },
+
+  "instagramCaptionVariantManualHint": "Tap a card below, then Copy caption.",
+  "@instagramCaptionVariantManualHint": { "description": "Snackbar for manual pick" },
+
+  "instagramCaptionVariantScore": "Score: {score}",
+  "@instagramCaptionVariantScore": {
+    "description": "Heuristic caption score",
+    "placeholders": { "score": { "type": "String" } }
+  },
+
+  "instagramPostPropertyIdOptional": "Property ID (tracking link, optional)",
+  "@instagramPostPropertyIdOptional": { "description": "For ?id= in caption URL" },
+
+  "instagramPostPropertyIdHint": "Firestore document id — adds ?id=…&cid=A|B|C",
+  "@instagramPostPropertyIdHint": { "description": "Hint for tracking field" },
+
+  "autoDecisionTitle": "💡 Smart recommendation",
+  "@autoDecisionTitle": { "description": "Marketing auto-decision dialog title" },
+
+  "autoDecisionBestTime": "🕒 Best time: {time}",
+  "@autoDecisionBestTime": {
+    "description": "Suggested send hour",
+    "placeholders": { "time": { "type": "String" } }
+  },
+
+  "autoDecisionAudience": "🎯 Audience: {segment}",
+  "@autoDecisionAudience": {
+    "description": "Suggested FCM segment",
+    "placeholders": { "segment": { "type": "String" } }
+  },
+
+  "autoDecisionCaptionVariant": "🔥 Caption: Variant {id}",
+  "@autoDecisionCaptionVariant": {
+    "description": "Chosen A/B/C caption",
+    "placeholders": { "id": { "type": "String" } }
+  },
+
+  "autoDecisionExpectedCtr": "📊 Expected CTR: {percent}%",
+  "@autoDecisionExpectedCtr": {
+    "description": "Rough expected click rate",
+    "placeholders": { "percent": { "type": "int" } }
+  },
+
+  "autoDecisionConfidence": "📈 Confidence: {percent}%",
+  "@autoDecisionConfidence": {
+    "description": "Model confidence",
+    "placeholders": { "percent": { "type": "int" } }
+  },
+
+  "autoDecisionReasonLabel": "Reason:",
+  "@autoDecisionReasonLabel": { "description": "Label before explanation string" },
+
+  "autoDecisionAudienceActive": "Active users",
+  "@autoDecisionAudienceActive": { "description": "Segment label" },
+  "autoDecisionAudienceWarm": "Warm users",
+  "@autoDecisionAudienceWarm": { "description": "Segment label" },
+  "autoDecisionAudienceCold": "Cold users",
+  "@autoDecisionAudienceCold": { "description": "Segment label" },
+  "autoDecisionAudienceAll": "All users",
+  "@autoDecisionAudienceAll": { "description": "Segment label" },
+
+  "autoDecisionApproveSchedule": "Approve & schedule",
+  "@autoDecisionApproveSchedule": { "description": "Queue at suggested time" },
+  "autoDecisionSendNow": "Send now",
+  "@autoDecisionSendNow": { "description": "Immediate broadcast" },
+  "autoDecisionEdit": "Edit",
+  "@autoDecisionEdit": { "description": "Open manual preview" },
+
+  "hybridAutoTitle": "🔥 Auto-run suggested",
+  "@hybridAutoTitle": { "description": "High-confidence hybrid dialog title" },
+  "hybridAutoSubtitle": "This decision has high confidence.",
+  "@hybridAutoSubtitle": { "description": "High-confidence explainer" },
+  "hybridReviewTitle": "💡 Review required",
+  "@hybridReviewTitle": { "description": "Medium-confidence title" },
+  "hybridManualTitle": "⚠️ Needs your input",
+  "@hybridManualTitle": { "description": "Low-confidence title" },
+  "hybridManualSubtitle": "Confidence is below the review threshold — edit before sending.",
+  "@hybridManualSubtitle": { "description": "Low-confidence explainer" },
+  "hybridRunNow": "Run now",
+  "@hybridRunNow": { "description": "Send push immediately (auto tier)" },
+  "hybridAutoCountdown": "Auto-send in {seconds}s (cancel to stop)",
+  "@hybridAutoCountdown": {
+    "placeholders": { "seconds": { "type": "int" } }
+  },
+  "hybridAutoShieldPausedTitle": "🛑 Auto mode paused",
+  "@hybridAutoShieldPausedTitle": { "description": "Banner when auto shield blocks execution" },
+  "hybridAutoShieldPausedBody": "Automatic execution has been paused due to performance.",
+  "@hybridAutoShieldPausedBody": { "description": "Explains auto shield" },
+  "hybridEditOnly": "Edit only",
+  "@hybridEditOnly": { "description": "Manual tier single action" },
+
+  "hybridSettingsTitle": "Hybrid marketing",
+  "@hybridSettingsTitle": { "description": "Settings dialog title" },
+  "hybridSettingsTooltip": "Hybrid marketing settings",
+  "@hybridSettingsTooltip": { "description": "App bar icon" },
+  "hybridSettingsAutoExec": "Enable automatic send (high confidence only)",
+  "@hybridSettingsAutoExec": { "description": "Toggle off by default" },
+  "hybridSettingsAutoThreshold": "Auto threshold (high confidence)",
+  "@hybridSettingsAutoThreshold": { "description": "Slider label" },
+  "hybridSettingsReviewThreshold": "Review threshold (medium)",
+  "@hybridSettingsReviewThreshold": { "description": "Slider label" },
+  "hybridSettingsSave": "Save",
+  "@hybridSettingsSave": { "description": "Persist prefs" },
+
+  "adminDecisionAccuracyTitle": "📊 Decision accuracy",
+  "@adminDecisionAccuracyTitle": { "description": "Auto marketing recommendation vs admin action" },
+  "adminDecisionAccuracySubtitle": "Accepted vs modified smart recommendations (Instagram flow).",
+  "@adminDecisionAccuracySubtitle": { "description": "Explainer under title" },
+  "adminDecisionAcceptedPct": "👍 Accepted: {pct}%",
+  "@adminDecisionAcceptedPct": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionModifiedPct": "✏️ Modified: {pct}%",
+  "@adminDecisionModifiedPct": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionMostOverridden": "Most edited: {part}",
+  "@adminDecisionMostOverridden": {
+    "placeholders": { "part": { "type": "String" } }
+  },
+  "adminDecisionPartTime": "time",
+  "adminDecisionPartCaption": "caption",
+  "adminDecisionPartAudience": "audience",
+  "adminDecisionPatternTrust": "Pattern trust: {pct}%",
+  "@adminDecisionPatternTrust": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionNoLogs": "No decisions logged yet.",
+  "@adminDecisionNoLogs": { "description": "Empty state" },
+
+  "adminDecisionSystemTrustTitle": "📊 System trust",
+  "@adminDecisionSystemTrustTitle": { "description": "Per-dimension trust heading" },
+  "adminDecisionTrustCaptionLine": "🔥 Caption: {pct}%",
+  "@adminDecisionTrustCaptionLine": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionTrustTimeLine": "🕒 Time: {pct}%",
+  "@adminDecisionTrustTimeLine": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionTrustAudienceLine": "🎯 Audience: {pct}%",
+  "@adminDecisionTrustAudienceLine": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionWeakestLine": "Needs attention: {part}",
+  "@adminDecisionWeakestLine": {
+    "placeholders": { "part": { "type": "String" } }
+  },
+
+  "adminDecisionOutcomeTitle": "📊 Outcome learning",
+  "@adminDecisionOutcomeTitle": { "description": "CTR outcome vs model expectation" },
+  "adminDecisionOutcomeSubtitle": "After send: CTR check at ~6h, full outcome at ~24h (vs expected CTR on the decision log).",
+  "@adminDecisionOutcomeSubtitle": { "description": "Explainer" },
+  "adminDecisionOutcomeBeat": "🔥 Beat expectation: {pct}%",
+  "@adminDecisionOutcomeBeat": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionOutcomeMiss": "📉 Below expectation: {pct}%",
+  "@adminDecisionOutcomeMiss": {
+    "placeholders": { "pct": { "type": "String" } }
+  },
+  "adminDecisionOutcomeWaiting": "No completed outcome evaluation yet (needs linked push + time window).",
+  "@adminDecisionOutcomeWaiting": { "description": "Empty outcome state" },
+
+  "adminCaptionPerformanceTitle": "📊 Caption performance",
+  "@adminCaptionPerformanceTitle": { "description": "Dashboard section" },
+
+  "adminCaptionPerformanceSubtitle": "Sample: last usage logs + click logs (learning signal for variant scores).",
+  "@adminCaptionPerformanceSubtitle": { "description": "Caption metrics explainer" },
+
+  "adminCaptionPerformanceRow": "Variant {variant} → {clicks} clicks · CTR {ctrPercent}%",
+  "@adminCaptionPerformanceRow": {
+    "description": "One caption variant row",
+    "placeholders": {
+      "variant": { "type": "String" },
+      "clicks": { "type": "int" },
+      "ctrPercent": { "type": "String" }
+    }
+  },
+
+  "adminCaptionLearningTitle": "📊 Learning insights",
+  "@adminCaptionLearningTitle": { "description": "Caption learning section" },
+
+  "adminCaptionLearningSubtitle": "Factor weights used in variant scoring (updated by scheduled job from usage + clicks).",
+  "@adminCaptionLearningSubtitle": { "description": "Learning explainer" },
+
+  "adminCaptionLearningFactorEmoji": "emoji",
+  "@adminCaptionLearningFactorEmoji": { "description": "Factor label" },
+
+  "adminCaptionLearningFactorArea": "area",
+  "@adminCaptionLearningFactorArea": { "description": "Factor label" },
+
+  "adminCaptionLearningFactorUrgency": "urgency",
+  "@adminCaptionLearningFactorUrgency": { "description": "Factor label" },
+
+  "adminCaptionLearningFactorShort": "short text",
+  "@adminCaptionLearningFactorShort": { "description": "Factor label" },
+
+  "adminControlCenterTitle": "Control center",
+  "@adminControlCenterTitle": { "description": "Marketing admin hub" },
+  "adminControlCenterSystemStatus": "System status",
+  "@adminControlCenterSystemStatus": { "description": "Section" },
+  "adminControlCenterTrust": "Trust (auto marketing)",
+  "@adminControlCenterTrust": { "description": "Section" },
+  "adminControlCenterPerformance": "Performance",
+  "@adminControlCenterPerformance": { "description": "Section" },
+  "adminControlCenterControls": "Controls",
+  "@adminControlCenterControls": { "description": "Section" },
+  "adminControlCenterAutoModeOn": "Auto mode: On",
+  "adminControlCenterAutoModeOff": "Auto mode: Off",
+  "adminControlCenterShieldActive": "Shield: Active",
+  "adminControlCenterShieldInactive": "Shield: Inactive",
+  "adminControlCenterAvgTrust": "Avg trust",
+  "adminControlCenterLastDelta": "Last outcome Δ",
+  "adminControlCenterLastDeltaNone": "—",
+  "adminControlCenterCtrTrend": "CTR trend (recent campaigns)",
+  "adminControlCenterTotalConversions": "Total conversions (sample)",
+  "adminControlCenterBestCaption": "Best caption (by CTR)",
+  "adminControlCenterBestCaptionValue": "Variant {variant} · CTR {ctr}",
+  "@adminControlCenterBestCaptionValue": {
+    "placeholders": {
+      "variant": { "type": "String" },
+      "ctr": { "type": "String" }
+    }
+  },
+  "adminControlCenterNoPerformanceData": "No notification logs yet.",
+  "adminControlCenterResetLearning": "Reset learning",
+  "adminControlCenterResetLearningTitle": "Reset learning?",
+  "adminControlCenterResetLearningBody": "Trust scores, decision counters, shield state, and outcome snapshot on the server will be reset. This cannot be undone.",
+  "adminControlCenterDisableShield": "Disable shield",
+  "adminControlCenterSaved": "Saved",
+  "adminControlCenterDone": "Done",
+  "adminControlCenterFailed": "Something went wrong",
+
+  "adminSystemAlertsTitle": "System alerts",
+  "@adminSystemAlertsTitle": { "description": "Control center section" },
+  "adminSystemAlertsUnread": "{count} unread",
+  "@adminSystemAlertsUnread": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "adminSystemAlertsEmpty": "No active alerts.",
+  "@adminSystemAlertsEmpty": { "description": "Empty alerts" },
+  "adminSystemAlertsMarkRead": "Mark read"
 
 }

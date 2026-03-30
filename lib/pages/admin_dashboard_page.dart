@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import 'package:aqarai_app/app/app_theme.dart';
+import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/models/admin_analytics_models.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/admin_analytics_service.dart';
@@ -13,6 +14,12 @@ import 'package:aqarai_app/services/admin_recommendations_service.dart';
 import 'package:aqarai_app/services/auth_service.dart';
 import 'package:aqarai_app/widgets/admin_notification_performance_section.dart';
 import 'package:aqarai_app/widgets/admin_recommendation_widgets.dart';
+import 'package:aqarai_app/widgets/admin_caption_learning_section.dart';
+import 'package:aqarai_app/widgets/admin_decision_accuracy_section.dart';
+import 'package:aqarai_app/widgets/admin_caption_performance_section.dart';
+import 'package:aqarai_app/widgets/admin_instagram_post_dialog.dart';
+import 'package:aqarai_app/pages/admin_control_center_page.dart';
+import 'package:aqarai_app/widgets/hybrid_marketing_settings_dialog.dart';
 
 /// Admin decision dashboard: `analytics/global` (fast) + bounded `deals` query (detail).
 class AdminDashboardPage extends StatefulWidget {
@@ -53,6 +60,30 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       appBar: AppBar(
         title: Text(isAr ? 'لوحة القرارات' : 'Business dashboard'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: AppLocalizations.of(context)!.adminControlCenterTitle,
+            icon: const Icon(Icons.dashboard_customize_outlined),
+            onPressed: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const AdminControlCenterPage(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: AppLocalizations.of(context)!.hybridSettingsTooltip,
+            icon: const Icon(Icons.tune_outlined),
+            onPressed: () => showHybridMarketingSettingsDialog(context: context),
+          ),
+          IconButton(
+            tooltip: AppLocalizations.of(context)!.instagramPostAppBarTooltip,
+            icon: const Icon(Icons.image_outlined),
+            onPressed: () => showAdminInstagramPostGenerator(context),
+          ),
+        ],
       ),
       body: FutureBuilder<bool>(
         future: _adminGateFuture,
@@ -305,6 +336,12 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
                         },
                       ),
 
+                      const SizedBox(height: 16),
+                      AdminCaptionPerformanceSection(isAr: isAr),
+                      const SizedBox(height: 16),
+                      AdminCaptionLearningSection(isAr: isAr),
+                      const SizedBox(height: 16),
+                      AdminDecisionAccuracySection(isAr: isAr),
                       const SizedBox(height: 16),
                       Builder(
                         builder: (ctx) {

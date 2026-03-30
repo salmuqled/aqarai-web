@@ -20,6 +20,7 @@ import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 
 import 'package:aqarai_app/pages/my_ads_page.dart';
 import 'package:aqarai_app/services/seller_radar_service.dart';
+import 'package:aqarai_app/services/user_ban_service.dart';
 
 class AddPropertyPage extends StatefulWidget {
   const AddPropertyPage({super.key});
@@ -278,6 +279,13 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       final user = await _ensureSignedIn();
       if (user == null) {
         _toast("Sign-in failed");
+        return;
+      }
+
+      if (await UserBanService.isCurrentUserBanned()) {
+        if (mounted) {
+          _toast(loc.cannotPostBanned);
+        }
         return;
       }
 

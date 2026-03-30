@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Public read for Instagram-ready outputs (uploads are server-only via Admin SDK).
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /generated_posts/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Template is read by Cloud Functions service account only (bypasses rules).
+    match /templates/{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

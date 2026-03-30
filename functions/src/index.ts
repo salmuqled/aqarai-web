@@ -131,3 +131,9 @@ export {
   dispatchScheduledNotifications,
 } from "./scheduledNotifications";
 export { updateActivityStats } from "./updateActivityStats";
+export { banUser } from "./userModeration";
+export { generatePostImage } from "./generatePostImage";
+export { generateCarousel } from "./generateCarousel";
+export { updateCaptionLearning } from "./updateCaptionLearning";
+export { evaluateDecisionOutcome } from "./evaluateDecisionOutcome";
+export { evaluateSystemAlerts } from "./evaluateSystemAlerts";

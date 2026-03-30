@@ -527,4 +527,592 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get propertySentForReview => 'Property sent for review';
+
+  @override
+  String get moderationMenu => 'Moderation';
+
+  @override
+  String get banUser => 'Ban user';
+
+  @override
+  String get banUserConfirmTitle => 'Ban this user?';
+
+  @override
+  String get banUserConfirmMessage => 'They will be signed out, unable to log in, and cannot post new listings. This uses Firebase Auth disable and Firestore flags.';
+
+  @override
+  String get banUserSuccess => 'User has been banned.';
+
+  @override
+  String get cannotPostBanned => 'Your account is restricted. You cannot post listings.';
+
+  @override
+  String get accountSuspendedTitle => 'Account restricted';
+
+  @override
+  String get accountSuspendedBody => 'This account is no longer allowed to use the app. Contact support if you think this is a mistake.';
+
+  @override
+  String get loginUserDisabled => 'This account has been disabled.';
+
+  @override
+  String get contactUsTitle => 'Contact us';
+
+  @override
+  String get supportFormIntro => 'Send us feedback, report a problem, or ask about a listing. We read every message.';
+
+  @override
+  String get supportSubjectLabel => 'Subject';
+
+  @override
+  String get supportSubjectHint => 'Short summary';
+
+  @override
+  String get supportCategoryLabel => 'Category';
+
+  @override
+  String get supportMessageLabel => 'Message';
+
+  @override
+  String get supportMessageHint => 'Describe your issue or question…';
+
+  @override
+  String get supportSubmit => 'Submit';
+
+  @override
+  String get supportMessageSent => 'Message sent successfully. We will get back to you soon.';
+
+  @override
+  String get supportFillRequired => 'Please enter subject and message.';
+
+  @override
+  String get supportCategoryGeneral => 'General';
+
+  @override
+  String get supportCategoryBug => 'Bug / technical issue';
+
+  @override
+  String get supportCategoryPropertyInquiry => 'Property inquiry';
+
+  @override
+  String get supportCategoryPayment => 'Payment';
+
+  @override
+  String get supportTabEn => 'Support';
+
+  @override
+  String get supportTabAr => 'الدعم';
+
+  @override
+  String get supportTicketStatusOpen => 'Open';
+
+  @override
+  String get supportTicketStatusInProgress => 'In progress';
+
+  @override
+  String get supportTicketStatusResolved => 'Resolved';
+
+  @override
+  String get supportMarkInProgress => 'Mark in progress';
+
+  @override
+  String get supportMarkResolved => 'Mark resolved';
+
+  @override
+  String get supportDeleteTicket => 'Delete ticket';
+
+  @override
+  String get supportDeleteTicketConfirm => 'Remove this ticket from the list? This cannot be undone.';
+
+  @override
+  String get supportNoTickets => 'No support tickets yet.';
+
+  @override
+  String get supportUserLine => 'User';
+
+  @override
+  String get supportTicketUpdated => 'Ticket updated.';
+
+  @override
+  String get supportTicketDeleted => 'Ticket deleted.';
+
+  @override
+  String get instagramPostDialogTitle => 'Instagram post image';
+
+  @override
+  String get instagramPostDialogHint => 'Text is drawn on the server over your 1080×1080 template. The image is not shown in the app—open the link in a browser.';
+
+  @override
+  String get instagramPostFieldTitle => 'Title';
+
+  @override
+  String get instagramPostFieldSubtitle => 'Subtitle';
+
+  @override
+  String get instagramPostGenerate => 'Generate';
+
+  @override
+  String get instagramPostFillBoth => 'Enter title and subtitle.';
+
+  @override
+  String get instagramPostGenerating => 'Generating image…';
+
+  @override
+  String get instagramPostFailed => 'Could not generate image. Check template in Storage and try again.';
+
+  @override
+  String get instagramPostSuccessTitle => 'Image ready';
+
+  @override
+  String get instagramPostSuccessBody => '📎 Image created. Open in browser or copy the link. Nothing is shown inside the app.';
+
+  @override
+  String get instagramPostOpenBrowser => 'Open in browser';
+
+  @override
+  String get instagramPostCopyLink => 'Copy link';
+
+  @override
+  String get instagramPostLinkCopied => 'Link copied.';
+
+  @override
+  String get instagramPostOpenFailed => 'Could not open link.';
+
+  @override
+  String get instagramPostAppBarTooltip => 'Generate Instagram image';
+
+  @override
+  String get instagramPostFieldArea => 'Area (for caption)';
+
+  @override
+  String get instagramPostFieldPropertyType => 'Property type (for caption)';
+
+  @override
+  String get instagramPostFillAllFields => 'Enter title, subtitle, area, and property type.';
+
+  @override
+  String get instagramPostCreatedHeadline => '📎 Post ready';
+
+  @override
+  String get instagramPostCaptionPreviewLabel => 'Suggested caption';
+
+  @override
+  String get instagramPostOpenImage => 'Open image';
+
+  @override
+  String get instagramPostCopyCaption => 'Copy caption';
+
+  @override
+  String get instagramPostOpenInstagram => 'Open Instagram';
+
+  @override
+  String get instagramCaptionCopied => 'Caption copied';
+
+  @override
+  String get instagramOpenAppFailed => 'Could not open Instagram.';
+
+  @override
+  String get instagramPostNoImageUrl => 'No image URL — open image is disabled.';
+
+  @override
+  String get instagramDemandLevelLabel => 'Market demand (for caption)';
+
+  @override
+  String get instagramDemandHigh => 'High';
+
+  @override
+  String get instagramDemandMedium => 'Medium';
+
+  @override
+  String get instagramDemandLow => 'Low';
+
+  @override
+  String get instagramRecentDealsLabel => 'Recent closed deals (optional)';
+
+  @override
+  String get instagramRecentDealsHint => '0 if unknown';
+
+  @override
+  String get instagramAreaAnalyticsHeadline => '💡 Market insight';
+
+  @override
+  String instagramAreaAnalyticsDemand(String level) {
+    return '📊 Demand: $level';
+  }
+
+  @override
+  String instagramAreaAnalyticsDeals(int count) {
+    return '📈 Deals (7 days): $count';
+  }
+
+  @override
+  String get instagramAreaAnalyticsLoading => 'Loading market data…';
+
+  @override
+  String get instagramAreaAnalyticsError => 'Could not load analytics. Defaults are used — you can override below.';
+
+  @override
+  String get instagramAreaAnalyticsRefresh => 'Refresh insight';
+
+  @override
+  String get instagramAreaAnalyticsEnterArea => 'Enter an area name to load 7-day deal stats.';
+
+  @override
+  String get instagramDemandOverrideHint => 'Auto-filled from data — adjust if needed';
+
+  @override
+  String get instagramPostGenerateCarousel => 'Carousel (4 images)';
+
+  @override
+  String get instagramPostGeneratingCarousel => 'Generating carousel…';
+
+  @override
+  String get instagramPostCarouselFailed => 'Could not generate carousel. Check template in Storage and try again.';
+
+  @override
+  String instagramPostCarouselHeadline(int count) {
+    return '📎 Post ready ($count images)';
+  }
+
+  @override
+  String get instagramPostOpenImages => 'Open images';
+
+  @override
+  String instagramCarouselSlideLabel(int slideNumber) {
+    return 'Slide $slideNumber';
+  }
+
+  @override
+  String get instagramPostCarouselFillFields => 'Enter title, area, and property type for the carousel.';
+
+  @override
+  String get instagramCaptionVariantBestTitle => '💡 Best suggested caption';
+
+  @override
+  String get instagramCaptionVariantRowA => 'Variant A · Urgency';
+
+  @override
+  String get instagramCaptionVariantRowB => 'Variant B · Value';
+
+  @override
+  String get instagramCaptionVariantRowC => 'Variant C · Steady market';
+
+  @override
+  String get instagramCaptionVariantUseBest => 'Use best';
+
+  @override
+  String get instagramCaptionVariantManualPick => 'Pick manually';
+
+  @override
+  String get instagramCaptionVariantManualHint => 'Tap a card below, then Copy caption.';
+
+  @override
+  String instagramCaptionVariantScore(String score) {
+    return 'Score: $score';
+  }
+
+  @override
+  String get instagramPostPropertyIdOptional => 'Property ID (tracking link, optional)';
+
+  @override
+  String get instagramPostPropertyIdHint => 'Firestore document id — adds ?id=…&cid=A|B|C';
+
+  @override
+  String get autoDecisionTitle => '💡 Smart recommendation';
+
+  @override
+  String autoDecisionBestTime(String time) {
+    return '🕒 Best time: $time';
+  }
+
+  @override
+  String autoDecisionAudience(String segment) {
+    return '🎯 Audience: $segment';
+  }
+
+  @override
+  String autoDecisionCaptionVariant(String id) {
+    return '🔥 Caption: Variant $id';
+  }
+
+  @override
+  String autoDecisionExpectedCtr(int percent) {
+    return '📊 Expected CTR: $percent%';
+  }
+
+  @override
+  String autoDecisionConfidence(int percent) {
+    return '📈 Confidence: $percent%';
+  }
+
+  @override
+  String get autoDecisionReasonLabel => 'Reason:';
+
+  @override
+  String get autoDecisionAudienceActive => 'Active users';
+
+  @override
+  String get autoDecisionAudienceWarm => 'Warm users';
+
+  @override
+  String get autoDecisionAudienceCold => 'Cold users';
+
+  @override
+  String get autoDecisionAudienceAll => 'All users';
+
+  @override
+  String get autoDecisionApproveSchedule => 'Approve & schedule';
+
+  @override
+  String get autoDecisionSendNow => 'Send now';
+
+  @override
+  String get autoDecisionEdit => 'Edit';
+
+  @override
+  String get hybridAutoTitle => '🔥 Auto-run suggested';
+
+  @override
+  String get hybridAutoSubtitle => 'This decision has high confidence.';
+
+  @override
+  String get hybridReviewTitle => '💡 Review required';
+
+  @override
+  String get hybridManualTitle => '⚠️ Needs your input';
+
+  @override
+  String get hybridManualSubtitle => 'Confidence is below the review threshold — edit before sending.';
+
+  @override
+  String get hybridRunNow => 'Run now';
+
+  @override
+  String hybridAutoCountdown(int seconds) {
+    return 'Auto-send in ${seconds}s (cancel to stop)';
+  }
+
+  @override
+  String get hybridAutoShieldPausedTitle => '🛑 Auto mode paused';
+
+  @override
+  String get hybridAutoShieldPausedBody => 'Automatic execution has been paused due to performance.';
+
+  @override
+  String get hybridEditOnly => 'Edit only';
+
+  @override
+  String get hybridSettingsTitle => 'Hybrid marketing';
+
+  @override
+  String get hybridSettingsTooltip => 'Hybrid marketing settings';
+
+  @override
+  String get hybridSettingsAutoExec => 'Enable automatic send (high confidence only)';
+
+  @override
+  String get hybridSettingsAutoThreshold => 'Auto threshold (high confidence)';
+
+  @override
+  String get hybridSettingsReviewThreshold => 'Review threshold (medium)';
+
+  @override
+  String get hybridSettingsSave => 'Save';
+
+  @override
+  String get adminDecisionAccuracyTitle => '📊 Decision accuracy';
+
+  @override
+  String get adminDecisionAccuracySubtitle => 'Accepted vs modified smart recommendations (Instagram flow).';
+
+  @override
+  String adminDecisionAcceptedPct(String pct) {
+    return '👍 Accepted: $pct%';
+  }
+
+  @override
+  String adminDecisionModifiedPct(String pct) {
+    return '✏️ Modified: $pct%';
+  }
+
+  @override
+  String adminDecisionMostOverridden(String part) {
+    return 'Most edited: $part';
+  }
+
+  @override
+  String get adminDecisionPartTime => 'time';
+
+  @override
+  String get adminDecisionPartCaption => 'caption';
+
+  @override
+  String get adminDecisionPartAudience => 'audience';
+
+  @override
+  String adminDecisionPatternTrust(String pct) {
+    return 'Pattern trust: $pct%';
+  }
+
+  @override
+  String get adminDecisionNoLogs => 'No decisions logged yet.';
+
+  @override
+  String get adminDecisionSystemTrustTitle => '📊 System trust';
+
+  @override
+  String adminDecisionTrustCaptionLine(String pct) {
+    return '🔥 Caption: $pct%';
+  }
+
+  @override
+  String adminDecisionTrustTimeLine(String pct) {
+    return '🕒 Time: $pct%';
+  }
+
+  @override
+  String adminDecisionTrustAudienceLine(String pct) {
+    return '🎯 Audience: $pct%';
+  }
+
+  @override
+  String adminDecisionWeakestLine(String part) {
+    return 'Needs attention: $part';
+  }
+
+  @override
+  String get adminDecisionOutcomeTitle => '📊 Outcome learning';
+
+  @override
+  String get adminDecisionOutcomeSubtitle => 'After send: CTR check at ~6h, full outcome at ~24h (vs expected CTR on the decision log).';
+
+  @override
+  String adminDecisionOutcomeBeat(String pct) {
+    return '🔥 Beat expectation: $pct%';
+  }
+
+  @override
+  String adminDecisionOutcomeMiss(String pct) {
+    return '📉 Below expectation: $pct%';
+  }
+
+  @override
+  String get adminDecisionOutcomeWaiting => 'No completed outcome evaluation yet (needs linked push + time window).';
+
+  @override
+  String get adminCaptionPerformanceTitle => '📊 Caption performance';
+
+  @override
+  String get adminCaptionPerformanceSubtitle => 'Sample: last usage logs + click logs (learning signal for variant scores).';
+
+  @override
+  String adminCaptionPerformanceRow(String variant, int clicks, String ctrPercent) {
+    return 'Variant $variant → $clicks clicks · CTR $ctrPercent%';
+  }
+
+  @override
+  String get adminCaptionLearningTitle => '📊 Learning insights';
+
+  @override
+  String get adminCaptionLearningSubtitle => 'Factor weights used in variant scoring (updated by scheduled job from usage + clicks).';
+
+  @override
+  String get adminCaptionLearningFactorEmoji => 'emoji';
+
+  @override
+  String get adminCaptionLearningFactorArea => 'area';
+
+  @override
+  String get adminCaptionLearningFactorUrgency => 'urgency';
+
+  @override
+  String get adminCaptionLearningFactorShort => 'short text';
+
+  @override
+  String get adminControlCenterTitle => 'Control center';
+
+  @override
+  String get adminControlCenterSystemStatus => 'System status';
+
+  @override
+  String get adminControlCenterTrust => 'Trust (auto marketing)';
+
+  @override
+  String get adminControlCenterPerformance => 'Performance';
+
+  @override
+  String get adminControlCenterControls => 'Controls';
+
+  @override
+  String get adminControlCenterAutoModeOn => 'Auto mode: On';
+
+  @override
+  String get adminControlCenterAutoModeOff => 'Auto mode: Off';
+
+  @override
+  String get adminControlCenterShieldActive => 'Shield: Active';
+
+  @override
+  String get adminControlCenterShieldInactive => 'Shield: Inactive';
+
+  @override
+  String get adminControlCenterAvgTrust => 'Avg trust';
+
+  @override
+  String get adminControlCenterLastDelta => 'Last outcome Δ';
+
+  @override
+  String get adminControlCenterLastDeltaNone => '—';
+
+  @override
+  String get adminControlCenterCtrTrend => 'CTR trend (recent campaigns)';
+
+  @override
+  String get adminControlCenterTotalConversions => 'Total conversions (sample)';
+
+  @override
+  String get adminControlCenterBestCaption => 'Best caption (by CTR)';
+
+  @override
+  String adminControlCenterBestCaptionValue(String variant, String ctr) {
+    return 'Variant $variant · CTR $ctr';
+  }
+
+  @override
+  String get adminControlCenterNoPerformanceData => 'No notification logs yet.';
+
+  @override
+  String get adminControlCenterResetLearning => 'Reset learning';
+
+  @override
+  String get adminControlCenterResetLearningTitle => 'Reset learning?';
+
+  @override
+  String get adminControlCenterResetLearningBody => 'Trust scores, decision counters, shield state, and outcome snapshot on the server will be reset. This cannot be undone.';
+
+  @override
+  String get adminControlCenterDisableShield => 'Disable shield';
+
+  @override
+  String get adminControlCenterSaved => 'Saved';
+
+  @override
+  String get adminControlCenterDone => 'Done';
+
+  @override
+  String get adminControlCenterFailed => 'Something went wrong';
+
+  @override
+  String get adminSystemAlertsTitle => 'System alerts';
+
+  @override
+  String adminSystemAlertsUnread(int count) {
+    return '$count unread';
+  }
+
+  @override
+  String get adminSystemAlertsEmpty => 'No active alerts.';
+
+  @override
+  String get adminSystemAlertsMarkRead => 'Mark read';
 }
