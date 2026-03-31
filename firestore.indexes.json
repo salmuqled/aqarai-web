@@ -508,17 +508,75 @@
       ]
     },
     {
-      "collectionGroup": "user_activity",
+      "collectionGroup": "auctions",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "lastSeenAt", "order": "ASCENDING"}
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "startDate", "order": "ASCENDING"}
       ]
     },
     {
-      "collectionGroup": "users",
+      "collectionGroup": "public_lots",
       "queryScope": "COLLECTION",
       "fields": [
-        {"fieldPath": "fcmToken", "order": "ASCENDING"}
+        {"fieldPath": "auctionId", "order": "ASCENDING"},
+        {"fieldPath": "startTime", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "lots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "auctionId", "order": "ASCENDING"},
+        {"fieldPath": "startTime", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "lots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "endTime", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "bids",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "lotId", "order": "ASCENDING"},
+        {"fieldPath": "timestamp", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "bids",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "auctionId", "order": "ASCENDING"},
+        {"fieldPath": "timestamp", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "auction_participants",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "auctionId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "bids",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "lotId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "auction_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "auctionId", "order": "ASCENDING"},
+        {"fieldPath": "timestamp", "order": "DESCENDING"}
       ]
     }
   ],

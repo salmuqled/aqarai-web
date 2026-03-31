@@ -7,11 +7,17 @@ class SmartAssistantCta extends StatefulWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.leadingIcon = Icons.auto_awesome_rounded,
+    this.trailingIcon = Icons.chat_bubble_outline_rounded,
+    this.accentColor,
   });
 
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final IconData leadingIcon;
+  final IconData trailingIcon;
+  final Color? accentColor;
 
   static const double _radius = 18;
 
@@ -28,6 +34,7 @@ class _SmartAssistantCtaState extends State<SmartAssistantCta> {
 
   @override
   Widget build(BuildContext context) {
+    final accent = widget.accentColor ?? _inkBlue;
     final semanticsLabel = '${widget.title}. ${widget.subtitle}';
 
     return Semantics(
@@ -68,7 +75,7 @@ class _SmartAssistantCtaState extends State<SmartAssistantCta> {
                     offset: const Offset(0, 6),
                   ),
                   BoxShadow(
-                    color: _inkBlue.withValues(alpha: 0.05),
+                    color: accent.withValues(alpha: 0.08),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -83,7 +90,7 @@ class _SmartAssistantCtaState extends State<SmartAssistantCta> {
                       color: Colors.white.withValues(alpha: 0.72),
                       boxShadow: [
                         BoxShadow(
-                          color: _inkBlue.withValues(alpha: 0.08),
+                          color: accent.withValues(alpha: 0.12),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -92,9 +99,9 @@ class _SmartAssistantCtaState extends State<SmartAssistantCta> {
                     child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Icon(
-                        Icons.auto_awesome_rounded,
+                        widget.leadingIcon,
                         size: 20,
-                        color: _inkBlue.withValues(alpha: 0.9),
+                        color: accent.withValues(alpha: 0.95),
                       ),
                     ),
                   ),
@@ -135,7 +142,7 @@ class _SmartAssistantCtaState extends State<SmartAssistantCta> {
                   ),
                   const SizedBox(width: 6),
                   Icon(
-                    Icons.chat_bubble_outline_rounded,
+                    widget.trailingIcon,
                     size: 20,
                     color: _textMuted.withValues(alpha: 0.55),
                   ),

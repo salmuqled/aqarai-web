@@ -16,6 +16,7 @@ import 'package:aqarai_app/pages/wanted_page.dart';
 import 'package:aqarai_app/pages/admin_requests_page.dart';
 import 'package:aqarai_app/pages/favorites_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
+import 'package:aqarai_app/pages/auctions_page.dart';
 import 'package:aqarai_app/pages/legal_pages.dart';
 import 'package:aqarai_app/pages/contact_us_page.dart';
 
@@ -171,6 +172,17 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.gavel_outlined),
+                title: Text(loc.auctionsPageTitle),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AuctionsPage()),
+                  );
+                },
+              ),
               const Divider(height: 1),
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
@@ -293,6 +305,24 @@ class _HomePageState extends State<HomePage> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const AssistantPage(),
+                            ),
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      SmartAssistantCta(
+                        title: loc.auctionsPageTitle,
+                        subtitle: loc.auctionsHomeSubtitle,
+                        leadingIcon: Icons.gavel_rounded,
+                        trailingIcon: Icons.chevron_right_rounded,
+                        accentColor: const Color(0xFFB45309),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AuctionsPage(),
                             ),
                           );
                         },

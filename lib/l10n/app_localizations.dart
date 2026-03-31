@@ -2206,6 +2206,342 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mark read'**
   String get adminSystemAlertsMarkRead;
+
+  /// App bar: auctions browse
+  ///
+  /// In en, this message translates to:
+  /// **'Auctions'**
+  String get auctionsPageTitle;
+
+  /// Home CTA under title
+  ///
+  /// In en, this message translates to:
+  /// **'Browse lots and prices before the event'**
+  String get auctionsHomeSubtitle;
+
+  /// No description provided for @auctionsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming auction'**
+  String get auctionsEmptyTitle;
+
+  /// No description provided for @auctionsEmptySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check back later for the next catalog.'**
+  String get auctionsEmptySubtitle;
+
+  /// No description provided for @addAuctionPropertyCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Have a standout property?'**
+  String get addAuctionPropertyCardTitle;
+
+  /// No description provided for @addAuctionPropertyCardSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'List it in the auction and let buyers compete for it 🔥'**
+  String get addAuctionPropertyCardSubtitle;
+
+  /// No description provided for @addAuctionPropertyCardCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Add now'**
+  String get addAuctionPropertyCardCta;
+
+  /// No description provided for @auctionStatusSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming soon'**
+  String get auctionStatusSoon;
+
+  /// No description provided for @auctionStatusLiveNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Live now'**
+  String get auctionStatusLiveNow;
+
+  /// No description provided for @auctionsViewProperty.
+  ///
+  /// In en, this message translates to:
+  /// **'View property'**
+  String get auctionsViewProperty;
+
+  /// No description provided for @auctionsStartingPriceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting price'**
+  String get auctionsStartingPriceLabel;
+
+  /// No description provided for @auctionsLotsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No lots in this auction yet.'**
+  String get auctionsLotsEmpty;
+
+  /// No description provided for @auctionsLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load auctions. Pull to retry.'**
+  String get auctionsLoadError;
+
+  /// No description provided for @auctionsStartsAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts {date}'**
+  String auctionsStartsAt(String date);
+
+  /// Opens informational terms on AuctionsPage
+  ///
+  /// In en, this message translates to:
+  /// **'View auction terms'**
+  String get auctionsShowTermsButton;
+
+  /// No description provided for @auctionsTermsDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auction information'**
+  String get auctionsTermsDialogTitle;
+
+  /// No description provided for @auctionsTermsParticipationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Participation terms'**
+  String get auctionsTermsParticipationTitle;
+
+  /// No description provided for @auctionsTermsParticipationBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Participation is subject to platform rules and identity verification where required. Bidding eligibility is determined per lot after you complete the steps for that specific property.'**
+  String get auctionsTermsParticipationBody;
+
+  /// No description provided for @auctionsTermsRegistrationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How to register'**
+  String get auctionsTermsRegistrationTitle;
+
+  /// No description provided for @auctionsTermsRegistrationBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Registration is done from each property (lot) page, not from this overview. Open the property and follow the instructions shown there.'**
+  String get auctionsTermsRegistrationBody;
+
+  /// No description provided for @auctionsTermsDepositTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit system'**
+  String get auctionsTermsDepositTitle;
+
+  /// No description provided for @auctionsTermsDepositBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit or earnest-money rules, when they apply, are defined per lot and are shown on the property page before you take part.'**
+  String get auctionsTermsDepositBody;
+
+  /// No description provided for @auctionsTermsGeneralTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'General notes'**
+  String get auctionsTermsGeneralTitle;
+
+  /// No description provided for @auctionsTermsGeneralBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This screen is for browsing only. Prices and timings may change; always rely on the official lot details on the property page.'**
+  String get auctionsTermsGeneralBody;
+
+  /// No description provided for @auctionsMinIncrementLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Min. increment'**
+  String get auctionsMinIncrementLabel;
+
+  /// No description provided for @auctionRegLoginToRegister.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to register'**
+  String get auctionRegLoginToRegister;
+
+  /// No description provided for @auctionRegRegisterButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Register for the auction'**
+  String get auctionRegRegisterButton;
+
+  /// No description provided for @auctionRegPendingReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request is under review'**
+  String get auctionRegPendingReview;
+
+  /// No description provided for @auctionRegRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request was declined'**
+  String get auctionRegRejected;
+
+  /// No description provided for @auctionRegBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Your access to this auction is blocked'**
+  String get auctionRegBlocked;
+
+  /// No description provided for @auctionRegPayDeposit.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay the deposit'**
+  String get auctionRegPayDeposit;
+
+  /// No description provided for @auctionRegFullyRegistered.
+  ///
+  /// In en, this message translates to:
+  /// **'You are registered for this auction'**
+  String get auctionRegFullyRegistered;
+
+  /// No description provided for @auctionRegLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking registration…'**
+  String get auctionRegLoading;
+
+  /// No description provided for @auctionDepositTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auction deposit'**
+  String get auctionDepositTitle;
+
+  /// No description provided for @auctionDepositAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due'**
+  String get auctionDepositAmountLabel;
+
+  /// No description provided for @auctionDepositContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue to payment'**
+  String get auctionDepositContinue;
+
+  /// No description provided for @auctionDepositListingPriceMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing price is required to calculate a percentage deposit.'**
+  String get auctionDepositListingPriceMissing;
+
+  /// No description provided for @auctionDepositPendingNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your deposit is pending confirmation. You will be notified when it is approved.'**
+  String get auctionDepositPendingNote;
+
+  /// No description provided for @auctionDepositRedirecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Redirecting you to payment…'**
+  String get auctionDepositRedirecting;
+
+  /// No description provided for @auctionDepositGatewayPlaceholderHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment gateway integration will open here.'**
+  String get auctionDepositGatewayPlaceholderHint;
+
+  /// No description provided for @auctionDepositVerifyingPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying your payment…'**
+  String get auctionDepositVerifyingPayment;
+
+  /// No description provided for @auctionDepositReceivedSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Deposit received successfully'**
+  String get auctionDepositReceivedSuccess;
+
+  /// No description provided for @auctionDepositPaymentDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get auctionDepositPaymentDone;
+
+  /// No description provided for @auctionBidNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not allowed to bid'**
+  String get auctionBidNotAllowed;
+
+  /// No description provided for @auctionBidParticipationRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Your participation was declined'**
+  String get auctionBidParticipationRejected;
+
+  /// No description provided for @auctionBidCompleteDepositFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Please complete paying the deposit first'**
+  String get auctionBidCompleteDepositFirst;
+
+  /// No description provided for @auctionBidCheckingEligibility.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking bid eligibility…'**
+  String get auctionBidCheckingEligibility;
+
+  /// No description provided for @auctionBidLessThanOneSecondLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Less than 1 second left — bidding locked'**
+  String get auctionBidLessThanOneSecondLeft;
+
+  /// No description provided for @auctionBidSignInFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in first'**
+  String get auctionBidSignInFirst;
+
+  /// No description provided for @auctionBidRegisterFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Register for the auction first'**
+  String get auctionBidRegisterFirst;
+
+  /// No description provided for @auctionBidCompleteDepositShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete your deposit payment'**
+  String get auctionBidCompleteDepositShort;
+
+  /// No description provided for @auctionBidInAuctionNow.
+  ///
+  /// In en, this message translates to:
+  /// **'You are in the live auction now'**
+  String get auctionBidInAuctionNow;
+
+  /// No description provided for @liveAuctionOutbidBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'You were outbid'**
+  String get liveAuctionOutbidBanner;
+
+  /// No description provided for @liveAuctionBadgeAuction.
+  ///
+  /// In en, this message translates to:
+  /// **'Auction'**
+  String get liveAuctionBadgeAuction;
+
+  /// No description provided for @liveAuctionBadgeLiveNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Live now'**
+  String get liveAuctionBadgeLiveNow;
+
+  /// No description provided for @auctionBidNowButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Bid now'**
+  String get auctionBidNowButton;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

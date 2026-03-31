@@ -1115,4 +1115,174 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get adminSystemAlertsMarkRead => 'تعليم كمقروء';
+
+  @override
+  String get auctionsPageTitle => 'المزادات';
+
+  @override
+  String get auctionsHomeSubtitle => 'تصفّح القطع والأسعار قبل المزاد';
+
+  @override
+  String get auctionsEmptyTitle => 'لا يوجد مزاد قادم';
+
+  @override
+  String get auctionsEmptySubtitle => 'عد لاحقاً لعرض الكتالوج القادم.';
+
+  @override
+  String get addAuctionPropertyCardTitle => 'عندك عقار مميز؟';
+
+  @override
+  String get addAuctionPropertyCardSubtitle => 'ادخله في المزاد وخل المشترين يتنافسون عليه 🔥';
+
+  @override
+  String get addAuctionPropertyCardCta => 'أضف الآن';
+
+  @override
+  String get auctionStatusSoon => 'قريبًا';
+
+  @override
+  String get auctionStatusLiveNow => 'جاري الآن';
+
+  @override
+  String get auctionsViewProperty => 'عرض العقار';
+
+  @override
+  String get auctionsStartingPriceLabel => 'السعر الافتتاحي';
+
+  @override
+  String get auctionsLotsEmpty => 'لا توجد قطع في هذا المزاد بعد.';
+
+  @override
+  String get auctionsLoadError => 'تعذّر تحميل المزادات. اسحب للتحديث.';
+
+  @override
+  String auctionsStartsAt(String date) {
+    return 'يبدأ $date';
+  }
+
+  @override
+  String get auctionsShowTermsButton => 'عرض شروط المزاد';
+
+  @override
+  String get auctionsTermsDialogTitle => 'شروط ومعلومات المزاد';
+
+  @override
+  String get auctionsTermsParticipationTitle => 'شروط المشاركة';
+
+  @override
+  String get auctionsTermsParticipationBody => 'المشاركة في المزاد تخضع لشروط المنصّة والتعريف بالهوية عند الطلب. أهلية المزايدة تُحدَّد لكل قطعة على حدة بعد استيفاء المتطلبات الخاصة بذلك العقار.';
+
+  @override
+  String get auctionsTermsRegistrationTitle => 'طريقة التسجيل';
+
+  @override
+  String get auctionsTermsRegistrationBody => 'التسجيل يتم من صفحة كل عقار (قطعة) على حدة وليس من هذه الصفحة. افتح العقار واتبع التعليمات المعروضة هناك لإكمال التسجيل.';
+
+  @override
+  String get auctionsTermsDepositTitle => 'نظام التأمين';
+
+  @override
+  String get auctionsTermsDepositBody => 'متطلبات التأمين أو العربون (إن وُجدت) تُعرَّف لكل قطعة ويظهر ذلك في صفحة العقار قبل المشاركة.';
+
+  @override
+  String get auctionsTermsGeneralTitle => 'ملاحظات عامة';
+
+  @override
+  String get auctionsTermsGeneralBody => 'هذه الصفحة للاطلاع والتصفّح فقط. قد تتغيّر الأسعار والمواعيد؛ يُرجى الرجوع إلى تفاصيل القطعة الرسمية في صفحة العقار.';
+
+  @override
+  String get auctionsMinIncrementLabel => 'الحد الأدنى للزيادة';
+
+  @override
+  String get auctionRegLoginToRegister => 'سجّل الدخول للتسجيل';
+
+  @override
+  String get auctionRegRegisterButton => 'التسجيل في المزاد';
+
+  @override
+  String get auctionRegPendingReview => 'طلبك قيد المراجعة';
+
+  @override
+  String get auctionRegRejected => 'تم رفض الطلب';
+
+  @override
+  String get auctionRegBlocked => 'تم حظر مشاركتك في هذا المزاد';
+
+  @override
+  String get auctionRegPayDeposit => 'ادفع التأمين';
+
+  @override
+  String get auctionRegFullyRegistered => 'أنت مسجل في المزاد';
+
+  @override
+  String get auctionRegLoading => 'جاري التحقق من التسجيل…';
+
+  @override
+  String get auctionDepositTitle => 'تأمين المزاد';
+
+  @override
+  String get auctionDepositAmountLabel => 'المبلغ المستحق';
+
+  @override
+  String get auctionDepositContinue => 'المتابعة للدفع';
+
+  @override
+  String get auctionDepositListingPriceMissing => 'سعر الإعلان مطلوب لحساب التأمين النسبي.';
+
+  @override
+  String get auctionDepositPendingNote => 'التأمين قيد التأكيد. سنُعلمك عند الاعتماد.';
+
+  @override
+  String get auctionDepositRedirecting => 'جارٍ تحويلك إلى الدفع';
+
+  @override
+  String get auctionDepositGatewayPlaceholderHint => 'سيتم فتح بوابة الدفع هنا لاحقاً.';
+
+  @override
+  String get auctionDepositVerifyingPayment => 'جاري التحقق من عملية الدفع…';
+
+  @override
+  String get auctionDepositReceivedSuccess => 'تم استلام التأمين بنجاح';
+
+  @override
+  String get auctionDepositPaymentDone => 'تم';
+
+  @override
+  String get auctionBidNotAllowed => 'غير مسموح لك بالمزايدة';
+
+  @override
+  String get auctionBidParticipationRejected => 'تم رفض مشاركتك';
+
+  @override
+  String get auctionBidCompleteDepositFirst => 'يرجى إكمال دفع التأمين أولاً';
+
+  @override
+  String get auctionBidCheckingEligibility => 'جاري التحقق من أهلية المزايدة…';
+
+  @override
+  String get auctionBidLessThanOneSecondLeft => 'الوقت المتبقي أقل من ثانية — توقفت المزايدة';
+
+  @override
+  String get auctionBidSignInFirst => 'سجل الدخول أولاً';
+
+  @override
+  String get auctionBidRegisterFirst => 'سجل في المزاد أولاً';
+
+  @override
+  String get auctionBidCompleteDepositShort => 'أكمل دفع التأمين';
+
+  @override
+  String get auctionBidInAuctionNow => 'أنت داخل المزاد الآن';
+
+  @override
+  String get liveAuctionOutbidBanner => 'تم تجاوز مزايدتك';
+
+  @override
+  String get liveAuctionBadgeAuction => 'مزاد';
+
+  @override
+  String get liveAuctionBadgeLiveNow => 'مباشر الآن';
+
+  @override
+  String get auctionBidNowButton => 'زايد الآن';
 }

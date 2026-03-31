@@ -1115,4 +1115,174 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminSystemAlertsMarkRead => 'Mark read';
+
+  @override
+  String get auctionsPageTitle => 'Auctions';
+
+  @override
+  String get auctionsHomeSubtitle => 'Browse lots and prices before the event';
+
+  @override
+  String get auctionsEmptyTitle => 'No upcoming auction';
+
+  @override
+  String get auctionsEmptySubtitle => 'Check back later for the next catalog.';
+
+  @override
+  String get addAuctionPropertyCardTitle => 'Have a standout property?';
+
+  @override
+  String get addAuctionPropertyCardSubtitle => 'List it in the auction and let buyers compete for it 🔥';
+
+  @override
+  String get addAuctionPropertyCardCta => 'Add now';
+
+  @override
+  String get auctionStatusSoon => 'Coming soon';
+
+  @override
+  String get auctionStatusLiveNow => 'Live now';
+
+  @override
+  String get auctionsViewProperty => 'View property';
+
+  @override
+  String get auctionsStartingPriceLabel => 'Starting price';
+
+  @override
+  String get auctionsLotsEmpty => 'No lots in this auction yet.';
+
+  @override
+  String get auctionsLoadError => 'Could not load auctions. Pull to retry.';
+
+  @override
+  String auctionsStartsAt(String date) {
+    return 'Starts $date';
+  }
+
+  @override
+  String get auctionsShowTermsButton => 'View auction terms';
+
+  @override
+  String get auctionsTermsDialogTitle => 'Auction information';
+
+  @override
+  String get auctionsTermsParticipationTitle => 'Participation terms';
+
+  @override
+  String get auctionsTermsParticipationBody => 'Participation is subject to platform rules and identity verification where required. Bidding eligibility is determined per lot after you complete the steps for that specific property.';
+
+  @override
+  String get auctionsTermsRegistrationTitle => 'How to register';
+
+  @override
+  String get auctionsTermsRegistrationBody => 'Registration is done from each property (lot) page, not from this overview. Open the property and follow the instructions shown there.';
+
+  @override
+  String get auctionsTermsDepositTitle => 'Deposit system';
+
+  @override
+  String get auctionsTermsDepositBody => 'Deposit or earnest-money rules, when they apply, are defined per lot and are shown on the property page before you take part.';
+
+  @override
+  String get auctionsTermsGeneralTitle => 'General notes';
+
+  @override
+  String get auctionsTermsGeneralBody => 'This screen is for browsing only. Prices and timings may change; always rely on the official lot details on the property page.';
+
+  @override
+  String get auctionsMinIncrementLabel => 'Min. increment';
+
+  @override
+  String get auctionRegLoginToRegister => 'Sign in to register';
+
+  @override
+  String get auctionRegRegisterButton => 'Register for the auction';
+
+  @override
+  String get auctionRegPendingReview => 'Your request is under review';
+
+  @override
+  String get auctionRegRejected => 'Your request was declined';
+
+  @override
+  String get auctionRegBlocked => 'Your access to this auction is blocked';
+
+  @override
+  String get auctionRegPayDeposit => 'Pay the deposit';
+
+  @override
+  String get auctionRegFullyRegistered => 'You are registered for this auction';
+
+  @override
+  String get auctionRegLoading => 'Checking registration…';
+
+  @override
+  String get auctionDepositTitle => 'Auction deposit';
+
+  @override
+  String get auctionDepositAmountLabel => 'Amount due';
+
+  @override
+  String get auctionDepositContinue => 'Continue to payment';
+
+  @override
+  String get auctionDepositListingPriceMissing => 'Listing price is required to calculate a percentage deposit.';
+
+  @override
+  String get auctionDepositPendingNote => 'Your deposit is pending confirmation. You will be notified when it is approved.';
+
+  @override
+  String get auctionDepositRedirecting => 'Redirecting you to payment…';
+
+  @override
+  String get auctionDepositGatewayPlaceholderHint => 'Payment gateway integration will open here.';
+
+  @override
+  String get auctionDepositVerifyingPayment => 'Verifying your payment…';
+
+  @override
+  String get auctionDepositReceivedSuccess => 'Deposit received successfully';
+
+  @override
+  String get auctionDepositPaymentDone => 'Done';
+
+  @override
+  String get auctionBidNotAllowed => 'You are not allowed to bid';
+
+  @override
+  String get auctionBidParticipationRejected => 'Your participation was declined';
+
+  @override
+  String get auctionBidCompleteDepositFirst => 'Please complete paying the deposit first';
+
+  @override
+  String get auctionBidCheckingEligibility => 'Checking bid eligibility…';
+
+  @override
+  String get auctionBidLessThanOneSecondLeft => 'Less than 1 second left — bidding locked';
+
+  @override
+  String get auctionBidSignInFirst => 'Sign in first';
+
+  @override
+  String get auctionBidRegisterFirst => 'Register for the auction first';
+
+  @override
+  String get auctionBidCompleteDepositShort => 'Complete your deposit payment';
+
+  @override
+  String get auctionBidInAuctionNow => 'You are in the live auction now';
+
+  @override
+  String get liveAuctionOutbidBanner => 'You were outbid';
+
+  @override
+  String get liveAuctionBadgeAuction => 'Auction';
+
+  @override
+  String get liveAuctionBadgeLiveNow => 'Live now';
+
+  @override
+  String get auctionBidNowButton => 'Bid now';
 }

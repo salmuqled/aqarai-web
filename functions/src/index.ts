@@ -107,6 +107,14 @@ export const setAdminClaim = onCall(
     }
 
     await admin.auth().setCustomUserClaims(targetUid, { admin: true });
+    await admin
+      .firestore()
+      .collection("admins")
+      .doc(targetUid)
+      .set(
+        { active: true, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
 
     return { ok: true, message: "Admin claim set for " + targetUid };
   }
@@ -137,3 +145,9 @@ export { generateCarousel } from "./generateCarousel";
 export { updateCaptionLearning } from "./updateCaptionLearning";
 export { evaluateDecisionOutcome } from "./evaluateDecisionOutcome";
 export { evaluateSystemAlerts } from "./evaluateSystemAlerts";
+export { placeAuctionBid } from "./placeAuctionBid";
+export { finalizeLot } from "./finalizeLot";
+export { finalizeExpiredAuctionLots } from "./auctionFinalizeLotsSchedule";
+export { getServerTime } from "./getServerTime";
+export { syncPublicLot, backfillPublicLots } from "./syncPublicLot";
+export { createAuctionDeposit } from "./createAuctionDeposit";

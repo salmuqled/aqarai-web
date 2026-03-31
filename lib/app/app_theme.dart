@@ -5,6 +5,16 @@ abstract final class AppColors {
   static const Color navy = Color(0xFF101046);
 }
 
+/// Auction / live bidding accent palette (primary navy stays [AppColors.navy]).
+abstract final class AuctionUiColors {
+  static const Color amber = Color(0xFFF0B429);
+  static const Color amberDeep = Color(0xFFD97706);
+  static const Color amberDark = Color(0xFFB45309);
+  static const Color urgencyRed = Color(0xFFC62828);
+  static const Color winningGreen = Color(0xFF15803D);
+  static const Color winningGreenLight = Color(0xFF22C55E);
+}
+
 /// ثيم فاتح بألوان أساسية كحلية بدل البنفسجي الافتراضي في Material 3.
 ThemeData aqarAiLightTheme() {
   const navy = AppColors.navy;

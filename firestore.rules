@@ -457,6 +457,70 @@ service cloud.firestore {
     }
 
     /* ============================================================
+        Official auctions (Kuwait — MoC; admin + controlled participant writes)
+        Catalog: non-draft auctions + public_lots readable by anyone.
+        Full lots: admin read only (mirrored to public_lots by Cloud Function).
+    ============================================================ */
+
+    match /auctions/{auctionId} {
+      allow read: if isAdmin() || resource.data.status != 'draft';
+      allow create, update, delete: if isAdmin();
+    }
+
+    /* Authoritative lot data (admin read/write). Clients browse public_lots. */
+    match /lots/{lotId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    /* Safe catalog mirror of lots — synced by Cloud Function only. */
+    match /public_lots/{lotId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /auction_participants/{docId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.auctionId is string
+        && request.resource.data.status == 'pending';
+      allow update, delete: if isAdmin();
+    }
+
+    match /lot_permissions/{docId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /deposits/{docId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      // One document per user per lot: ID must be `{uid}_{lotId}` (same as Cloud Function).
+      allow create: if isSignedIn()
+        && docId == request.auth.uid + '_' + request.resource.data.lotId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.paymentStatus == 'pending'
+        && request.resource.data.auctionId is string
+        && request.resource.data.lotId is string;
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /bids/{docId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if false;
+    }
+
+    match /auction_logs/{docId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    /* ============================================================
         Interested Leads (تفاصيل المهتم — ضغط "أنا مهتم")
     ============================================================ */
 

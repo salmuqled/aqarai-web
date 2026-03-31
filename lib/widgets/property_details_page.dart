@@ -8,6 +8,9 @@ import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/admin_action_service.dart';
 import 'package:aqarai_app/services/caption_click_log_service.dart';
 import 'package:aqarai_app/services/property_view_tracking_service.dart';
+import 'package:aqarai_app/models/auction/auction_firestore_paths.dart';
+import 'package:aqarai_app/models/auction/public_auction_lot.dart';
+import 'package:aqarai_app/widgets/auction_registration_status_widget.dart';
 
 class PropertyDetailsPage extends StatelessWidget {
   final String propertyId;
@@ -19,12 +22,20 @@ class PropertyDetailsPage extends StatelessWidget {
   /// Instagram A/B caption id from link `?cid=` (optional).
   final String? captionTrackingId;
 
+  /// When opening from auction catalog: `public_lots` doc id for faster resolution.
+  final String? auctionLotId;
+
+  /// Optional sanity check against [PublicAuctionLot.auctionId].
+  final String? auctionId;
+
   const PropertyDetailsPage({
     super.key,
     required this.propertyId,
     this.isAdminView = false,
     this.leadSource = DealLeadSource.direct,
     this.captionTrackingId,
+    this.auctionLotId,
+    this.auctionId,
   });
 
   String _translateType(BuildContext context, String value) {
@@ -185,6 +196,15 @@ class PropertyDetailsPage extends StatelessWidget {
                   _translateService(context, serviceType),
                   _translateStatus(context, status),
                 ),
+
+                if (!isAdminView &&
+                    auctionLotId != null &&
+                    auctionLotId!.trim().isNotEmpty)
+                  _AuctionRegistrationForLot(
+                    lotDocId: auctionLotId!.trim(),
+                    expectedAuctionId: auctionId,
+                    listingPrice: price.toDouble(),
+                  ),
 
                 const SizedBox(height: 16),
 
@@ -777,6 +797,49 @@ class _FavoriteHeart extends StatelessWidget {
               }
             }
           },
+        );
+      },
+    );
+  }
+}
+
+/// Loads [PublicAuctionLot] only from `public_lots/{lotDocId}` (must match [PropertyDetailsPage.auctionLotId]).
+class _AuctionRegistrationForLot extends StatelessWidget {
+  const _AuctionRegistrationForLot({
+    required this.lotDocId,
+    required this.listingPrice,
+    this.expectedAuctionId,
+  });
+
+  final String lotDocId;
+  final double listingPrice;
+  final String? expectedAuctionId;
+
+  @override
+  Widget build(BuildContext context) {
+    final col = AuctionFirestorePaths.publicLots;
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection(col).doc(lotDocId).snapshots(),
+      builder: (context, docSnap) {
+        if (!docSnap.hasData) return const SizedBox.shrink();
+        final ds = docSnap.data!;
+        if (!ds.exists || ds.data() == null) {
+          return const SizedBox.shrink();
+        }
+        final lot = PublicAuctionLot.fromFirestore(ds.id, ds.data()!);
+        final exp = expectedAuctionId?.trim();
+        if (exp != null && exp.isNotEmpty && lot.auctionId != exp) {
+          return const SizedBox.shrink();
+        }
+        return Column(
+          children: [
+            const SizedBox(height: 12),
+            AuctionRegistrationStatusWidget(
+              lot: lot,
+              listingPrice: listingPrice,
+            ),
+          ],
         );
       },
     );
