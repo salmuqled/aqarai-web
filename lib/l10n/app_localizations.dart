@@ -2357,6 +2357,54 @@ abstract class AppLocalizations {
   /// **'Min. increment'**
   String get auctionsMinIncrementLabel;
 
+  /// No description provided for @auctionLotRejectedTimeoutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Approval period ended'**
+  String get auctionLotRejectedTimeoutTitle;
+
+  /// No description provided for @auctionLotRejectedTimeoutBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The seller and admin did not complete approvals before the deadline. This lot is closed without a sale.'**
+  String get auctionLotRejectedTimeoutBody;
+
+  /// No description provided for @auctionLotRejectedManualTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deal not completed'**
+  String get auctionLotRejectedManualTitle;
+
+  /// No description provided for @auctionLotRejectedManualBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This auction outcome was not finalized. The lot is closed without a sale.'**
+  String get auctionLotRejectedManualBody;
+
+  /// No description provided for @auctionLotRejectedByAdminTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deal declined by admin'**
+  String get auctionLotRejectedByAdminTitle;
+
+  /// No description provided for @auctionLotRejectedByAdminBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The platform did not approve this transaction. The lot is closed without a sale.'**
+  String get auctionLotRejectedByAdminBody;
+
+  /// No description provided for @auctionLotRejectedBySellerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Declined by seller'**
+  String get auctionLotRejectedBySellerTitle;
+
+  /// No description provided for @auctionLotRejectedBySellerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The property owner did not accept the winning bid. The lot is closed without a sale.'**
+  String get auctionLotRejectedBySellerBody;
+
   /// No description provided for @auctionRegLoginToRegister.
   ///
   /// In en, this message translates to:
@@ -2542,6 +2590,978 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bid now'**
   String get auctionBidNowButton;
+
+  /// App bar: submit property for auction
+  ///
+  /// In en, this message translates to:
+  /// **'Auction listing request'**
+  String get auctionRequestPageTitle;
+
+  /// No description provided for @auctionRequestFieldTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get auctionRequestFieldTitle;
+
+  /// No description provided for @auctionRequestFieldLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get auctionRequestFieldLocation;
+
+  /// No description provided for @auctionRequestFieldExpectedPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected price (KWD)'**
+  String get auctionRequestFieldExpectedPrice;
+
+  /// No description provided for @auctionRequestFieldPropertyIdOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Existing listing ID (optional)'**
+  String get auctionRequestFieldPropertyIdOptional;
+
+  /// No description provided for @auctionRequestFieldPropertyIdHint.
+  ///
+  /// In en, this message translates to:
+  /// **'If your property is already on the app'**
+  String get auctionRequestFieldPropertyIdHint;
+
+  /// No description provided for @auctionRequestAcceptLowerSwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow a lower starting price to encourage bidding?'**
+  String get auctionRequestAcceptLowerSwitch;
+
+  /// No description provided for @auctionRequestFieldDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get auctionRequestFieldDescription;
+
+  /// No description provided for @auctionRequestImagesSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get auctionRequestImagesSection;
+
+  /// No description provided for @auctionRequestPickImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photos'**
+  String get auctionRequestPickImages;
+
+  /// No description provided for @auctionRequestSubmitButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit request'**
+  String get auctionRequestSubmitButton;
+
+  /// No description provided for @auctionRequestValidationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This field is required'**
+  String get auctionRequestValidationRequired;
+
+  /// No description provided for @auctionRequestInvalidPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid price'**
+  String get auctionRequestInvalidPrice;
+
+  /// No description provided for @auctionRequestSignInRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with your account to submit an auction request.'**
+  String get auctionRequestSignInRequired;
+
+  /// No description provided for @auctionRequestSignInCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get auctionRequestSignInCta;
+
+  /// No description provided for @auctionRequestSubmitError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not submit'**
+  String get auctionRequestSubmitError;
+
+  /// No description provided for @auctionRequestSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request received'**
+  String get auctionRequestSuccessTitle;
+
+  /// No description provided for @auctionRequestSuccessBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll review it and get in touch soon.'**
+  String get auctionRequestSuccessBody;
+
+  /// No description provided for @auctionRequestSuccessDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get auctionRequestSuccessDismiss;
+
+  /// No description provided for @auctionPaymentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auction listing fee'**
+  String get auctionPaymentTitle;
+
+  /// Main fee line on mock checkout
+  ///
+  /// In en, this message translates to:
+  /// **'Listing fee for the auction: {amount} KWD'**
+  String auctionPaymentFeeLine(String amount);
+
+  /// No description provided for @auctionPaymentDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Includes licensing and auction management.'**
+  String get auctionPaymentDescription;
+
+  /// No description provided for @auctionPaymentPayNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay now'**
+  String get auctionPaymentPayNow;
+
+  /// No description provided for @auctionPaymentSuccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment received'**
+  String get auctionPaymentSuccessTitle;
+
+  /// No description provided for @auctionPaymentSuccessMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request has been received and auction procedures will begin.'**
+  String get auctionPaymentSuccessMessage;
+
+  /// No description provided for @auctionPaymentDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get auctionPaymentDone;
+
+  /// No description provided for @auctionPaymentLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this request.'**
+  String get auctionPaymentLoadError;
+
+  /// No description provided for @auctionPaymentDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment was not completed.'**
+  String get auctionPaymentDeclined;
+
+  /// No description provided for @auctionPaymentServerError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not confirm payment. Please try again.'**
+  String get auctionPaymentServerError;
+
+  /// No description provided for @auctionPaymentNotOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'This request does not belong to your account.'**
+  String get auctionPaymentNotOwner;
+
+  /// No description provided for @auctionPaymentRequestMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Request not found.'**
+  String get auctionPaymentRequestMissing;
+
+  /// No description provided for @auctionPaymentAlreadyProcessed.
+  ///
+  /// In en, this message translates to:
+  /// **'This fee was already processed.'**
+  String get auctionPaymentAlreadyProcessed;
+
+  /// No description provided for @auctionPaymentSignInRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in.'**
+  String get auctionPaymentSignInRequired;
+
+  /// No description provided for @auctionPaymentReferenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reference'**
+  String get auctionPaymentReferenceLabel;
+
+  /// No description provided for @adminAuctionEarningsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Real earnings'**
+  String get adminAuctionEarningsTitle;
+
+  /// No description provided for @adminEarningsFilterAllTime.
+  ///
+  /// In en, this message translates to:
+  /// **'All time'**
+  String get adminEarningsFilterAllTime;
+
+  /// No description provided for @adminEarningsFilterToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get adminEarningsFilterToday;
+
+  /// No description provided for @adminEarningsFilterLast7Days.
+  ///
+  /// In en, this message translates to:
+  /// **'7 days'**
+  String get adminEarningsFilterLast7Days;
+
+  /// No description provided for @adminEarningsFilterLast30Days.
+  ///
+  /// In en, this message translates to:
+  /// **'30 days'**
+  String get adminEarningsFilterLast30Days;
+
+  /// No description provided for @adminRealEarningsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Live Firestore totals (no analytics). Date ranges and daily buckets use Kuwait time (UTC+3) from stored UTC timestamps, so everyone sees the same figures.'**
+  String get adminRealEarningsHint;
+
+  /// No description provided for @adminRealEarningsTotalRevenue.
+  ///
+  /// In en, this message translates to:
+  /// **'Total revenue'**
+  String get adminRealEarningsTotalRevenue;
+
+  /// No description provided for @adminRealEarningsLegacyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Only deals with status \"sold\" are included. New approved closures write this field; older deal rows may need a one-time backfill.'**
+  String get adminRealEarningsLegacyNote;
+
+  /// No description provided for @adminRealEarningsChartEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No dated fee or commission events to plot.'**
+  String get adminRealEarningsChartEmpty;
+
+  /// No description provided for @adminAuctionEarningsTotalFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing fees (paid)'**
+  String get adminAuctionEarningsTotalFees;
+
+  /// No description provided for @adminAuctionEarningsPaidListings.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid auctions'**
+  String get adminAuctionEarningsPaidListings;
+
+  /// No description provided for @adminAuctionEarningsDealsCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Sold deals'**
+  String get adminAuctionEarningsDealsCompleted;
+
+  /// No description provided for @adminAuctionEarningsEstCommission.
+  ///
+  /// In en, this message translates to:
+  /// **'Total commission'**
+  String get adminAuctionEarningsEstCommission;
+
+  /// No description provided for @adminEarningsRevenueBreakdownTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revenue breakdown'**
+  String get adminEarningsRevenueBreakdownTitle;
+
+  /// No description provided for @adminEarningsShareOfTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of total revenue'**
+  String adminEarningsShareOfTotal(String percent);
+
+  /// No description provided for @adminAuctionEarningsChartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revenue by day'**
+  String get adminAuctionEarningsChartTitle;
+
+  /// No description provided for @adminAuctionEarningsChartSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily revenue in the selected range (Kuwait calendar days; fees by payment time, commission by deal createdAt).'**
+  String get adminAuctionEarningsChartSubtitle;
+
+  /// No description provided for @adminAuctionEarningsPartialDataHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Some totals are from a capped scan — deploy indexes if prompted, or totals may be lower bounds.'**
+  String get adminAuctionEarningsPartialDataHint;
+
+  /// No description provided for @adminAuctionEarningsNoChartData.
+  ///
+  /// In en, this message translates to:
+  /// **'No data for this period.'**
+  String get adminAuctionEarningsNoChartData;
+
+  /// No description provided for @adminAuctionEarningsLegendFees.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing fees'**
+  String get adminAuctionEarningsLegendFees;
+
+  /// No description provided for @adminAuctionEarningsLegendCommission.
+  ///
+  /// In en, this message translates to:
+  /// **'Commission'**
+  String get adminAuctionEarningsLegendCommission;
+
+  /// No description provided for @companyPaymentAddTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record payment'**
+  String get companyPaymentAddTitle;
+
+  /// No description provided for @companyPaymentAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount (KWD)'**
+  String get companyPaymentAmountLabel;
+
+  /// No description provided for @companyPaymentTypeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment type'**
+  String get companyPaymentTypeLabel;
+
+  /// No description provided for @companyPaymentReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get companyPaymentReasonLabel;
+
+  /// No description provided for @companyPaymentSourceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get companyPaymentSourceLabel;
+
+  /// No description provided for @companyPaymentReferenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reference number'**
+  String get companyPaymentReferenceLabel;
+
+  /// No description provided for @companyPaymentRelatedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked record'**
+  String get companyPaymentRelatedLabel;
+
+  /// No description provided for @companyPaymentNotesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get companyPaymentNotesLabel;
+
+  /// No description provided for @companyPaymentSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save payment'**
+  String get companyPaymentSave;
+
+  /// No description provided for @companyPaymentSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment recorded'**
+  String get companyPaymentSaved;
+
+  /// No description provided for @companyPaymentTypeAuctionFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Auction fee'**
+  String get companyPaymentTypeAuctionFee;
+
+  /// No description provided for @companyPaymentTypeCommission.
+  ///
+  /// In en, this message translates to:
+  /// **'Commission'**
+  String get companyPaymentTypeCommission;
+
+  /// No description provided for @companyPaymentTypeOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get companyPaymentTypeOther;
+
+  /// No description provided for @companyPaymentReasonSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale'**
+  String get companyPaymentReasonSale;
+
+  /// No description provided for @companyPaymentReasonRent.
+  ///
+  /// In en, this message translates to:
+  /// **'Rent'**
+  String get companyPaymentReasonRent;
+
+  /// No description provided for @companyPaymentReasonAuction.
+  ///
+  /// In en, this message translates to:
+  /// **'Auction'**
+  String get companyPaymentReasonAuction;
+
+  /// No description provided for @companyPaymentReasonManagementFee.
+  ///
+  /// In en, this message translates to:
+  /// **'Management fee'**
+  String get companyPaymentReasonManagementFee;
+
+  /// No description provided for @companyPaymentReasonOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get companyPaymentReasonOther;
+
+  /// No description provided for @companyPaymentSourceBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank transfer'**
+  String get companyPaymentSourceBank;
+
+  /// No description provided for @companyPaymentSourceCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Certified check'**
+  String get companyPaymentSourceCheck;
+
+  /// No description provided for @companyPaymentSourceCash.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash'**
+  String get companyPaymentSourceCash;
+
+  /// No description provided for @companyPaymentPickAuction.
+  ///
+  /// In en, this message translates to:
+  /// **'Select paid auction request'**
+  String get companyPaymentPickAuction;
+
+  /// No description provided for @companyPaymentPickDeal.
+  ///
+  /// In en, this message translates to:
+  /// **'Select sold deal'**
+  String get companyPaymentPickDeal;
+
+  /// No description provided for @companyPaymentNoAuctionOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'No paid auction requests in list.'**
+  String get companyPaymentNoAuctionOptions;
+
+  /// No description provided for @companyPaymentNoDealOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'No sold deals in list.'**
+  String get companyPaymentNoDealOptions;
+
+  /// No description provided for @companyPaymentErrAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid positive amount.'**
+  String get companyPaymentErrAmount;
+
+  /// No description provided for @companyPaymentErrAuction.
+  ///
+  /// In en, this message translates to:
+  /// **'Link a paid auction request.'**
+  String get companyPaymentErrAuction;
+
+  /// No description provided for @companyPaymentErrDeal.
+  ///
+  /// In en, this message translates to:
+  /// **'Link a sold deal.'**
+  String get companyPaymentErrDeal;
+
+  /// No description provided for @companyPaymentErrReferenceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a reference number for bank transfer or check.'**
+  String get companyPaymentErrReferenceRequired;
+
+  /// No description provided for @companyPaymentErrDuplicateReference.
+  ///
+  /// In en, this message translates to:
+  /// **'This reference number is already used.'**
+  String get companyPaymentErrDuplicateReference;
+
+  /// No description provided for @companyPaymentErrGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save. Check rules and connection.'**
+  String get companyPaymentErrGeneric;
+
+  /// No description provided for @companyPaymentStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get companyPaymentStatusLabel;
+
+  /// No description provided for @companyPaymentStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get companyPaymentStatusPending;
+
+  /// No description provided for @companyPaymentStatusConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed'**
+  String get companyPaymentStatusConfirmed;
+
+  /// No description provided for @companyPaymentStatusRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get companyPaymentStatusRejected;
+
+  /// No description provided for @companyCashflowSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recognized revenue from paid auction fees + sold deals vs manual collections.'**
+  String get companyCashflowSubtitle;
+
+  /// No description provided for @companyCashflowConfirmedOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Cash in and breakdown by reason include only payments with status confirmed.'**
+  String get companyCashflowConfirmedOnlyHint;
+
+  /// No description provided for @companyPaymentTotalCashFoot.
+  ///
+  /// In en, this message translates to:
+  /// **'company_payments (confirmed only)'**
+  String get companyPaymentTotalCashFoot;
+
+  /// No description provided for @adminAuctionRequestsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auction property requests'**
+  String get adminAuctionRequestsTitle;
+
+  /// No description provided for @adminAuctionRequestsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No requests yet.'**
+  String get adminAuctionRequestsEmpty;
+
+  /// No description provided for @adminAuctionRequestApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get adminAuctionRequestApprove;
+
+  /// No description provided for @adminAuctionRequestReject.
+  ///
+  /// In en, this message translates to:
+  /// **'Reject'**
+  String get adminAuctionRequestReject;
+
+  /// No description provided for @adminAuctionRequestStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get adminAuctionRequestStatusPending;
+
+  /// No description provided for @adminAuctionRequestStatusApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get adminAuctionRequestStatusApproved;
+
+  /// No description provided for @adminAuctionRequestStatusRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected'**
+  String get adminAuctionRequestStatusRejected;
+
+  /// No description provided for @adminAuctionRequestDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Request details'**
+  String get adminAuctionRequestDetailTitle;
+
+  /// No description provided for @adminAuctionRequestUserId.
+  ///
+  /// In en, this message translates to:
+  /// **'User ID'**
+  String get adminAuctionRequestUserId;
+
+  /// No description provided for @adminAuctionRequestPropertyId.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing ID'**
+  String get adminAuctionRequestPropertyId;
+
+  /// No description provided for @adminAuctionRequestExpectedPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected price'**
+  String get adminAuctionRequestExpectedPrice;
+
+  /// No description provided for @adminAuctionRequestAcceptLower.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepts lower start'**
+  String get adminAuctionRequestAcceptLower;
+
+  /// No description provided for @adminAuctionRequestYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get adminAuctionRequestYes;
+
+  /// No description provided for @adminAuctionRequestNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get adminAuctionRequestNo;
+
+  /// No description provided for @adminAuctionRequestImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get adminAuctionRequestImages;
+
+  /// No description provided for @adminAuctionRequestConfirmRejectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reject this request?'**
+  String get adminAuctionRequestConfirmRejectTitle;
+
+  /// No description provided for @adminAuctionRequestConfirmRejectBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The user will see the rejected status when we add a client view.'**
+  String get adminAuctionRequestConfirmRejectBody;
+
+  /// No description provided for @adminAuctionRequestLotReminder.
+  ///
+  /// In en, this message translates to:
+  /// **'After approval, create the auction lot manually in Firestore or your admin tools.'**
+  String get adminAuctionRequestLotReminder;
+
+  /// No description provided for @adminAuctionRequestUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Status updated'**
+  String get adminAuctionRequestUpdated;
+
+  /// No description provided for @adminAuctionRequestUpdateError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update status'**
+  String get adminAuctionRequestUpdateError;
+
+  /// No description provided for @adminAuctionRequestLocationDisplay.
+  ///
+  /// In en, this message translates to:
+  /// **'Governorate & area'**
+  String get adminAuctionRequestLocationDisplay;
+
+  /// No description provided for @adminAuctionRequestGovernorateCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Governorate code'**
+  String get adminAuctionRequestGovernorateCode;
+
+  /// No description provided for @adminAuctionRequestAreaCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Area code'**
+  String get adminAuctionRequestAreaCode;
+
+  /// No description provided for @adminInvoicesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices'**
+  String get adminInvoicesTitle;
+
+  /// No description provided for @adminInvoicesSummaryTotalRevenue.
+  ///
+  /// In en, this message translates to:
+  /// **'Total revenue'**
+  String get adminInvoicesSummaryTotalRevenue;
+
+  /// No description provided for @adminInvoicesSummaryLedgerEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'Ledger entries'**
+  String get adminInvoicesSummaryLedgerEntries;
+
+  /// No description provided for @adminInvoicesSummaryThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get adminInvoicesSummaryThisMonth;
+
+  /// No description provided for @adminInvoicesSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search number or company'**
+  String get adminInvoicesSearchHint;
+
+  /// No description provided for @adminInvoicesFilterServiceType.
+  ///
+  /// In en, this message translates to:
+  /// **'Service type'**
+  String get adminInvoicesFilterServiceType;
+
+  /// No description provided for @adminInvoicesFilterAllServices.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get adminInvoicesFilterAllServices;
+
+  /// No description provided for @adminInvoicesServiceRent.
+  ///
+  /// In en, this message translates to:
+  /// **'Rent'**
+  String get adminInvoicesServiceRent;
+
+  /// No description provided for @adminInvoicesServiceSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale'**
+  String get adminInvoicesServiceSale;
+
+  /// No description provided for @adminInvoicesServiceChalet.
+  ///
+  /// In en, this message translates to:
+  /// **'Chalet'**
+  String get adminInvoicesServiceChalet;
+
+  /// No description provided for @adminInvoicesDateFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get adminInvoicesDateFrom;
+
+  /// No description provided for @adminInvoicesDateTo.
+  ///
+  /// In en, this message translates to:
+  /// **'To'**
+  String get adminInvoicesDateTo;
+
+  /// No description provided for @adminInvoicesAmountMin.
+  ///
+  /// In en, this message translates to:
+  /// **'Min amount (KWD)'**
+  String get adminInvoicesAmountMin;
+
+  /// No description provided for @adminInvoicesAmountMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Max amount (KWD)'**
+  String get adminInvoicesAmountMax;
+
+  /// No description provided for @adminInvoicesApplyFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get adminInvoicesApplyFilters;
+
+  /// No description provided for @adminInvoicesClearFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get adminInvoicesClearFilters;
+
+  /// No description provided for @adminInvoicesLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get adminInvoicesLoadMore;
+
+  /// No description provided for @adminInvoicesEndOfList.
+  ///
+  /// In en, this message translates to:
+  /// **'End of list'**
+  String get adminInvoicesEndOfList;
+
+  /// No description provided for @adminInvoicesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No invoices yet.'**
+  String get adminInvoicesEmpty;
+
+  /// No description provided for @adminInvoicesError.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong.'**
+  String get adminInvoicesError;
+
+  /// No description provided for @adminInvoicesClientFilterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search matches invoice number or company name on loaded pages — use Load more to scan older invoices.'**
+  String get adminInvoicesClientFilterHint;
+
+  /// No description provided for @adminInvoiceDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice'**
+  String get adminInvoiceDetailTitle;
+
+  /// No description provided for @adminInvoiceDetailDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download invoice'**
+  String get adminInvoiceDetailDownload;
+
+  /// No description provided for @adminInvoiceDetailNoPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF not ready'**
+  String get adminInvoiceDetailNoPdf;
+
+  /// No description provided for @adminInvoiceFieldCompany.
+  ///
+  /// In en, this message translates to:
+  /// **'Company'**
+  String get adminInvoiceFieldCompany;
+
+  /// No description provided for @adminInvoiceFieldAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get adminInvoiceFieldAmount;
+
+  /// No description provided for @adminInvoiceFieldServiceType.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get adminInvoiceFieldServiceType;
+
+  /// No description provided for @adminInvoiceFieldArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Area'**
+  String get adminInvoiceFieldArea;
+
+  /// No description provided for @adminInvoiceFieldDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get adminInvoiceFieldDescription;
+
+  /// No description provided for @adminInvoiceFieldStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get adminInvoiceFieldStatus;
+
+  /// No description provided for @adminInvoiceFieldDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get adminInvoiceFieldDate;
+
+  /// No description provided for @adminInvoiceFieldPaymentId.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment ID'**
+  String get adminInvoiceFieldPaymentId;
+
+  /// No description provided for @adminInvoicesCouldNotOpenPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open PDF link.'**
+  String get adminInvoicesCouldNotOpenPdf;
+
+  /// No description provided for @adminInvoiceFieldPaidAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid at'**
+  String get adminInvoiceFieldPaidAt;
+
+  /// No description provided for @adminInvoiceFieldEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Email sent'**
+  String get adminInvoiceFieldEmailSent;
+
+  /// No description provided for @adminInvoiceFieldEmailError.
+  ///
+  /// In en, this message translates to:
+  /// **'Email error'**
+  String get adminInvoiceFieldEmailError;
+
+  /// No description provided for @adminInvoiceFieldEmailSentAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Email sent at'**
+  String get adminInvoiceFieldEmailSentAt;
+
+  /// No description provided for @adminInvoiceFieldEmailAttemptAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Last email attempt'**
+  String get adminInvoiceFieldEmailAttemptAt;
+
+  /// No description provided for @adminInvoiceFieldPdfError.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF error'**
+  String get adminInvoiceFieldPdfError;
+
+  /// No description provided for @adminInvoiceFieldPdfErrorAt.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF error at'**
+  String get adminInvoiceFieldPdfErrorAt;
+
+  /// No description provided for @adminInvoiceActionResendEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend invoice email'**
+  String get adminInvoiceActionResendEmail;
+
+  /// No description provided for @adminInvoiceActionRetryPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry PDF'**
+  String get adminInvoiceActionRetryPdf;
+
+  /// No description provided for @adminInvoiceEmailSentYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get adminInvoiceEmailSentYes;
+
+  /// No description provided for @adminInvoiceEmailSentNo.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get adminInvoiceEmailSentNo;
+
+  /// No description provided for @adminInvoiceResendQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Email dispatch completed.'**
+  String get adminInvoiceResendQueued;
+
+  /// No description provided for @adminInvoiceRetryPdfOk.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF regenerated.'**
+  String get adminInvoiceRetryPdfOk;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

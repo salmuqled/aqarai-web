@@ -11,4 +11,6 @@ abstract final class AuctionFirestorePaths {
   static const String deposits = 'deposits';
   static const String bids = 'bids';
   static const String logs = 'auction_logs';
+  /// User-submitted requests to list a property in an auction (admin review).
+  static const String auctionRequests = 'auction_requests';
 }

@@ -50,11 +50,13 @@ class _HighestBidWidgetState extends State<HighestBidWidget>
     super.didUpdateWidget(oldWidget);
     final next = _displayAmount();
     final prev = _prevAmount ?? next;
-    final hasBids =
-        widget.lot.highestBid != null && widget.lot.highestBid! > 0;
+    final hasBids = widget.lot.currentHighBid != null &&
+        widget.lot.currentHighBid! > 0;
     final amountRose = next > prev + 1e-9;
-    final highChanged = widget.lot.highestBid != oldWidget.lot.highestBid ||
-        widget.lot.highestBidderId != oldWidget.lot.highestBidderId;
+    final highChanged =
+        widget.lot.currentHighBid != oldWidget.lot.currentHighBid ||
+            widget.lot.currentHighBidderId !=
+                oldWidget.lot.currentHighBidderId;
     if (hasBids && amountRose && highChanged) {
       HapticFeedback.mediumImpact();
       _newHigh.forward(from: 0);
@@ -82,7 +84,7 @@ class _HighestBidWidgetState extends State<HighestBidWidget>
   }
 
   double _displayAmount() {
-    final h = widget.lot.highestBid;
+    final h = widget.lot.currentHighBid;
     if (h != null && h > 0) return h;
     return widget.lot.startingPrice;
   }
@@ -107,7 +109,7 @@ class _HighestBidWidgetState extends State<HighestBidWidget>
 
   bool _userIsWinning(String? uid) {
     if (uid == null || uid.isEmpty) return false;
-    final hb = widget.lot.highestBidderId;
+    final hb = widget.lot.currentHighBidderId;
     return hb != null && hb == uid;
   }
 
@@ -116,7 +118,8 @@ class _HighestBidWidgetState extends State<HighestBidWidget>
     final theme = Theme.of(context);
     final ar = Localizations.localeOf(context).languageCode == 'ar';
     final amount = _displayAmount();
-    final hasBids = widget.lot.highestBid != null && widget.lot.highestBid! > 0;
+    final hasBids =
+        widget.lot.currentHighBid != null && widget.lot.currentHighBid! > 0;
     final uid = widget.currentUserId;
     final leading = _userIsWinning(uid);
 
@@ -124,10 +127,10 @@ class _HighestBidWidgetState extends State<HighestBidWidget>
     var subIsPositive = false;
     if (uid != null && hasBids) {
       if (leading) {
-        subMessage = ar ? 'أنت المتصدر' : 'You are in the lead';
+        subMessage = ar ? 'أنت أعلى مزايد' : 'You are the highest bidder';
         subIsPositive = true;
       } else if (_userHasAnyBid(uid)) {
-        subMessage = ar ? 'تم تجاوز مزايدتك' : 'You have been outbid';
+        subMessage = ar ? 'تم تجاوزك' : 'You have been outbid';
       }
     }
 
@@ -225,7 +228,7 @@ class _HighestBidWidgetState extends State<HighestBidWidget>
                       style: theme.textTheme.titleMedium?.copyWith(
                         color: subIsPositive
                             ? AuctionUiColors.winningGreenLight
-                            : Colors.orangeAccent.shade100,
+                            : Colors.redAccent.shade100,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

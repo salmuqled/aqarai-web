@@ -56,10 +56,17 @@ abstract final class LotService {
     return AuctionLot.fromFirestore(s.id, s.data()!);
   }
 
+  /// Single public catalog row (`public_lots/{lotId}`).
+  static Stream<PublicAuctionLot?> watchPublicLot(String lotId) {
+    return _publicLotsCol.doc(lotId).snapshots().map((s) {
+      if (!s.exists || s.data() == null) return null;
+      return PublicAuctionLot.fromFirestore(s.id, s.data()!);
+    });
+  }
+
   /// Real-time single lot (e.g. live auction screen). Uses authoritative `lots`.
   ///
-  /// With default Firestore rules (`lots` read: admin only), this stream works
-  /// for admin clients. To support live bidders, relax rules or use a server feed.
+  /// Requires signed-in user per Firestore rules (`lots` read for authenticated clients).
   static Stream<AuctionLot?> watchLot(String lotId) {
     return ref(lotId).snapshots().map((s) {
       if (!s.exists || s.data() == null) return null;
@@ -82,13 +89,19 @@ abstract final class LotService {
       depositType: lot.depositType,
       depositValue: lot.depositValue,
       startTime: lot.startTime,
-      endTime: lot.endTime,
+      endsAt: lot.endsAt,
       status: lot.status,
-      highestBid: lot.highestBid,
-      highestBidderId: lot.highestBidderId,
+      currentHighBid: lot.currentHighBid,
+      currentHighBidderId: lot.currentHighBidderId,
+      bidCount: lot.bidCount,
       winnerId: lot.winnerId,
       finalPrice: lot.finalPrice,
       finalizedAt: lot.finalizedAt,
+      sellerApprovalStatus: lot.sellerApprovalStatus,
+      adminApproved: lot.adminApproved,
+      sellerApprovalAt: lot.sellerApprovalAt,
+      adminDecisionAt: lot.adminDecisionAt,
+      rejectionReason: lot.rejectionReason,
       createdAt: lot.createdAt,
       updatedAt: lot.updatedAt,
     );
@@ -200,11 +213,41 @@ abstract final class LotService {
     );
   }
 
-  /// Admin callable [finalizeLot]: closes lot after [endTime], sets winning bid to `won`.
+  /// Admin callable [finalizeLot]: closes lot after [endsAt], sets winning bid to `won`.
   static Future<Map<String, dynamic>> finalizeLotAdmin({required String lotId}) async {
     final callable =
         FirebaseFunctions.instanceFor(region: 'us-central1').httpsCallable('finalizeLot');
     final res = await callable.call<dynamic>({'lotId': lotId});
+    final raw = res.data;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return <String, dynamic>{};
+  }
+
+  static Future<Map<String, dynamic>> adminReviewAuction({
+    required String lotId,
+    required String decision,
+  }) async {
+    final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('adminReviewAuction');
+    final res = await callable.call<dynamic>({
+      'lotId': lotId,
+      'decision': decision,
+    });
+    final raw = res.data;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return <String, dynamic>{};
+  }
+
+  static Future<Map<String, dynamic>> sellerApproveAuction({
+    required String lotId,
+    required String decision,
+  }) async {
+    final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('sellerApproveAuction');
+    final res = await callable.call<dynamic>({
+      'lotId': lotId,
+      'decision': decision,
+    });
     final raw = res.data;
     if (raw is Map) return Map<String, dynamic>.from(raw);
     return <String, dynamic>{};

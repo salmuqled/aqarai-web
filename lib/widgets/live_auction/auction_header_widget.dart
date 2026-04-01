@@ -21,7 +21,7 @@ class AuctionHeaderWidget extends StatelessWidget {
   bool _isLiveNow() {
     if (lot.status != LotStatus.active) return false;
     if (serverNow.isBefore(lot.startTime)) return false;
-    if (!serverNow.isBefore(lot.endTime)) return false;
+    if (!serverNow.isBefore(lot.endsAt)) return false;
     return true;
   }
 

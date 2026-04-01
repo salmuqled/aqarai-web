@@ -2,9 +2,12 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/models/auction/auction.dart';
 import 'package:aqarai_app/models/auction/auction_enums.dart';
 import 'package:aqarai_app/models/auction/auction_lot.dart';
+import 'package:aqarai_app/pages/admin_auction_deal_review_page.dart';
+import 'package:aqarai_app/widgets/auction/auction_lot_rejection_strip.dart';
 import 'package:aqarai_app/services/auction/auction_service.dart';
 import 'package:aqarai_app/services/auction/lot_service.dart';
 
@@ -135,12 +138,19 @@ class LotListSection extends StatelessWidget {
               ...lots.map((lot) {
                 final active = lot.status == LotStatus.active;
                 final sold = lot.status == LotStatus.sold;
+                final rejected = lot.status == LotStatus.rejected;
+                final pendingReview =
+                    lot.status == LotStatus.pendingAdminReview;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Material(
                     color: active
                         ? Colors.red.shade50
-                        : Colors.grey.shade100,
+                        : pendingReview
+                            ? Colors.indigo.shade50
+                            : rejected
+                                ? Colors.red.shade50
+                                : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(10),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -160,16 +170,57 @@ class LotListSection extends StatelessWidget {
                             style: TextStyle(
                               color: active
                                   ? Colors.red.shade800
-                                  : Colors.grey.shade700,
+                                  : pendingReview
+                                      ? Colors.indigo.shade800
+                                      : Colors.grey.shade700,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          if (lot.highestBid != null)
+                          if (pendingReview) ...[
                             Text(
-                              '${isArabic ? 'أعلى مزايدة' : 'High bid'}: ${lot.highestBid}',
+                              '${isArabic ? 'البائع' : 'Seller'}: ${lot.sellerApprovalStatus?.firestoreValue ?? 'pending'}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                            Text(
+                              '${isArabic ? 'إدارة' : 'Admin'}: ${lot.adminApproved == true ? (isArabic ? 'معتمد' : 'approved') : (isArabic ? 'معلق' : 'pending')}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                          ],
+                          if (rejected) ...[
+                            Builder(
+                              builder: (ctx) {
+                                final loc = AppLocalizations.of(ctx);
+                                if (loc == null) {
+                                  return const SizedBox.shrink();
+                                }
+                                final (title, _) =
+                                    auctionLotRejectionCopy(loc, lot.rejectionReason);
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Text(
+                                    title,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.red.shade900,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                          if (lot.currentHighBid != null)
+                            Text(
+                              '${isArabic ? 'أعلى مزايدة' : 'High bid'}: ${lot.currentHighBid}',
                             ),
                           Text(
-                            '${isArabic ? 'النهاية' : 'Ends'}: ${fmt.format(lot.endTime.toLocal())}',
+                            '${isArabic ? 'النهاية' : 'Ends'}: ${fmt.format(lot.endsAt.toLocal())}',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey.shade700,
@@ -186,10 +237,28 @@ class LotListSection extends StatelessWidget {
                                 child: Text(isArabic ? 'تشغيل' : 'Start lot'),
                               ),
                               FilledButton.tonal(
-                                onPressed: sold
-                                    ? null
-                                    : () => _closeLot(context, lot),
-                                child: Text(isArabic ? 'تسوية / إغلاق' : 'Finalize'),
+                                onPressed: pendingReview
+                                    ? () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (_) =>
+                                                AdminAuctionDealReviewPage(
+                                              lotId: lot.id,
+                                              auctionId: auction.id,
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    : sold
+                                        ? null
+                                        : () => _closeLot(context, lot),
+                                child: Text(
+                                  pendingReview
+                                      ? (isArabic
+                                          ? 'مراجعة الصفقة'
+                                          : 'Review deal')
+                                      : (isArabic ? 'تسوية / إغلاق' : 'Finalize'),
+                                ),
                               ),
                             ],
                           ),

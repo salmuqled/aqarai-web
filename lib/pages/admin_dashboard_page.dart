@@ -18,7 +18,12 @@ import 'package:aqarai_app/widgets/admin_caption_learning_section.dart';
 import 'package:aqarai_app/widgets/admin_decision_accuracy_section.dart';
 import 'package:aqarai_app/widgets/admin_caption_performance_section.dart';
 import 'package:aqarai_app/widgets/admin_instagram_post_dialog.dart';
+import 'package:aqarai_app/pages/add_company_payment_page.dart';
+import 'package:aqarai_app/pages/admin_auction_earnings_page.dart';
+import 'package:aqarai_app/pages/admin_auction_requests_page.dart';
 import 'package:aqarai_app/pages/admin_control_center_page.dart';
+import 'package:aqarai_app/pages/admin_invoices_page.dart';
+import 'package:aqarai_app/widgets/admin_cashflow_ledger_section.dart';
 import 'package:aqarai_app/widgets/hybrid_marketing_settings_dialog.dart';
 
 /// Admin decision dashboard: `analytics/global` (fast) + bounded `deals` query (detail).
@@ -61,6 +66,54 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         title: Text(isAr ? 'لوحة القرارات' : 'Business dashboard'),
         centerTitle: true,
         actions: [
+          IconButton(
+            tooltip: AppLocalizations.of(context)!.companyPaymentAddTitle,
+            icon: const Icon(Icons.add_card_outlined),
+            onPressed: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const AddCompanyPaymentPage(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: AppLocalizations.of(context)!.adminInvoicesTitle,
+            icon: const Icon(Icons.receipt_long_outlined),
+            onPressed: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const AdminInvoicesPage(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: AppLocalizations.of(context)!.adminAuctionEarningsTitle,
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            onPressed: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const AdminAuctionEarningsPage(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: AppLocalizations.of(context)!.adminAuctionRequestsTitle,
+            icon: const Icon(Icons.gavel_outlined),
+            onPressed: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const AdminAuctionRequestsPage(),
+                ),
+              );
+            },
+          ),
           IconButton(
             tooltip: AppLocalizations.of(context)!.adminControlCenterTitle,
             icon: const Icon(Icons.dashboard_customize_outlined),
@@ -334,6 +387,12 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
                             ],
                           );
                         },
+                      ),
+
+                      const SizedBox(height: 20),
+                      AdminCashflowLedgerSection(
+                        fmtKwd: widget.fmtKwd,
+                        isAr: isAr,
                       ),
 
                       const SizedBox(height: 16),

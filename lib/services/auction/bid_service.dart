@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -17,16 +19,35 @@ abstract final class BidService {
   static FirebaseFunctions _functions() =>
       FirebaseFunctions.instanceFor(region: 'us-central1');
 
-  static CollectionReference<Map<String, dynamic>> get _col =>
-      _db.collection(AuctionFirestorePaths.bids);
+  /// UUID v4 for [placeBid] idempotency (must match Cloud Function validation).
+  static String newClientRequestId() {
+    final r = Random.secure();
+    final b = List<int>.generate(16, (_) => r.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const hex = '0123456789abcdef';
+    final sb = StringBuffer();
+    for (var i = 0; i < 16; i++) {
+      if (i == 4 || i == 6 || i == 8 || i == 10) sb.write('-');
+      sb.write(hex[b[i] >> 4]);
+      sb.write(hex[b[i] & 0x0f]);
+    }
+    return sb.toString();
+  }
 
+  static CollectionReference<Map<String, dynamic>> _bidsSub(String lotId) =>
+      _db
+          .collection(AuctionFirestorePaths.lots)
+          .doc(lotId)
+          .collection('bids');
+
+  /// Latest bids for one lot (`lots/{lotId}/bids`), ordered by [createdAt] only.
   static Stream<List<AuctionBid>> watchBidsForLot(
     String lotId, {
     int limit = 100,
   }) {
-    return _col
-        .where('lotId', isEqualTo: lotId)
-        .orderBy('timestamp', descending: true)
+    return _bidsSub(lotId)
+        .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
         .map(
@@ -36,14 +57,15 @@ abstract final class BidService {
         );
   }
 
-  /// Admin monitor: latest bids across an auction.
+  /// Admin monitor: latest bids across an auction (collection group `bids`).
   static Stream<List<AuctionBid>> watchBidsForAuction(
     String auctionId, {
     int limit = 20,
   }) {
-    return _col
+    return _db
+        .collectionGroup('bids')
         .where('auctionId', isEqualTo: auctionId)
-        .orderBy('timestamp', descending: true)
+        .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
         .map(
@@ -60,7 +82,6 @@ abstract final class BidService {
     required String lotId,
     required double amount,
   }) async {
-    // Catalog mirror only — no bids / bidders; server validates full rules.
     final pubSnap =
         await _db.collection(AuctionFirestorePaths.publicLots).doc(lotId).get();
     if (!pubSnap.exists || pubSnap.data() == null) {
@@ -110,7 +131,6 @@ abstract final class BidService {
     return const BidEligibility.ok();
   }
 
-  /// Maps [FirebaseFunctionsException] from `placeAuctionBid` to short UI copy.
   static String mapPlaceBidFunctionsError(
     FirebaseFunctionsException e, {
     required bool arabic,
@@ -138,8 +158,16 @@ abstract final class BidService {
           m.contains('registered')) {
         return arabic ? 'لا يمكن المزايدة حالياً' : 'Bidding not allowed right now';
       }
-      if (m.contains('one bid per second') || m.contains('per second')) {
-        return arabic ? 'انتظر ثانية قبل المزايدة مرة أخرى' : 'Wait before bidding again';
+      if (m.contains('one bid per second') ||
+          m.contains('per second') ||
+          m.contains('wait at least') ||
+          m.contains('between bids')) {
+        return arabic ? 'انتظر قليلاً قبل المزايدة مرة أخرى' : 'Wait before bidding again';
+      }
+      if (m.contains('clientrequestid') ||
+          m.contains('client request id') ||
+          m.contains('different amount')) {
+        return arabic ? 'طلب مزايدة مكرر أو غير صالح' : 'Duplicate or invalid bid request';
       }
       return arabic ? 'تعذّر تنفيذ المزايدة' : 'Could not place bid';
     }
@@ -147,12 +175,22 @@ abstract final class BidService {
       return arabic ? 'غير مصرّح' : 'Not authorized';
     }
     if (code == 'resource-exhausted') {
-      return arabic ? 'انتظر ثانية قبل المزايدة مرة أخرى' : 'Too many bids — try again shortly';
+      if (m.contains('too many bids') || m.contains('last 60')) {
+        return arabic
+            ? 'عدد كبير من المزايدات — انتظر قليلاً'
+            : 'Too many bids in a short time — try again shortly';
+      }
+      return arabic ? 'انتظر قليلاً قبل المزايدة مرة أخرى' : 'Too many bids — try again shortly';
     }
     if (code == 'not-found') {
       return arabic ? 'العنصر غير موجود' : 'Not found';
     }
     if (code == 'invalid-argument') {
+      if (m.contains('clientrequestid') || m.contains('uuid')) {
+        return arabic
+            ? 'معرّف الطلب غير صالح (UUID)'
+            : 'Invalid client request id (UUID required)';
+      }
       return arabic ? 'بيانات غير صالحة' : 'Invalid request';
     }
     if (code == 'unauthenticated') {
@@ -163,7 +201,6 @@ abstract final class BidService {
         : (e.message ?? 'Something went wrong');
   }
 
-  /// Authoritative bid placement (Firebase Callable `placeAuctionBid`).
   static Future<BidPlacementResult> placeBid({
     required String auctionId,
     required String lotId,
@@ -183,6 +220,7 @@ abstract final class BidService {
         'auctionId': auctionId,
         'lotId': lotId,
         'amount': amount,
+        'clientRequestId': newClientRequestId(),
       });
 
       final raw = res.data;
@@ -192,13 +230,13 @@ abstract final class BidService {
       final data = Map<String, dynamic>.from(raw);
       if (data['success'] == true) {
         final bidId = data['bidId']?.toString() ?? '';
-        final hb = data['highestBid'];
+        final hb = data['currentHighBid'];
         final highest = hb is num ? hb.toDouble() : amount;
         final le = data['lotEndTimeMs'];
         final lotEndMs = le is num ? le.round() : null;
         return BidPlacementResult.success(
           bidId,
-          highestBid: highest,
+          currentHighBid: highest,
           antiSnipeExtended: data['antiSnipeExtended'] == true,
           lotEndTimeMs: lotEndMs,
         );
@@ -245,7 +283,7 @@ class BidPlacementResult {
   const BidPlacementResult._({
     this.success = false,
     this.bidId,
-    this.highestBid,
+    this.currentHighBid,
     this.antiSnipeExtended,
     this.lotEndTimeMs,
     this.rejection,
@@ -254,7 +292,7 @@ class BidPlacementResult {
 
   final bool success;
   final String? bidId;
-  final double? highestBid;
+  final double? currentHighBid;
   final bool? antiSnipeExtended;
   final int? lotEndTimeMs;
   final BidRejectionReason? rejection;
@@ -262,14 +300,14 @@ class BidPlacementResult {
 
   factory BidPlacementResult.success(
     String id, {
-    double? highestBid,
+    double? currentHighBid,
     bool? antiSnipeExtended,
     int? lotEndTimeMs,
   }) =>
       BidPlacementResult._(
         success: true,
         bidId: id,
-        highestBid: highestBid,
+        currentHighBid: currentHighBid,
         antiSnipeExtended: antiSnipeExtended,
         lotEndTimeMs: lotEndTimeMs,
       );

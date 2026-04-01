@@ -82,7 +82,7 @@ class LiveBidsMonitor extends StatelessWidget {
                         ),
                       ),
                       subtitle: Text(
-                        '${_maskUid(b.userId)} · ${fmt.format(b.timestamp.toLocal())}',
+                        '${_maskUid(b.userId)} · ${fmt.format(b.createdAt.toLocal())}',
                         style: const TextStyle(fontSize: 12),
                       ),
                       trailing: isTop

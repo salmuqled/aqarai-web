@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:aqarai_app/models/auction/auction_enums.dart';
 import 'package:aqarai_app/models/auction/auction_firestore_utils.dart';
 
+/// Bid document under `lots/{lotId}/bids/{bidId}`.
+/// Canonical ordering field: [createdAt] (server timestamp).
 class AuctionBid {
   const AuctionBid({
     required this.id,
@@ -10,10 +12,10 @@ class AuctionBid {
     required this.auctionId,
     required this.lotId,
     required this.amount,
-    required this.timestamp,
+    required this.createdAt,
     required this.status,
     required this.isAutoExtended,
-    this.createdAt,
+    this.clientRequestId,
   });
 
   final String id;
@@ -21,10 +23,15 @@ class AuctionBid {
   final String auctionId;
   final String lotId;
   final double amount;
-  final DateTime timestamp;
+  final DateTime createdAt;
   final BidStatus status;
   final bool isAutoExtended;
-  final DateTime? createdAt;
+
+  /// Same as document id when placed via [placeAuctionBid] (UUID v4).
+  final String? clientRequestId;
+
+  /// Alias for UI sorted by time.
+  DateTime get placedAt => createdAt;
 
   Map<String, dynamic> toFirestore() {
     return {
@@ -32,27 +39,27 @@ class AuctionBid {
       'auctionId': auctionId,
       'lotId': lotId,
       'amount': amount,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'createdAt': Timestamp.fromDate(createdAt),
       'status': status.firestoreValue,
       'isAutoExtended': isAutoExtended,
-      if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
+      if (clientRequestId != null && clientRequestId!.trim().isNotEmpty)
+        'clientRequestId': clientRequestId!.trim(),
     };
   }
 
   static AuctionBid fromFirestore(String id, Map<String, dynamic> data) {
-    final ts = auctionReadDateTime(data['timestamp']) ??
-        auctionReadDateTime(data['createdAt']) ??
-        DateTime.now();
+    final created = auctionReadDateTime(data['createdAt']);
+    final cr = data['clientRequestId']?.toString().trim();
     return AuctionBid(
       id: id,
       userId: auctionReadString(data['userId']),
       auctionId: auctionReadString(data['auctionId']),
       lotId: auctionReadString(data['lotId']),
       amount: auctionReadDouble(data['amount']),
-      timestamp: ts,
+      createdAt: created ?? DateTime.now(),
       status: BidStatus.fromFirestore(data['status']?.toString()),
       isAutoExtended: auctionReadBool(data['isAutoExtended']),
-      createdAt: auctionReadDateTime(data['createdAt']),
+      clientRequestId: (cr != null && cr.isNotEmpty) ? cr : null,
     );
   }
 }

@@ -43,10 +43,10 @@ class _BidActionWidgetState extends State<BidActionWidget> {
   void didUpdateWidget(covariant BidActionWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.lot.id != widget.lot.id ||
-        oldWidget.lot.highestBid != widget.lot.highestBid ||
+        oldWidget.lot.currentHighBid != widget.lot.currentHighBid ||
         oldWidget.lot.minIncrement != widget.lot.minIncrement ||
         oldWidget.lot.startingPrice != widget.lot.startingPrice ||
-        oldWidget.lot.endTime != widget.lot.endTime) {
+        oldWidget.lot.endsAt != widget.lot.endsAt) {
       _syncAmountWithLot();
     }
   }
@@ -93,7 +93,7 @@ class _BidActionWidgetState extends State<BidActionWidget> {
   }
 
   Duration _remaining(AuctionLot lot, DateTime serverNow) {
-    return lot.endTime.difference(serverNow);
+    return lot.endsAt.difference(serverNow);
   }
 
   /// Safety lock: no bids in the final second (NTP-skewed clock).
@@ -112,7 +112,7 @@ class _BidActionWidgetState extends State<BidActionWidget> {
   }) {
     if (user == null) return false;
     if (lot.status != LotStatus.active) return false;
-    if (!serverNow.isBefore(lot.endTime)) return false;
+    if (!serverNow.isBefore(lot.endsAt)) return false;
     if (participant?.isApproved != true) return false;
     if (permission?.canBid != true || permission?.isActive != true) {
       return false;
@@ -137,7 +137,7 @@ class _BidActionWidgetState extends State<BidActionWidget> {
     if (lot.status != LotStatus.active) {
       return loc.auctionBidNotAllowed;
     }
-    if (!serverNow.isBefore(lot.endTime)) {
+    if (!serverNow.isBefore(lot.endsAt)) {
       return loc.auctionBidNotAllowed;
     }
     if (participant == null) {
@@ -222,7 +222,7 @@ class _BidActionWidgetState extends State<BidActionWidget> {
           message: _successMessage(context, result.antiSnipeExtended == true),
         );
         if (result.lotEndTimeMs != null) {
-          // Lot stream will refresh endTime; optional local hint only.
+          // Lot stream will refresh endsAt; optional local hint only.
         }
       } else {
         _toast(

@@ -1,18 +1,32 @@
 /**
  * Shared server-side lot finalization (callable admin + scheduled job).
- * Idempotent: lots already `sold` or `closed` return without duplicate writes.
+ * Bids live under `lots/{lotId}/bids/{bidId}` only.
+ * Lot end field: `endsAt` (legacy `endTime` supported until migrated).
  */
 import { HttpsError } from "firebase-functions/v2/https";
-import type { DocumentData, Firestore, Transaction } from "firebase-admin/firestore";
+import type {
+  DocumentData,
+  Firestore,
+  QueryDocumentSnapshot,
+  Transaction,
+} from "firebase-admin/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import {
+  AuctionAnalyticsEventType,
+  recordAuctionAnalyticsEvent,
+} from "./auctionAnalytics";
+import { AUCTION_APPROVAL_TIMEOUT_MS } from "./auctionApprovalDeadline";
+
 export const LOTS = "lots";
-export const BIDS = "bids";
 export const LOGS = "auction_logs";
 
 export const LOT_ACTIVE = "active";
 export const LOT_CLOSED = "closed";
 export const LOT_SOLD = "sold";
+/** Lot had winning bid(s) at end; awaiting seller + admin before `sold`. */
+export const LOT_PENDING_ADMIN_REVIEW = "pending_admin_review";
+export const LOT_REJECTED = "rejected";
 export const BID_WINNING = "winning";
 export const BID_WON = "won";
 export const BID_OUTBID = "outbid";
@@ -34,6 +48,10 @@ export function readTimestamp(v: unknown): Timestamp | null {
   return null;
 }
 
+function readLotEndsAt(lot: DocumentData): Timestamp | null {
+  return readTimestamp(lot.endsAt) ?? readTimestamp(lot.endTime);
+}
+
 export type FinalizeActorKind = "admin" | "system";
 
 export type FinalizeLotCoreResult = {
@@ -52,23 +70,29 @@ function buildAlreadyFinalized(
 ): FinalizeLotCoreResult {
   const status = String(lot.status ?? "");
   let winnerUserId: string | null = null;
+  const wu = lot.winnerUserId;
   const wid = lot.winnerId;
-  if (wid != null && String(wid).trim() !== "") {
+  if (wu != null && String(wu).trim() !== "") {
+    winnerUserId = String(wu);
+  } else if (wid != null && String(wid).trim() !== "") {
     winnerUserId = String(wid);
   } else {
-    const hbid = lot.highestBidderId;
+    const hbid = lot.currentHighBidderId ?? lot.highestBidderId;
     if (hbid != null && String(hbid).trim() !== "") {
       winnerUserId = String(hbid);
     }
   }
   const fp = num(lot.finalPrice);
-  const hb = num(lot.highestBid);
+  const hb = num(lot.currentHighBid ?? lot.highestBid);
   const finalPrice =
     Number.isFinite(fp) && fp > 0
       ? fp
       : Number.isFinite(hb) && hb > 0
         ? hb
         : null;
+  const wbid = lot.winningBidId;
+  const winningBidId =
+    typeof wbid === "string" && wbid.trim() ? wbid.trim() : null;
   return {
     alreadyFinalized: true,
     lotId,
@@ -76,8 +100,36 @@ function buildAlreadyFinalized(
     lotStatus: status,
     winnerUserId,
     finalPrice,
-    winningBidId: null,
+    winningBidId,
   };
+}
+
+/**
+ * Pick exactly one winning bid when multiple docs still have status `winning`
+ * (should be rare). Higher amount wins; tie → latest createdAt; tie → doc id.
+ */
+export function pickSingleTopWinningBid(
+  docs: QueryDocumentSnapshot<DocumentData>[]
+): QueryDocumentSnapshot<DocumentData> {
+  let top = docs[0]!;
+  for (let i = 1; i < docs.length; i++) {
+    const d = docs[i]!;
+    if (compareWinningBids(d, top) > 0) top = d;
+  }
+  return top;
+}
+
+function compareWinningBids(
+  a: QueryDocumentSnapshot<DocumentData>,
+  b: QueryDocumentSnapshot<DocumentData>
+): number {
+  const amtA = num(a.data().amount);
+  const amtB = num(b.data().amount);
+  if (amtA !== amtB) return amtA > amtB ? 1 : -1;
+  const ta = readTimestamp(a.data().createdAt)?.toMillis() ?? 0;
+  const tb = readTimestamp(b.data().createdAt)?.toMillis() ?? 0;
+  if (ta !== tb) return ta > tb ? 1 : -1;
+  return a.id.localeCompare(b.id);
 }
 
 /**
@@ -90,7 +142,6 @@ export async function runFinalizeLotTransaction(
     performedBy: string;
     nowMs: number;
     actorKind: FinalizeActorKind;
-    /** When false, skips endTime check (not used; callers always enforce). */
     enforceEndTimePassed: boolean;
   }
 ): Promise<FinalizeLotCoreResult> {
@@ -103,12 +154,9 @@ export async function runFinalizeLotTransaction(
   } = options;
 
   const lotRef = db.collection(LOTS).doc(lotId);
-  const winningQuery = db
-    .collection(BIDS)
-    .where("lotId", "==", lotId)
-    .where("status", "==", BID_WINNING);
+  const winningQuery = lotRef.collection("bids").where("status", "==", BID_WINNING);
 
-  return db.runTransaction(async (t: Transaction) => {
+  const result = await db.runTransaction(async (t: Transaction) => {
     const lotSnap = await t.get(lotRef);
     if (!lotSnap.exists || !lotSnap.data()) {
       throw new HttpsError("not-found", "Lot not found");
@@ -117,7 +165,12 @@ export async function runFinalizeLotTransaction(
     const auctionId = String(lot.auctionId ?? "");
 
     const status = String(lot.status ?? "");
-    if (status === LOT_CLOSED || status === LOT_SOLD) {
+    if (
+      status === LOT_CLOSED ||
+      status === LOT_SOLD ||
+      status === LOT_PENDING_ADMIN_REVIEW ||
+      status === LOT_REJECTED
+    ) {
       return buildAlreadyFinalized(lotId, lot);
     }
 
@@ -128,10 +181,11 @@ export async function runFinalizeLotTransaction(
       );
     }
 
-    const endTs = readTimestamp(lot.endTime);
+    const endTs = readLotEndsAt(lot);
     if (!endTs) {
-      throw new HttpsError("failed-precondition", "Lot endTime is missing");
+      throw new HttpsError("failed-precondition", "Lot endsAt is missing");
     }
+    // Finalize only when current time is at or after endsAt (same boundary as placeAuctionBid rejection).
     if (enforceEndTimePassed && endTs.toMillis() > nowMs) {
       throw new HttpsError(
         "failed-precondition",
@@ -152,43 +206,44 @@ export async function runFinalizeLotTransaction(
       t.update(lotRef, {
         status: LOT_CLOSED,
         winnerId: null,
+        winnerUserId: null,
+        winningBidId: null,
         finalPrice: null,
+        currentHighBid: null,
+        currentHighBidderId: null,
         finalizedAt: now,
+        sellerApprovalStatus: FieldValue.delete(),
+        adminApproved: FieldValue.delete(),
+        sellerApprovalAt: FieldValue.delete(),
+        adminDecisionAt: FieldValue.delete(),
+        approvalDeadlineAt: FieldValue.delete(),
+        rejectionReason: FieldValue.delete(),
+        approvalOneHourWarningSent: FieldValue.delete(),
+        approvalTenMinWarningSent: FieldValue.delete(),
+        approvalOneMinWarningSent: FieldValue.delete(),
         updatedAt: now,
       });
     } else {
-      lotStatus = LOT_SOLD;
-      let topDoc = winningSnap.docs[0];
-      let topAmount = num(topDoc.data().amount);
-      for (let i = 1; i < winningSnap.docs.length; i++) {
-        const d = winningSnap.docs[i];
-        const a = num(d.data().amount);
-        if (a > topAmount) {
-          topAmount = a;
-          topDoc = d;
-        }
-      }
-
-      for (const d of winningSnap.docs) {
-        if (d.id === topDoc.id) {
-          t.update(d.ref, { status: BID_WON });
-        } else {
-          t.update(d.ref, { status: BID_OUTBID });
-        }
-      }
-
-      const topData = topDoc.data();
-      winnerUserId = String(topData.userId ?? "");
-      highestBid = num(topData.amount);
-      winningBidId = topDoc.id;
-
+      lotStatus = LOT_PENDING_ADMIN_REVIEW;
+      const approvalDeadlineAt = Timestamp.fromMillis(
+        nowMs + AUCTION_APPROVAL_TIMEOUT_MS
+      );
       t.update(lotRef, {
-        status: LOT_SOLD,
-        winnerId: winnerUserId,
-        finalPrice: highestBid,
-        highestBid: highestBid,
-        highestBidderId: winnerUserId,
-        finalizedAt: now,
+        status: LOT_PENDING_ADMIN_REVIEW,
+        sellerApprovalStatus: "pending",
+        adminApproved: false,
+        sellerApprovalAt: FieldValue.delete(),
+        adminDecisionAt: FieldValue.delete(),
+        approvalDeadlineAt,
+        winnerId: null,
+        winnerUserId: null,
+        winningBidId: null,
+        finalPrice: null,
+        finalizedAt: FieldValue.delete(),
+        rejectionReason: FieldValue.delete(),
+        approvalOneHourWarningSent: FieldValue.delete(),
+        approvalTenMinWarningSent: FieldValue.delete(),
+        approvalOneMinWarningSent: FieldValue.delete(),
         updatedAt: now,
       });
     }
@@ -197,17 +252,24 @@ export async function runFinalizeLotTransaction(
     t.set(logRef, {
       auctionId: auctionId || null,
       lotId,
-      action: "lot_closed",
+      action:
+        lotStatus === LOT_PENDING_ADMIN_REVIEW
+          ? "lot_pending_admin_review"
+          : "lot_closed",
       performedBy,
       details: {
         winnerUserId,
         winnerId: winnerUserId,
         finalPrice: highestBid,
-        highestBid,
+        currentHighBid: highestBid,
         winningBidId,
         hadWinningBid: !winningSnap.empty,
         lotStatus,
         actorKind,
+        approvalDeadlineAtMillis:
+          lotStatus === LOT_PENDING_ADMIN_REVIEW
+            ? nowMs + AUCTION_APPROVAL_TIMEOUT_MS
+            : null,
       },
       timestamp: now,
     });
@@ -222,4 +284,19 @@ export async function runFinalizeLotTransaction(
       winningBidId,
     };
   });
+
+  if (
+    !result.alreadyFinalized &&
+    result.lotStatus === LOT_SOLD &&
+    result.winnerUserId &&
+    result.winnerUserId.trim() !== ""
+  ) {
+    void recordAuctionAnalyticsEvent(db, {
+      eventType: AuctionAnalyticsEventType.AUCTION_WON,
+      userId: result.winnerUserId,
+      lotId: result.lotId,
+    });
+  }
+
+  return result;
 }

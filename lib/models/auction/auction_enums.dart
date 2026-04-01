@@ -25,7 +25,11 @@ enum LotStatus {
   pending('pending'),
   active('active'),
   closed('closed'),
-  sold('sold');
+  sold('sold'),
+  /// Auction time ended with bids; awaiting seller + admin before winner is locked.
+  pendingAdminReview('pending_admin_review'),
+  rejected('rejected'),
+  ended('ended');
 
   const LotStatus(this.firestoreValue);
   final String firestoreValue;
@@ -36,6 +40,34 @@ enum LotStatus {
       if (e.firestoreValue == v) return e;
     }
     return LotStatus.pending;
+  }
+}
+
+/// Values for `lots.rejectionReason` when [LotStatus.rejected].
+abstract final class LotRejectionReason {
+  LotRejectionReason._();
+
+  static const approvalTimeout = 'approval_timeout';
+  static const adminRejected = 'admin_rejected';
+  static const sellerRejected = 'seller_rejected';
+}
+
+/// Seller response for a lot in [LotStatus.pendingAdminReview].
+enum LotSellerApprovalStatus {
+  pending('pending'),
+  approved('approved'),
+  rejected('rejected');
+
+  const LotSellerApprovalStatus(this.firestoreValue);
+  final String firestoreValue;
+
+  static LotSellerApprovalStatus? fromFirestore(String? raw) {
+    final v = raw?.trim() ?? '';
+    if (v.isEmpty) return null;
+    for (final e in LotSellerApprovalStatus.values) {
+      if (e.firestoreValue == v) return e;
+    }
+    return null;
   }
 }
 
@@ -131,4 +163,22 @@ abstract final class AuctionLogActions {
   static const String lotsSuperseded = 'lots_superseded';
   static const String biddingPaused = 'bidding_paused';
   static const String biddingResumed = 'bidding_resumed';
+}
+
+/// Admin workflow for [AuctionFirestorePaths.auctionRequests].
+enum AuctionRequestStatus {
+  pending('pending'),
+  approved('approved'),
+  rejected('rejected');
+
+  const AuctionRequestStatus(this.firestoreValue);
+  final String firestoreValue;
+
+  static AuctionRequestStatus fromFirestore(String? raw) {
+    final v = raw?.trim() ?? '';
+    for (final e in AuctionRequestStatus.values) {
+      if (e.firestoreValue == v) return e;
+    }
+    return AuctionRequestStatus.pending;
+  }
 }

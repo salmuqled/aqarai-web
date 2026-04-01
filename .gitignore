@@ -48,5 +48,8 @@ app.*.map.json
 **/serviceAccountKey.json
 **/serviceAccount*.json
 
+# Firebase Functions local env (SMTP secrets, etc.)
+functions/.env*
+
 # Firebase options (يحتوي API keys — لا ترفعه؛ استخدم: flutterfire configure)
 lib/firebase_options.dart

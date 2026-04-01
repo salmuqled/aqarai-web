@@ -1,5 +1,5 @@
 /**
- * Periodically finalizes lots that are still `active` but past `endTime`.
+ * Periodically finalizes lots that are still `active` but past `endsAt`.
  *
  * Note: Google Cloud Scheduler (Firebase scheduled functions) does not support
  * sub-minute intervals; the tightest practical schedule is once per minute.
@@ -30,7 +30,7 @@ export const finalizeExpiredAuctionLots = onSchedule(
     const snap = await db
       .collection(LOTS)
       .where("status", "==", LOT_ACTIVE)
-      .where("endTime", "<", now)
+      .where("endsAt", "<", now)
       .limit(QUERY_LIMIT)
       .get();
 

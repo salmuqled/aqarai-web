@@ -10,6 +10,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 
 // ✅ بدل main.dart
 import 'package:aqarai_app/app/navigation_keys.dart';
+import 'package:aqarai_app/pages/auction_details_page.dart';
 import 'package:aqarai_app/services/notification_click_tracking_service.dart';
 
 // ✅ للتهيئة الآمنة داخل الهاندلر الخلفي
@@ -151,6 +152,24 @@ class NotificationService {
   /// يعرض الـ Dialog ويستدعي الCallable حسب زر المستخدم
   static void _handle(BuildContext context, RemoteMessage message) {
     final data = message.data;
+    final type = data['type']?.toString();
+
+    switch (type) {
+      case AuctionApprovalReminderFcmTypes.oneHour:
+        _navigateToAuctionApprovalLot(data);
+        return;
+      case AuctionApprovalReminderFcmTypes.tenMin:
+        _navigateToAuctionApprovalLot(data);
+        return;
+      case AuctionApprovalReminderFcmTypes.oneMin:
+        _navigateToAuctionApprovalLot(data);
+        return;
+      case AuctionApprovalReminderFcmTypes.legacyDeadlineSoon:
+        // خلفية: السيرفر كان يرسل type واحداً مع data.stage
+        _navigateToAuctionApprovalLot(data);
+        return;
+    }
+
     final actionType = data['actionType']; // rent_status | sale_status
     final propertyId = data['propertyId'];
     final yesStatus = data['action_yes']; // hard_delete
@@ -257,6 +276,25 @@ class NotificationService {
   }
 
   /// تحديث الاشتراك في Topic الإدمن (تقدر تناديها عند تغيّر الصلاحية)
+  /// فتح صفحة تفاصيل القطعة بعد الضغط على تذكير اعتماد المزاد (FCM).
+  static void _navigateToAuctionApprovalLot(Map<String, dynamic> data) {
+    final lotId = data['lotId']?.toString().trim() ?? '';
+    if (lotId.isEmpty) return;
+    final auctionRaw = data['auctionId']?.toString().trim() ?? '';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final nav = rootNavigatorKey.currentState;
+      if (nav == null) return;
+      nav.push(
+        MaterialPageRoute<void>(
+          builder: (_) => AuctionDetailsPage(
+            lotId: lotId,
+            auctionId: auctionRaw.isEmpty ? null : auctionRaw,
+          ),
+        ),
+      );
+    });
+  }
+
   static Future<void> toggleAdminTopic(bool subscribe) async {
     try {
       if (subscribe) {
@@ -266,4 +304,16 @@ class NotificationService {
       }
     } catch (_) {}
   }
+}
+
+/// قيم `data['type']` لتذكيرات اعتماد المزاد (تطابق Cloud Function).
+abstract final class AuctionApprovalReminderFcmTypes {
+  AuctionApprovalReminderFcmTypes._();
+
+  static const String oneHour = 'auction_approval_1h';
+  static const String tenMin = 'auction_approval_10m';
+  static const String oneMin = 'auction_approval_1m';
+
+  /// Payloads أقدم قبل فصل النوع لكل مرحلة (`data.stage` كان اختيارياً).
+  static const String legacyDeadlineSoon = 'auction_approval_deadline_soon';
 }

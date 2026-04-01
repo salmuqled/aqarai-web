@@ -23,7 +23,7 @@ class LotPermission {
   final bool isActive;
   final DateTime createdAt;
   final DateTime? updatedAt;
-  /// Server-set by [placeAuctionBid] for rate limiting (1 bid / second / lot).
+  /// Server-set by [placeAuctionBid] for rate limiting (min interval + bids / minute window).
   final DateTime? lastBidAt;
 
   static String documentId(String userId, String lotId) => '${userId}_$lotId';

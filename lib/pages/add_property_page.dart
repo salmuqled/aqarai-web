@@ -11,16 +11,14 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
-// الخرائط الرسمية
-import 'package:aqarai_app/data/governorates_data_ar.dart';
-import 'package:aqarai_app/data/governorates_data_en.dart';
-
 // 🔥 التحويل الرسمي AR → EN (الاستخدام داخل صفحة الإضافة)
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 
 import 'package:aqarai_app/pages/my_ads_page.dart';
 import 'package:aqarai_app/services/seller_radar_service.dart';
 import 'package:aqarai_app/services/user_ban_service.dart';
+import 'package:aqarai_app/utils/property_form_parsing.dart';
+import 'package:aqarai_app/widgets/property_area_search_sheet.dart';
 
 class AddPropertyPage extends StatefulWidget {
   const AddPropertyPage({super.key});
@@ -68,17 +66,6 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   late final TapGestureRecognizer _termsLinkTap;
 
   String? _lastLocaleCode;
-
-  // ✅ توليد Code ثابت وآمن (دائم)
-  String _code(String s) {
-    var v = s.trim().toLowerCase();
-    v = v.replaceAll(RegExp(r'\s+'), '_');
-    v = v.replaceAll('-', '_');
-    v = v.replaceAll(RegExp(r'[^a-z0-9_]+'), '');
-    v = v.replaceAll(RegExp(r'_+'), '_');
-    v = v.replaceAll(RegExp(r'^_+|_+$'), '');
-    return v;
-  }
 
   @override
   void initState() {
@@ -138,21 +125,6 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     }
   }
 
-  String _normalizeDigits(String input) {
-    const arabic = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-    const persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-
-    var s = input.trim();
-    for (var i = 0; i < 10; i++) {
-      s = s.replaceAll(arabic[i], '$i').replaceAll(persian[i], '$i');
-    }
-    return s.replaceAll(RegExp(r'[^\d\.\-]'), '');
-  }
-
-  int _parseInt(String text) => int.tryParse(_normalizeDigits(text)) ?? 0;
-  double _parseDouble(String text) =>
-      double.tryParse(_normalizeDigits(text)) ?? 0;
-
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
@@ -197,7 +169,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     }
     final areaAr = selectedArea!;
     final areaEn = areaArToEn[areaAr] ?? '';
-    final areaCode = _code(areaEn.isNotEmpty ? areaEn : areaAr);
+    final areaCode = propertyLocationCode(areaEn.isNotEmpty ? areaEn : areaAr);
     try {
       final count = await SellerRadarService().getInterestedBuyersCount(
         areaCode: areaCode,
@@ -228,11 +200,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       return false;
     }
 
-    if (_normalizeDigits(sizeController.text).isEmpty) {
+    if (normalizeDigitsForPropertyForm(sizeController.text).isEmpty) {
       _toast(loc.propertySize);
       return false;
     }
-    if (_normalizeDigits(priceController.text).isEmpty) {
+    if (normalizeDigitsForPropertyForm(priceController.text).isEmpty) {
       _toast(loc.propertyPrice);
       return false;
     }
@@ -296,8 +268,9 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       final areaEn = areaArToEn[areaAr] ?? "";
 
       // ✅ codes ثابتة للبحث (الأساس الجديد)
-      final governorateCode = _code(govEn.isNotEmpty ? govEn : govAr);
-      final areaCode = _code(areaEn.isNotEmpty ? areaEn : areaAr);
+      final governorateCode =
+          propertyLocationCode(govEn.isNotEmpty ? govEn : govAr);
+      final areaCode = propertyLocationCode(areaEn.isNotEmpty ? areaEn : areaAr);
 
       final data = {
         "ownerId": user.uid,
@@ -320,12 +293,12 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
 
         "description": descriptionController.text.trim(),
 
-        "roomCount": _parseInt(roomCountController.text),
-        "masterRoomCount": _parseInt(masterRoomCountController.text),
-        "bathroomCount": _parseInt(bathroomCountController.text),
-        "parkingCount": _parseInt(parkingCountController.text),
-        "size": _parseDouble(sizeController.text),
-        "price": _parseDouble(priceController.text),
+        "roomCount": parsePropertyInt(roomCountController.text),
+        "masterRoomCount": parsePropertyInt(masterRoomCountController.text),
+        "bathroomCount": parsePropertyInt(bathroomCountController.text),
+        "parkingCount": parsePropertyInt(parkingCountController.text),
+        "size": parsePropertyDouble(sizeController.text),
+        "price": parsePropertyDouble(priceController.text),
 
         "hasElevator": hasElevator,
         "hasCentralAC": hasCentralAC,
@@ -382,81 +355,16 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   }
 
   void _openAreaSearchSheet() {
-    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
-    final data = isArabic ? governoratesAndAreasAr : governoratesAndAreasEn;
-
-    final List<Map<String, String>> allAreas = [];
-    data.forEach((gov, areas) {
-      for (final area in areas) {
-        allAreas.add({"governorate": gov, "area": area});
-      }
-    });
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) {
-        String query = "";
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final filtered = allAreas.where((item) {
-              final a = item["area"]!.toLowerCase();
-              final g = item["governorate"]!.toLowerCase();
-              final q = query.toLowerCase();
-              return a.contains(q) || g.contains(q);
-            }).toList();
-
-            return Padding(
-              padding: MediaQuery.of(context).viewInsets,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: TextField(
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: isArabic ? "ابحث عن المنطقة" : "Search area",
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      onChanged: (v) => setModalState(() => query = v),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) {
-                        final item = filtered[i];
-                        return ListTile(
-                          title: Text(item["area"]!),
-                          subtitle: Text(item["governorate"]!),
-                          onTap: () {
-                            if (!mounted) return;
-                            setState(() {
-                              selectedGovernorate = item["governorate"];
-                              selectedArea = item["area"];
-                            });
-                            Navigator.pop(context);
-                            WidgetsBinding.instance.addPostFrameCallback(
-                                (_) => _updateInterestedBuyersCount());
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+    showPropertyAreaSearchSheet(
+      context,
+      onAreaSelected: (governorate, area) {
+        if (!mounted) return;
+        setState(() {
+          selectedGovernorate = governorate;
+          selectedArea = area;
+        });
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _updateInterestedBuyersCount());
       },
     );
   }

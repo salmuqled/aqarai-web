@@ -467,16 +467,36 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    /* Authoritative lot data (admin read/write). Clients browse public_lots. */
+    /* Authoritative lot data: writes admin-only; reads for signed-in bidders/live UI.
+       Critical fields (status, approvals, winner) are only set by Cloud Functions. */
     match /lots/{lotId} {
-      allow read: if isAdmin();
+      allow read: if isSignedIn();
       allow create, update, delete: if isAdmin();
+
+      /* Bids subcollection — writes only via Cloud Functions. */
+      match /bids/{bidId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if false;
+      }
     }
 
     /* Safe catalog mirror of lots — synced by Cloud Function only. */
     match /public_lots/{lotId} {
       allow read: if true;
       allow write: if false;
+    }
+
+    /* Auction analytics (append-only). Clients may only create `auction_viewed` for self. */
+    match /analytics_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.eventType == 'auction_viewed'
+        && request.resource.data.lotId is string
+        && request.resource.data.lotId.size() > 0
+        && request.resource.data.keys().hasAll(['eventType', 'userId', 'lotId', 'timestamp'])
+        && request.resource.data.size() == 4;
+      allow update, delete: if false;
     }
 
     match /auction_participants/{docId} {
@@ -518,6 +538,167 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isAdmin();
       allow update, delete: if false;
+    }
+
+    /* User requests to include a property in an auction (admin reviews). */
+    match /auction_requests/{requestId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.propertyType is string
+        && request.resource.data.governorate is string
+        && request.resource.data.area is string
+        && request.resource.data.governorateCode is string
+        && request.resource.data.areaCode is string
+        && request.resource.data.governorateAr is string
+        && request.resource.data.governorateEn is string
+        && request.resource.data.areaAr is string
+        && request.resource.data.areaEn is string
+        && request.resource.data.price is number
+        && request.resource.data.size is number
+        && request.resource.data.roomCount is int
+        && request.resource.data.masterRoomCount is int
+        && request.resource.data.bathroomCount is int
+        && request.resource.data.parkingCount is int
+        && request.resource.data.hasElevator is bool
+        && request.resource.data.hasCentralAC is bool
+        && request.resource.data.hasSplitAC is bool
+        && request.resource.data.hasMaidRoom is bool
+        && request.resource.data.hasDriverRoom is bool
+        && request.resource.data.hasLaundryRoom is bool
+        && request.resource.data.hasGarden is bool
+        && request.resource.data.description is string
+        && request.resource.data.images is list
+        && request.resource.data.acceptLowerStartPrice is bool
+        && request.resource.data.auctionFee is number
+        && request.resource.data.auctionFee >= 1
+        && request.resource.data.auctionFee <= 1000000
+        && request.resource.data.auctionFeeStatus == 'pending'
+        && !request.resource.data.keys().hasAny(['auctionFeePaidAt', 'paymentReference']);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ============================================================
+        Company payments ledger (manual cash / bank / check — admin only)
+    ============================================================ */
+
+    /// Bank/check: document ID must equal referenceNumber (unique key). Cash: auto ID, no stored reference.
+    function companyPaymentCreateValid(paymentId) {
+      let d = request.resource.data;
+      return d.amount is number
+        && d.amount > 0
+        && d.status in ['pending', 'confirmed', 'rejected']
+        && d.type in ['auction_fee', 'commission', 'other']
+        && d.reason in ['sale', 'rent', 'auction', 'management_fee', 'other']
+        && d.source in ['bank_transfer', 'certified_check', 'cash']
+        && d.relatedType in ['auction_request', 'deal', 'manual']
+        && d.notes is string
+        && d.createdBy == request.auth.uid
+        && d.updatedBy == request.auth.uid
+        && d.updatedBy is string
+        && d.createdAt is timestamp
+        && (!('relatedId' in d) || d.relatedId is string)
+        && (
+          (d.source in ['bank_transfer', 'certified_check']
+            && paymentId == d.referenceNumber
+            && d.referenceNumber is string
+            && d.referenceNumber.size() > 0)
+          || (d.source == 'cash'
+            && (!('referenceNumber' in d)
+              || (d.referenceNumber is string && d.referenceNumber.size() == 0)))
+        )
+        && (
+          (d.type == 'auction_fee'
+            && d.relatedType == 'auction_request'
+            && d.relatedId is string
+            && d.relatedId.size() > 0)
+          || (d.type == 'commission'
+            && d.relatedType == 'deal'
+            && d.relatedId is string
+            && d.relatedId.size() > 0)
+          || (d.type == 'other'
+            && d.relatedType == 'manual')
+        );
+    }
+
+    function companyPaymentRelatedIdUnchanged() {
+      return (!('relatedId' in resource.data) && !('relatedId' in request.resource.data))
+        || ('relatedId' in resource.data && 'relatedId' in request.resource.data
+            && resource.data.relatedId == request.resource.data.relatedId);
+    }
+
+    function companyPaymentReferenceNumberUnchanged() {
+      return (!('referenceNumber' in resource.data) && !('referenceNumber' in request.resource.data))
+        || ('referenceNumber' in resource.data && 'referenceNumber' in request.resource.data
+            && resource.data.referenceNumber == request.resource.data.referenceNumber);
+    }
+
+    /// Updates may only change status, notes, and updatedBy; all financial / linkage fields stay fixed.
+    function companyPaymentUpdateValid() {
+      let r = resource.data;
+      let n = request.resource.data;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'notes', 'updatedBy'])
+        && r.amount == n.amount
+        && r.type == n.type
+        && r.reason == n.reason
+        && r.source == n.source
+        && r.relatedType == n.relatedType
+        && r.createdAt == n.createdAt
+        && r.createdBy == n.createdBy
+        && companyPaymentRelatedIdUnchanged()
+        && companyPaymentReferenceNumberUnchanged()
+        && n.status in ['pending', 'confirmed', 'rejected']
+        && n.notes is string
+        && n.updatedBy is string
+        && n.updatedBy == request.auth.uid;
+    }
+
+    match /company_payments/{paymentId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && companyPaymentCreateValid(paymentId);
+      allow update: if isAdmin() && companyPaymentUpdateValid();
+      // No deletes — financial audit trail. Void entries via status = "rejected".
+      allow delete: if false;
+    }
+
+    /* ============================================================
+        Payment audit logs (append-only; mirrors company_payments events)
+    ============================================================ */
+
+    match /payment_logs/{logId} {
+      allow read: if isAdmin();
+      // Only Cloud Functions (Admin SDK) may create logs — unified audit source.
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    /* ============================================================
+        Invoices (PDF receipts — created only by Cloud Functions)
+    ============================================================ */
+
+    match /invoices/{invoiceId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /* ============================================================
+        Financial ledger (revenue — written only by Cloud Functions)
+    ============================================================ */
+
+    match /financial_ledger/{entryId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /* ============================================================
+        System counters (invoice sequences — Functions / Admin SDK only)
+    ============================================================ */
+
+    match /system/{docId} {
+      allow read, write: if false;
     }
 
     /* ============================================================

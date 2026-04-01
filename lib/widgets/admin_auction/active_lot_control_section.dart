@@ -126,7 +126,7 @@ class _ActiveLotControlSectionState extends State<ActiveLotControlSection> {
   }
 
   String _countdown(AuctionLot lot) {
-    final diff = lot.endTime.difference(_now);
+    final diff = lot.endsAt.difference(_now);
     if (diff.isNegative) {
       return widget.isArabic ? 'انتهى' : 'Ended';
     }
@@ -169,10 +169,10 @@ class _ActiveLotControlSectionState extends State<ActiveLotControlSection> {
                       fontWeight: FontWeight.w700, fontSize: 17)),
               const SizedBox(height: 6),
               Text(
-                '${ar ? 'أعلى مزايدة' : 'Highest'}: ${lot.highestBid ?? '—'}',
+                '${ar ? 'أعلى مزايدة' : 'Highest'}: ${lot.currentHighBid ?? '—'}',
               ),
               Text(
-                '${ar ? 'المزايد' : 'Bidder'}: ${lot.highestBidderId ?? '—'}',
+                '${ar ? 'المزايد' : 'Bidder'}: ${lot.currentHighBidderId ?? '—'}',
                 style: const TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 6),
@@ -186,7 +186,7 @@ class _ActiveLotControlSectionState extends State<ActiveLotControlSection> {
                 ),
               ),
               Text(
-                DateFormat.yMMMd().add_Hm().format(lot.endTime.toLocal()),
+                DateFormat.yMMMd().add_Hm().format(lot.endsAt.toLocal()),
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
               ),
               if (a.status != AuctionStatus.live)

@@ -64,6 +64,22 @@ export function buildPublicLotData(
       ? d.depositType.trim()
       : "fixed";
 
+  const endsAt = d.endsAt ?? d.endTime ?? null;
+  const currentHighBid =
+    d.currentHighBid !== undefined && d.currentHighBid !== null
+      ? d.currentHighBid
+      : d.highestBid;
+  const currentHighBidderId =
+    d.currentHighBidderId != null && String(d.currentHighBidderId).trim() !== ""
+      ? String(d.currentHighBidderId).trim()
+      : d.highestBidderId != null && String(d.highestBidderId).trim() !== ""
+        ? String(d.highestBidderId).trim()
+        : null;
+  const bidCount =
+    typeof d.bidCount === "number" && Number.isFinite(d.bidCount)
+      ? d.bidCount
+      : 0;
+
   const out: Record<string, unknown> = {
     id: lotId,
     auctionId: String(d.auctionId ?? ""),
@@ -76,9 +92,39 @@ export function buildPublicLotData(
     depositValue,
     startTime: d.startTime ?? admin.firestore.Timestamp.now(),
     status,
+    currentHighBid: currentHighBid ?? null,
+    currentHighBidderId,
+    bidCount,
   };
+  if (endsAt != null) {
+    out.endsAt = endsAt;
+  }
   if (propertyId != null) {
     out.propertyId = propertyId;
+  }
+
+  const sas = d.sellerApprovalStatus;
+  if (typeof sas === "string" && sas.trim() !== "") {
+    out.sellerApprovalStatus = sas.trim();
+  }
+  if (d.adminApproved === true || d.adminApproved === false) {
+    out.adminApproved = d.adminApproved;
+  }
+  const saa = d.sellerApprovalAt;
+  if (saa != null) {
+    out.sellerApprovalAt = saa;
+  }
+  const ada = d.adminDecisionAt;
+  if (ada != null) {
+    out.adminDecisionAt = ada;
+  }
+  const adl = d.approvalDeadlineAt;
+  if (adl != null) {
+    out.approvalDeadlineAt = adl;
+  }
+  const rr = d.rejectionReason;
+  if (typeof rr === "string" && rr.trim() !== "") {
+    out.rejectionReason = rr.trim();
   }
   return out;
 }

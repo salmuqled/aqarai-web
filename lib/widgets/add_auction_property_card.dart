@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:aqarai_app/app/app_theme.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
-/// Promotional CTA to submit a property for auction (navigate to [AddPropertyPage] from parent).
+/// Promotional CTA to submit a property for auction (parent opens [AuctionRequestPage]).
 class AddAuctionPropertyCard extends StatelessWidget {
   const AddAuctionPropertyCard({
     super.key,

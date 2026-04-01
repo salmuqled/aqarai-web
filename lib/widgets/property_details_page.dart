@@ -7,9 +7,12 @@ import '../l10n/app_localizations.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/admin_action_service.dart';
 import 'package:aqarai_app/services/caption_click_log_service.dart';
+import 'package:aqarai_app/services/auction/auction_analytics_service.dart';
 import 'package:aqarai_app/services/property_view_tracking_service.dart';
 import 'package:aqarai_app/models/auction/auction_firestore_paths.dart';
 import 'package:aqarai_app/models/auction/public_auction_lot.dart';
+import 'package:aqarai_app/pages/seller_auction_approval_page.dart';
+import 'package:aqarai_app/widgets/auction/auction_lot_rejection_strip.dart';
 import 'package:aqarai_app/widgets/auction_registration_status_widget.dart';
 
 class PropertyDetailsPage extends StatelessWidget {
@@ -104,6 +107,7 @@ class PropertyDetailsPage extends StatelessWidget {
       leadSource: leadSource,
       skipRecording: isAdminView,
       captionTrackingId: captionTrackingId,
+      auctionLotId: auctionLotId,
       child: Scaffold(
         backgroundColor: const Color(0xFFF7F7F7),
 
@@ -204,6 +208,23 @@ class PropertyDetailsPage extends StatelessWidget {
                     lotDocId: auctionLotId!.trim(),
                     expectedAuctionId: auctionId,
                     listingPrice: price.toDouble(),
+                  ),
+
+                if (!isAdminView &&
+                    auctionLotId != null &&
+                    auctionLotId!.trim().isNotEmpty)
+                  _AuctionLotPublicRejectionStrip(
+                    lotDocId: auctionLotId!.trim(),
+                    expectedAuctionId: auctionId,
+                  ),
+
+                if (!isAdminView &&
+                    auctionLotId != null &&
+                    auctionLotId!.trim().isNotEmpty &&
+                    ownerId.isNotEmpty &&
+                    FirebaseAuth.instance.currentUser?.uid == ownerId)
+                  _SellerAuctionOutcomeEntry(
+                    lotId: auctionLotId!.trim(),
                   ),
 
                 const SizedBox(height: 16),
@@ -700,6 +721,7 @@ class _RecordPropertyViewOnce extends StatefulWidget {
   final String leadSource;
   final bool skipRecording;
   final String? captionTrackingId;
+  final String? auctionLotId;
   final Widget child;
 
   const _RecordPropertyViewOnce({
@@ -707,6 +729,7 @@ class _RecordPropertyViewOnce extends StatefulWidget {
     required this.leadSource,
     required this.skipRecording,
     this.captionTrackingId,
+    this.auctionLotId,
     required this.child,
   });
 
@@ -743,6 +766,14 @@ class _RecordPropertyViewOnceState extends State<_RecordPropertyViewOnce> {
           propertyId: widget.propertyId,
           area: area,
         );
+      });
+    }
+    final lotFromAuction = widget.auctionLotId?.trim();
+    if (lotFromAuction != null &&
+        lotFromAuction.isNotEmpty &&
+        !widget.skipRecording) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        AuctionAnalyticsService.logAuctionViewed(lotId: lotFromAuction);
       });
     }
   }
@@ -797,6 +828,130 @@ class _FavoriteHeart extends StatelessWidget {
               }
             }
           },
+        );
+      },
+    );
+  }
+}
+
+/// Shows timeout vs manual rejection copy from `public_lots` when status is `rejected`.
+class _AuctionLotPublicRejectionStrip extends StatelessWidget {
+  const _AuctionLotPublicRejectionStrip({
+    required this.lotDocId,
+    this.expectedAuctionId,
+  });
+
+  final String lotDocId;
+  final String? expectedAuctionId;
+
+  @override
+  Widget build(BuildContext context) {
+    final col = AuctionFirestorePaths.publicLots;
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream:
+          FirebaseFirestore.instance.collection(col).doc(lotDocId).snapshots(),
+      builder: (context, docSnap) {
+        final ds = docSnap.data;
+        if (ds == null || !ds.exists || ds.data() == null) {
+          return const SizedBox.shrink();
+        }
+        final lot = PublicAuctionLot.fromFirestore(ds.id, ds.data()!);
+        final exp = expectedAuctionId?.trim();
+        if (exp != null && exp.isNotEmpty && lot.auctionId != exp) {
+          return const SizedBox.shrink();
+        }
+        if (lot.displayStatus != 'rejected') {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: AuctionLotRejectionStrip(
+            rejectionReason: lot.rejectionReason,
+            dense: true,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Prompts the listing owner when the linked lot is in `pending_admin_review`.
+class _SellerAuctionOutcomeEntry extends StatelessWidget {
+  const _SellerAuctionOutcomeEntry({required this.lotId});
+
+  final String lotId;
+
+  @override
+  Widget build(BuildContext context) {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(AuctionFirestorePaths.publicLots)
+          .doc(lotId)
+          .snapshots(),
+      builder: (context, s) {
+        final d = s.data?.data();
+        if (d == null) return const SizedBox.shrink();
+        final status = d['status']?.toString() ?? '';
+        if (status != 'pending_admin_review') {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Card(
+            color: Colors.teal.shade50,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.teal.shade200),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.how_to_vote_outlined, color: Colors.teal.shade800),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          isAr
+                              ? 'مطلوب موافقتك على نتيجة المزاد'
+                              : 'Your approval is required for the auction outcome',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.teal.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isAr
+                        ? 'راجع أعلى مزايدة وقرّر القبول أو الرفض.'
+                        : 'Review the highest bid and accept or reject.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => SellerAuctionApprovalPage(lotId: lotId),
+                        ),
+                      );
+                    },
+                    child: Text(isAr ? 'مراجعة' : 'Review'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         );
       },
     );

@@ -212,6 +212,8 @@ class PropertyClosureService {
     });
 
     final dealPayload = <String, dynamic>{
+      'status': 'sold',
+      'createdAt': FieldValue.serverTimestamp(),
       'propertyId': propertyId,
       'ownerId': p['ownerId'] ?? r['ownerId'],
       'buyerId': buyerId,

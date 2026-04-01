@@ -8,7 +8,7 @@ import 'package:aqarai_app/models/auction/auction_enums.dart';
 import 'package:aqarai_app/models/auction/public_auction_lot.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/auction/auction_service.dart';
-import 'package:aqarai_app/pages/add_property_page.dart';
+import 'package:aqarai_app/pages/auction_request_page.dart';
 import 'package:aqarai_app/services/auction/lot_service.dart';
 import 'package:aqarai_app/widgets/add_auction_property_card.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
@@ -199,6 +199,16 @@ class _AuctionsPageState extends State<AuctionsPage> {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    const SizedBox(height: 24),
+                    AddAuctionPropertyCard(
+                      onTap: () {
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const AuctionRequestPage(),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -220,7 +230,7 @@ class _AuctionsPageState extends State<AuctionsPage> {
                 void openAddProperty() {
                   Navigator.of(context).push<void>(
                     MaterialPageRoute<void>(
-                      builder: (_) => const AddPropertyPage(),
+                      builder: (_) => const AuctionRequestPage(),
                     ),
                   );
                 }

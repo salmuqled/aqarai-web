@@ -1,8 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:aqarai_app/config/auction_read_compat.dart';
 import 'package:aqarai_app/models/auction/auction_enums.dart';
 import 'package:aqarai_app/models/auction/auction_firestore_utils.dart';
 
+/// Authoritative auction lot (`lots/{id}`).
+///
+/// Firestore field names (canonical):
+/// - [endsAt], [currentHighBid], [currentHighBidderId]
 class AuctionLot {
   const AuctionLot({
     required this.id,
@@ -17,13 +22,19 @@ class AuctionLot {
     required this.depositType,
     required this.depositValue,
     required this.startTime,
-    required this.endTime,
+    required this.endsAt,
     required this.status,
-    this.highestBid,
-    this.highestBidderId,
+    this.currentHighBid,
+    this.currentHighBidderId,
+    this.bidCount = 0,
     this.winnerId,
     this.finalPrice,
     this.finalizedAt,
+    this.sellerApprovalStatus,
+    this.adminApproved,
+    this.sellerApprovalAt,
+    this.adminDecisionAt,
+    this.rejectionReason,
     required this.createdAt,
     this.updatedAt,
   });
@@ -32,7 +43,6 @@ class AuctionLot {
   final String auctionId;
   final String title;
   final String description;
-  /// When set, points at `properties/{propertyId}` for listing details.
   final String? propertyId;
   final String? image;
   final String? location;
@@ -41,14 +51,20 @@ class AuctionLot {
   final DepositType depositType;
   final double depositValue;
   final DateTime startTime;
-  final DateTime endTime;
+  final DateTime endsAt;
   final LotStatus status;
-  final double? highestBid;
-  final String? highestBidderId;
-  /// Set when lot is finalized with a winning bid (`sold`).
+  final double? currentHighBid;
+  final String? currentHighBidderId;
+  final int bidCount;
   final String? winnerId;
   final double? finalPrice;
   final DateTime? finalizedAt;
+  final LotSellerApprovalStatus? sellerApprovalStatus;
+  final bool? adminApproved;
+  final DateTime? sellerApprovalAt;
+  final DateTime? adminDecisionAt;
+  /// e.g. `approval_timeout`, `admin_rejected`, `seller_rejected` when [status] is rejected.
+  final String? rejectionReason;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -67,27 +83,57 @@ class AuctionLot {
       'depositType': depositType.firestoreValue,
       'depositValue': depositValue,
       'startTime': Timestamp.fromDate(startTime),
-      'endTime': Timestamp.fromDate(endTime),
+      'endsAt': Timestamp.fromDate(endsAt),
       'status': status.firestoreValue,
-      if (highestBid != null) 'highestBid': highestBid,
-      if (highestBidderId != null && highestBidderId!.isNotEmpty)
-        'highestBidderId': highestBidderId,
+      if (currentHighBid != null) 'currentHighBid': currentHighBid,
+      if (currentHighBidderId != null && currentHighBidderId!.isNotEmpty)
+        'currentHighBidderId': currentHighBidderId,
+      'bidCount': bidCount,
       if (winnerId != null && winnerId!.isNotEmpty) 'winnerId': winnerId,
       if (finalPrice != null) 'finalPrice': finalPrice,
       if (finalizedAt != null) 'finalizedAt': Timestamp.fromDate(finalizedAt!),
+      if (sellerApprovalStatus != null)
+        'sellerApprovalStatus': sellerApprovalStatus!.firestoreValue,
+      if (adminApproved != null) 'adminApproved': adminApproved,
+      if (sellerApprovalAt != null)
+        'sellerApprovalAt': Timestamp.fromDate(sellerApprovalAt!),
+      if (adminDecisionAt != null)
+        'adminDecisionAt': Timestamp.fromDate(adminDecisionAt!),
+      if (rejectionReason != null && rejectionReason!.trim().isNotEmpty)
+        'rejectionReason': rejectionReason!.trim(),
       'createdAt': Timestamp.fromDate(createdAt),
       if (updatedAt != null) 'updatedAt': Timestamp.fromDate(updatedAt!),
     };
   }
 
   static AuctionLot fromFirestore(String id, Map<String, dynamic> data) {
-    final hb = data['highestBid'];
-    final double? highBid = hb is num && hb.isFinite ? hb.toDouble() : null;
-    final bidder = data['highestBidderId']?.toString();
-    final winId = data['winnerId']?.toString();
-    final fp = data['finalPrice'];
-    final double? finalP =
-        fp is num && fp.isFinite ? fp.toDouble() : null;
+    final hbCanon = data['currentHighBid'];
+    final hbLegacy = kAuctionReadLegacyLotFields ? data['highestBid'] : null;
+    final highRaw = hbCanon ?? hbLegacy;
+    final double? highBid =
+        highRaw is num && highRaw.isFinite ? highRaw.toDouble() : null;
+
+    final bidderCanon = data['currentHighBidderId']?.toString();
+    final bidderLegacy =
+        kAuctionReadLegacyLotFields ? data['highestBidderId']?.toString() : null;
+    final bidder = (bidderCanon != null && bidderCanon.isNotEmpty)
+        ? bidderCanon
+        : (bidderLegacy != null && bidderLegacy.isNotEmpty)
+            ? bidderLegacy
+            : null;
+
+    final endsCanon = auctionReadDateTime(data['endsAt']);
+    final endsLegacy =
+        kAuctionReadLegacyLotFields ? auctionReadDateTime(data['endTime']) : null;
+    final ends = endsCanon ?? endsLegacy ?? DateTime.now();
+
+    final bc = data['bidCount'];
+    final bidCount = bc is int
+        ? bc
+        : bc is num
+            ? bc.round()
+            : 0;
+
     final pid = data['propertyId']?.toString().trim();
     final img = data['image']?.toString().trim();
     final loc = data['location']?.toString().trim();
@@ -104,30 +150,47 @@ class AuctionLot {
       depositType: DepositType.fromFirestore(data['depositType']?.toString()),
       depositValue: auctionReadDouble(data['depositValue']),
       startTime: auctionReadDateTime(data['startTime']) ?? DateTime.now(),
-      endTime: auctionReadDateTime(data['endTime']) ?? DateTime.now(),
+      endsAt: ends,
       status: LotStatus.fromFirestore(data['status']?.toString()),
-      highestBid: highBid,
-      highestBidderId:
-          bidder != null && bidder.isNotEmpty ? bidder : null,
-      winnerId: winId != null && winId.isNotEmpty ? winId : null,
-      finalPrice: finalP,
+      currentHighBid: highBid,
+      currentHighBidderId: bidder != null && bidder.isNotEmpty ? bidder : null,
+      bidCount: bidCount,
+      winnerId: () {
+        final w = data['winnerId']?.toString().trim();
+        return w != null && w.isNotEmpty ? w : null;
+      }(),
+      finalPrice: () {
+        final fp = data['finalPrice'];
+        return fp is num && fp.isFinite ? fp.toDouble() : null;
+      }(),
       finalizedAt: auctionReadDateTime(data['finalizedAt']),
+      sellerApprovalStatus:
+          LotSellerApprovalStatus.fromFirestore(data['sellerApprovalStatus']?.toString()),
+      adminApproved: () {
+        final a = data['adminApproved'];
+        if (a is bool) return a;
+        return null;
+      }(),
+      sellerApprovalAt: auctionReadDateTime(data['sellerApprovalAt']),
+      adminDecisionAt: auctionReadDateTime(data['adminDecisionAt']),
+      rejectionReason: () {
+        final r = data['rejectionReason']?.toString().trim();
+        return r != null && r.isNotEmpty ? r : null;
+      }(),
       createdAt: auctionReadDateTime(data['createdAt']) ?? DateTime.now(),
       updatedAt: auctionReadDateTime(data['updatedAt']),
     );
   }
 
-  /// Id passed to [PropertyDetailsPage] as `propertyId` (listing doc or lot id).
   String get listingDocumentId {
     final p = propertyId?.trim();
     if (p != null && p.isNotEmpty) return p;
     return id;
   }
 
-  /// Minimum next bid (after at least one bid), else [startingPrice].
   double minimumNextBid() {
-    final h = highestBid;
-    if (h == null) return startingPrice;
+    final h = currentHighBid;
+    if (h == null || h <= 0) return startingPrice;
     return h + minIncrement;
   }
 }

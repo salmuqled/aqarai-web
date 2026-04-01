@@ -1194,6 +1194,30 @@ class AppLocalizationsAr extends AppLocalizations {
   String get auctionsMinIncrementLabel => 'الحد الأدنى للزيادة';
 
   @override
+  String get auctionLotRejectedTimeoutTitle => 'انتهت مهلة الاعتماد';
+
+  @override
+  String get auctionLotRejectedTimeoutBody => 'لم يُكمل البائع والإدارة الاعتمادات خلال المهلة المحددة. أُغلق هذا العنصر دون بيع.';
+
+  @override
+  String get auctionLotRejectedManualTitle => 'لم تُكتمل الصفقة';
+
+  @override
+  String get auctionLotRejectedManualBody => 'لم تُنجز نتيجة المزاد بشكل نهائي. أُغلق العنصر دون بيع.';
+
+  @override
+  String get auctionLotRejectedByAdminTitle => 'رفض من الإدارة';
+
+  @override
+  String get auctionLotRejectedByAdminBody => 'لم تعتمد المنصّة هذه الصفقة. أُغلق العنصر دون بيع.';
+
+  @override
+  String get auctionLotRejectedBySellerTitle => 'رفض من المالك';
+
+  @override
+  String get auctionLotRejectedBySellerBody => 'لم يوافق مالك العقار على أعلى مزايدة. أُغلق العنصر دون بيع.';
+
+  @override
   String get auctionRegLoginToRegister => 'سجّل الدخول للتسجيل';
 
   @override
@@ -1285,4 +1309,494 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get auctionBidNowButton => 'زايد الآن';
+
+  @override
+  String get auctionRequestPageTitle => 'طلب إدراج في المزاد';
+
+  @override
+  String get auctionRequestFieldTitle => 'العنوان';
+
+  @override
+  String get auctionRequestFieldLocation => 'الموقع';
+
+  @override
+  String get auctionRequestFieldExpectedPrice => 'السعر المتوقع (د.ك)';
+
+  @override
+  String get auctionRequestFieldPropertyIdOptional => 'معرّف إعلانك الحالي (اختياري)';
+
+  @override
+  String get auctionRequestFieldPropertyIdHint => 'إن كان العقار مضافاً مسبقاً في التطبيق';
+
+  @override
+  String get auctionRequestAcceptLowerSwitch => 'هل تقبل بدء المزاد بسعر أقل لزيادة التنافس؟';
+
+  @override
+  String get auctionRequestFieldDescription => 'الوصف';
+
+  @override
+  String get auctionRequestImagesSection => 'الصور';
+
+  @override
+  String get auctionRequestPickImages => 'إضافة صور';
+
+  @override
+  String get auctionRequestSubmitButton => 'إرسال الطلب';
+
+  @override
+  String get auctionRequestValidationRequired => 'هذا الحقل مطلوب';
+
+  @override
+  String get auctionRequestInvalidPrice => 'أدخل سعراً صالحاً';
+
+  @override
+  String get auctionRequestSignInRequired => 'سجّل الدخول بحسابك لإرسال طلب المزاد.';
+
+  @override
+  String get auctionRequestSignInCta => 'تسجيل الدخول';
+
+  @override
+  String get auctionRequestSubmitError => 'تعذّر الإرسال';
+
+  @override
+  String get auctionRequestSuccessTitle => 'تم استلام طلبك ✔️';
+
+  @override
+  String get auctionRequestSuccessBody => 'سيتم مراجعته والتواصل معك قريباً';
+
+  @override
+  String get auctionRequestSuccessDismiss => 'حسناً';
+
+  @override
+  String get auctionPaymentTitle => 'رسوم إدراج المزاد';
+
+  @override
+  String auctionPaymentFeeLine(String amount) {
+    return 'رسوم إدراج العقار في المزاد: $amount د.ك';
+  }
+
+  @override
+  String get auctionPaymentDescription => 'تشمل الترخيص + إدارة المزاد';
+
+  @override
+  String get auctionPaymentPayNow => 'ادفع الآن';
+
+  @override
+  String get auctionPaymentSuccessTitle => 'تم الدفع';
+
+  @override
+  String get auctionPaymentSuccessMessage => 'تم استلام طلبك وسيتم بدء إجراءات المزاد';
+
+  @override
+  String get auctionPaymentDone => 'تم';
+
+  @override
+  String get auctionPaymentLoadError => 'تعذّر تحميل الطلب.';
+
+  @override
+  String get auctionPaymentDeclined => 'لم يكتمل الدفع.';
+
+  @override
+  String get auctionPaymentServerError => 'تعذّر تأكيد الدفع. حاول مرة أخرى.';
+
+  @override
+  String get auctionPaymentNotOwner => 'هذا الطلب لا يخص حسابك.';
+
+  @override
+  String get auctionPaymentRequestMissing => 'الطلب غير موجود.';
+
+  @override
+  String get auctionPaymentAlreadyProcessed => 'تمت معالجة الرسوم مسبقاً.';
+
+  @override
+  String get auctionPaymentSignInRequired => 'يرجى تسجيل الدخول.';
+
+  @override
+  String get auctionPaymentReferenceLabel => 'مرجع الدفع';
+
+  @override
+  String get adminAuctionEarningsTitle => 'الإيراد الفعلي';
+
+  @override
+  String get adminEarningsFilterAllTime => 'كل الأوقات';
+
+  @override
+  String get adminEarningsFilterToday => 'اليوم';
+
+  @override
+  String get adminEarningsFilterLast7Days => '7 أيام';
+
+  @override
+  String get adminEarningsFilterLast30Days => '30 يوماً';
+
+  @override
+  String get adminRealEarningsHint => 'مجاميع مباشرة من Firestore (بدون analytics). المدى الزمني والأيام اليومية وفق توقيت الكويت (UTC+3) من الطوابع UTC، ليظهر الجميع نفس الأرقام.';
+
+  @override
+  String get adminRealEarningsTotalRevenue => 'إجمالي الإيراد';
+
+  @override
+  String get adminRealEarningsLegacyNote => 'تُحتسب فقط الصفقات ذات الحالة «sold». الصفقات المعتمدة حديثاً تُسجّل هذا الحقل؛ قد تحتاج صفوف قديمة إلى تحديث لمرة واحدة.';
+
+  @override
+  String get adminRealEarningsChartEmpty => 'لا توجد أحداث بتاريخ لرسم المنحنى.';
+
+  @override
+  String get adminAuctionEarningsTotalFees => 'رسوم الإدراج (مدفوعة)';
+
+  @override
+  String get adminAuctionEarningsPaidListings => 'مزادات مدفوعة';
+
+  @override
+  String get adminAuctionEarningsDealsCompleted => 'صفقات مباعة';
+
+  @override
+  String get adminAuctionEarningsEstCommission => 'إجمالي العمولة';
+
+  @override
+  String get adminEarningsRevenueBreakdownTitle => 'تفصيل الإيراد';
+
+  @override
+  String adminEarningsShareOfTotal(String percent) {
+    return '$percent٪ من إجمالي الإيراد';
+  }
+
+  @override
+  String get adminAuctionEarningsChartTitle => 'الإيراد حسب اليوم';
+
+  @override
+  String get adminAuctionEarningsChartSubtitle => 'الإيراد اليومي ضمن المدى (أيام تقويم الكويت؛ الرسوم حسب الدفع، العمولة حسب createdAt).';
+
+  @override
+  String get adminAuctionEarningsPartialDataHint => 'بعض الإجماليات من عيّنة محدودة — انشر الفهارس إن طُلب منك، وقد تكون الأرقام حداً أدنى.';
+
+  @override
+  String get adminAuctionEarningsNoChartData => 'لا بيانات لهذه الفترة.';
+
+  @override
+  String get adminAuctionEarningsLegendFees => 'رسوم الإدراج';
+
+  @override
+  String get adminAuctionEarningsLegendCommission => 'العمولة';
+
+  @override
+  String get companyPaymentAddTitle => 'تسجيل دفعة';
+
+  @override
+  String get companyPaymentAmountLabel => 'المبلغ (د.ك)';
+
+  @override
+  String get companyPaymentTypeLabel => 'نوع الدفعة';
+
+  @override
+  String get companyPaymentReasonLabel => 'السبب';
+
+  @override
+  String get companyPaymentSourceLabel => 'مصدر التحصيل';
+
+  @override
+  String get companyPaymentReferenceLabel => 'رقم المرجع';
+
+  @override
+  String get companyPaymentRelatedLabel => 'مرتبط بـ';
+
+  @override
+  String get companyPaymentNotesLabel => 'ملاحظات';
+
+  @override
+  String get companyPaymentSave => 'حفظ الدفعة';
+
+  @override
+  String get companyPaymentSaved => 'تم تسجيل الدفعة';
+
+  @override
+  String get companyPaymentTypeAuctionFee => 'رسوم مزاد';
+
+  @override
+  String get companyPaymentTypeCommission => 'عمولة';
+
+  @override
+  String get companyPaymentTypeOther => 'أخرى';
+
+  @override
+  String get companyPaymentReasonSale => 'بيع';
+
+  @override
+  String get companyPaymentReasonRent => 'إيجار';
+
+  @override
+  String get companyPaymentReasonAuction => 'مزاد';
+
+  @override
+  String get companyPaymentReasonManagementFee => 'رسوم إدارة';
+
+  @override
+  String get companyPaymentReasonOther => 'أخرى';
+
+  @override
+  String get companyPaymentSourceBank => 'تحويل بنكي';
+
+  @override
+  String get companyPaymentSourceCheck => 'شيك مصدّق';
+
+  @override
+  String get companyPaymentSourceCash => 'نقد';
+
+  @override
+  String get companyPaymentPickAuction => 'اختر طلب مزاد (مدفوع)';
+
+  @override
+  String get companyPaymentPickDeal => 'اختر صفقة مباعة';
+
+  @override
+  String get companyPaymentNoAuctionOptions => 'لا توجد طلبات مدفوعة في القائمة.';
+
+  @override
+  String get companyPaymentNoDealOptions => 'لا توجد صفقات مباعة في القائمة.';
+
+  @override
+  String get companyPaymentErrAmount => 'أدخل مبلغاً صحيحاً أكبر من صفر.';
+
+  @override
+  String get companyPaymentErrAuction => 'اربط بطلب مزاد مدفوع.';
+
+  @override
+  String get companyPaymentErrDeal => 'اربط بصفقة مباعة.';
+
+  @override
+  String get companyPaymentErrReferenceRequired => 'أدخل رقم مرجع للتحويل البنكي أو الشيك.';
+
+  @override
+  String get companyPaymentErrDuplicateReference => 'رقم المرجع هذا مستخدم مسبقاً.';
+
+  @override
+  String get companyPaymentErrGeneric => 'تعذّر الحفظ. تحقق من القواعد والاتصال.';
+
+  @override
+  String get companyPaymentStatusLabel => 'الحالة';
+
+  @override
+  String get companyPaymentStatusPending => 'معلّق';
+
+  @override
+  String get companyPaymentStatusConfirmed => 'مؤكّد';
+
+  @override
+  String get companyPaymentStatusRejected => 'مرفوض';
+
+  @override
+  String get companyCashflowSubtitle => 'إيراد مُعرَّف من المزادات المدفوعة + صفقات sold، مقابل التحصيل اليدوي.';
+
+  @override
+  String get companyCashflowConfirmedOnlyHint => 'إجمالي التحصيل والتفصيل حسب السبب يشمل فقط الدفعات بحالة «مؤكّد».';
+
+  @override
+  String get companyPaymentTotalCashFoot => 'company_payments (مؤكّد فقط)';
+
+  @override
+  String get adminAuctionRequestsTitle => 'طلبات إدراج المزاد';
+
+  @override
+  String get adminAuctionRequestsEmpty => 'لا توجد طلبات بعد.';
+
+  @override
+  String get adminAuctionRequestApprove => 'قبول';
+
+  @override
+  String get adminAuctionRequestReject => 'رفض';
+
+  @override
+  String get adminAuctionRequestStatusPending => 'قيد المراجعة';
+
+  @override
+  String get adminAuctionRequestStatusApproved => 'مقبول';
+
+  @override
+  String get adminAuctionRequestStatusRejected => 'مرفوض';
+
+  @override
+  String get adminAuctionRequestDetailTitle => 'تفاصيل الطلب';
+
+  @override
+  String get adminAuctionRequestUserId => 'معرّف المستخدم';
+
+  @override
+  String get adminAuctionRequestPropertyId => 'معرّف الإعلان';
+
+  @override
+  String get adminAuctionRequestExpectedPrice => 'السعر المتوقع';
+
+  @override
+  String get adminAuctionRequestAcceptLower => 'يقبل سعر افتتاح أقل';
+
+  @override
+  String get adminAuctionRequestYes => 'نعم';
+
+  @override
+  String get adminAuctionRequestNo => 'لا';
+
+  @override
+  String get adminAuctionRequestImages => 'الصور';
+
+  @override
+  String get adminAuctionRequestConfirmRejectTitle => 'رفض هذا الطلب؟';
+
+  @override
+  String get adminAuctionRequestConfirmRejectBody => 'سيظهر للمستخدم حالة الرفض عند إتاحة العرض في التطبيق.';
+
+  @override
+  String get adminAuctionRequestLotReminder => 'بعد القبول، أنشئ قطعة المزاد يدوياً في Firestore أو أدوات الإدارة.';
+
+  @override
+  String get adminAuctionRequestUpdated => 'تم تحديث الحالة';
+
+  @override
+  String get adminAuctionRequestUpdateError => 'تعذّر تحديث الحالة';
+
+  @override
+  String get adminAuctionRequestLocationDisplay => 'المحافظة والمنطقة';
+
+  @override
+  String get adminAuctionRequestGovernorateCode => 'رمز المحافظة';
+
+  @override
+  String get adminAuctionRequestAreaCode => 'رمز المنطقة';
+
+  @override
+  String get adminInvoicesTitle => 'الفواتير';
+
+  @override
+  String get adminInvoicesSummaryTotalRevenue => 'إجمالي الإيراد';
+
+  @override
+  String get adminInvoicesSummaryLedgerEntries => 'قيود الدفتر';
+
+  @override
+  String get adminInvoicesSummaryThisMonth => 'هذا الشهر';
+
+  @override
+  String get adminInvoicesSearchHint => 'بحث برقم الفاتورة أو الشركة';
+
+  @override
+  String get adminInvoicesFilterServiceType => 'نوع الخدمة';
+
+  @override
+  String get adminInvoicesFilterAllServices => 'الكل';
+
+  @override
+  String get adminInvoicesServiceRent => 'إيجار';
+
+  @override
+  String get adminInvoicesServiceSale => 'بيع';
+
+  @override
+  String get adminInvoicesServiceChalet => 'شاليه';
+
+  @override
+  String get adminInvoicesDateFrom => 'من';
+
+  @override
+  String get adminInvoicesDateTo => 'إلى';
+
+  @override
+  String get adminInvoicesAmountMin => 'أقل مبلغ (د.ك)';
+
+  @override
+  String get adminInvoicesAmountMax => 'أعلى مبلغ (د.ك)';
+
+  @override
+  String get adminInvoicesApplyFilters => 'تطبيق';
+
+  @override
+  String get adminInvoicesClearFilters => 'مسح';
+
+  @override
+  String get adminInvoicesLoadMore => 'تحميل المزيد';
+
+  @override
+  String get adminInvoicesEndOfList => 'نهاية القائمة';
+
+  @override
+  String get adminInvoicesEmpty => 'لا توجد فواتير بعد.';
+
+  @override
+  String get adminInvoicesError => 'حدث خطأ.';
+
+  @override
+  String get adminInvoicesClientFilterHint => 'البحث يطابق رقم الفاتورة أو اسم الشركة ضمن الصفحات المحمّلة — استخدم «تحميل المزيد» لمسح فواتير أقدم.';
+
+  @override
+  String get adminInvoiceDetailTitle => 'فاتورة';
+
+  @override
+  String get adminInvoiceDetailDownload => 'تحميل الفاتورة';
+
+  @override
+  String get adminInvoiceDetailNoPdf => 'ملف PDF غير جاهز';
+
+  @override
+  String get adminInvoiceFieldCompany => 'الشركة';
+
+  @override
+  String get adminInvoiceFieldAmount => 'المبلغ';
+
+  @override
+  String get adminInvoiceFieldServiceType => 'الخدمة';
+
+  @override
+  String get adminInvoiceFieldArea => 'المنطقة';
+
+  @override
+  String get adminInvoiceFieldDescription => 'الوصف';
+
+  @override
+  String get adminInvoiceFieldStatus => 'الحالة';
+
+  @override
+  String get adminInvoiceFieldDate => 'التاريخ';
+
+  @override
+  String get adminInvoiceFieldPaymentId => 'رقم الدفعة';
+
+  @override
+  String get adminInvoicesCouldNotOpenPdf => 'تعذّر فتح رابط PDF.';
+
+  @override
+  String get adminInvoiceFieldPaidAt => 'تاريخ التسديد';
+
+  @override
+  String get adminInvoiceFieldEmailSent => 'أُرسل البريد';
+
+  @override
+  String get adminInvoiceFieldEmailError => 'خطأ البريد';
+
+  @override
+  String get adminInvoiceFieldEmailSentAt => 'وقت إرسال البريد';
+
+  @override
+  String get adminInvoiceFieldEmailAttemptAt => 'آخر محاولة بريد';
+
+  @override
+  String get adminInvoiceFieldPdfError => 'خطأ PDF';
+
+  @override
+  String get adminInvoiceFieldPdfErrorAt => 'وقت خطأ PDF';
+
+  @override
+  String get adminInvoiceActionResendEmail => 'إعادة إرسال الفاتورة';
+
+  @override
+  String get adminInvoiceActionRetryPdf => 'إعادة إنشاء PDF';
+
+  @override
+  String get adminInvoiceEmailSentYes => 'نعم';
+
+  @override
+  String get adminInvoiceEmailSentNo => 'لا';
+
+  @override
+  String get adminInvoiceResendQueued => 'اكتمل إرسال البريد.';
+
+  @override
+  String get adminInvoiceRetryPdfOk => 'أُعيد إنشاء ملف PDF.';
 }

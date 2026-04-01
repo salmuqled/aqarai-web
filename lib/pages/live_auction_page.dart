@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:aqarai_app/app/app_theme.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/models/auction/auction_lot.dart';
+import 'package:aqarai_app/services/auction/auction_analytics_service.dart';
 import 'package:aqarai_app/services/auction/auction_time_service.dart';
 import 'package:aqarai_app/services/auction/live_auction_combined_stream.dart';
 import 'package:aqarai_app/widgets/live_auction/auction_header_widget.dart';
@@ -36,7 +37,7 @@ class _LiveAuctionPageState extends State<LiveAuctionPage>
   late final ValueNotifier<DateTime> _serverNow;
   Timer? _clockTimer;
 
-  String? _prevHighestBidderId;
+  String? _prevCurrentHighBidderId;
   bool _outbidBannerVisible = false;
   Timer? _outbidBannerTimer;
 
@@ -71,6 +72,12 @@ class _LiveAuctionPageState extends State<LiveAuctionPage>
       }
       setState(() => _combined = state);
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(
+        AuctionAnalyticsService.logAuctionViewed(lotId: widget.lotId),
+      );
+    });
   }
 
   @override
@@ -83,23 +90,23 @@ class _LiveAuctionPageState extends State<LiveAuctionPage>
   void _detectOutbid(AuctionLot lot) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      _prevHighestBidderId = lot.highestBidderId;
+      _prevCurrentHighBidderId = lot.currentHighBidderId;
       return;
     }
-    final cur = lot.highestBidderId;
-    final had = _prevHighestBidderId;
+    final cur = lot.currentHighBidderId;
+    final had = _prevCurrentHighBidderId;
     if (had == uid &&
         cur != null &&
         cur.isNotEmpty &&
         cur != uid) {
-      _prevHighestBidderId = cur;
+      _prevCurrentHighBidderId = cur;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _showOutbidBanner();
       });
       return;
     }
-    _prevHighestBidderId = cur;
+    _prevCurrentHighBidderId = cur;
   }
 
   void _showOutbidBanner() {
@@ -241,7 +248,7 @@ class _LiveAuctionPageState extends State<LiveAuctionPage>
                   valueListenable: _serverNow,
                   builder: (context, now, _) {
                     return CountdownWidget(
-                      key: ValueKey<int>(lot.endTime.millisecondsSinceEpoch),
+                      key: ValueKey<int>(lot.endsAt.millisecondsSinceEpoch),
                       lot: lot,
                       serverNow: now,
                     );

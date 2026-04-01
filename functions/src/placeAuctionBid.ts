@@ -1,18 +1,26 @@
 /**
  * Callable: authoritative auction bid placement (Admin SDK + transaction).
- * - Marks prior `winning` bids as `outbid`
- * - Anti-sniping: extends `lot.endTime` by 30s if &lt; 30s remain
- * - Rate limit: max one bid per user per lot per second (`lot_permissions.lastBidAt`)
+ * - Writes bids ONLY under `lots/{lotId}/bids/{bidId}` (canonical).
+ * - Bid document ID = `clientRequestId` (UUID) so duplicates are impossible per lot.
+ * - Bid docs: `createdAt: serverTimestamp()`, `clientRequestId` field stored on the bid.
+ * - Idempotent replay: same user + same amount + same clientRequestId → success, no double write.
+ * - Rate limits (per user per lot): min interval between bids + max bids per rolling minute window.
+ * - Lot fields: `currentHighBid`, `currentHighBidderId`, `endsAt`, `bidCount`.
  */
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
+import {
+  AuctionAnalyticsEventType,
+  recordAuctionAnalyticsEvent,
+} from "./auctionAnalytics";
+import { sendAuctionOutbidNotification } from "./auctionOutbidNotification";
+
 const LOTS = "lots";
 const PARTICIPANTS = "auction_participants";
 const PERMISSIONS = "lot_permissions";
 const DEPOSITS = "deposits";
-const BIDS = "bids";
 const LOGS = "auction_logs";
 
 const STATUS_APPROVED = "approved";
@@ -23,7 +31,17 @@ const BID_OUTBID = "outbid";
 
 const ANTI_SNIPE_WINDOW_MS = 30_000;
 const ANTI_SNIPE_EXTEND_MS = 30_000;
-const MIN_BID_INTERVAL_MS = 1_000;
+
+/** Minimum time between *new* bids (same user, same lot). */
+const MIN_BID_INTERVAL_MS = 2_500;
+
+/** Rolling window for burst cap (permission doc). */
+const BID_RATE_WINDOW_MS = 60_000;
+const MAX_BIDS_PER_RATE_WINDOW = 20;
+
+/** RFC 4122 UUID v4 (lowercase hex + hyphens). */
+const UUID_V4_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 function num(v: unknown): number {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -57,6 +75,50 @@ function readTimestamp(v: unknown): Timestamp | null {
   return null;
 }
 
+/** Canonical lot end; supports legacy `endTime` until DB migrated. */
+function readLotEndsAt(lot: Record<string, unknown>): Timestamp | null {
+  return readTimestamp(lot.endsAt) ?? readTimestamp(lot.endTime);
+}
+
+function readCurrentHighBid(lot: Record<string, unknown>): number | null {
+  const a = lot.currentHighBid;
+  const b = lot.highestBid;
+  const v = a !== undefined && a !== null ? a : b;
+  if (v === undefined || v === null) return null;
+  const n = num(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Previous leading bidder on the lot (canonical or legacy field). */
+function readPreviousHighBidderId(lot: Record<string, unknown>): string | null {
+  const a = lot.currentHighBidderId;
+  const b = lot.highestBidderId;
+  const s =
+    typeof a === "string" && a.trim()
+      ? a.trim()
+      : typeof b === "string" && b.trim()
+        ? b.trim()
+        : "";
+  return s || null;
+}
+
+function assertValidClientRequestId(raw: unknown): string {
+  if (typeof raw !== "string") {
+    throw new HttpsError(
+      "invalid-argument",
+      "clientRequestId is required and must be a string (UUID v4)"
+    );
+  }
+  const id = raw.trim().toLowerCase();
+  if (id.length > 128 || !UUID_V4_REGEX.test(id)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "clientRequestId must be a valid UUID v4"
+    );
+  }
+  return id;
+}
+
 export const placeAuctionBid = onCall(
   { region: "us-central1" },
   async (request) => {
@@ -66,6 +128,7 @@ export const placeAuctionBid = onCall(
       typeof data?.auctionId === "string" ? data.auctionId.trim() : "";
     const lotId = typeof data?.lotId === "string" ? data.lotId.trim() : "";
     const amountRaw = data?.amount;
+    const clientRequestId = assertValidClientRequestId(data?.clientRequestId);
 
     if (!auctionId) {
       throw new HttpsError("invalid-argument", "auctionId is required");
@@ -83,6 +146,7 @@ export const placeAuctionBid = onCall(
 
     const db = admin.firestore();
     const lotRef = db.collection(LOTS).doc(lotId);
+    const bidRef = lotRef.collection("bids").doc(clientRequestId);
     const participantRef = db
       .collection(PARTICIPANTS)
       .doc(participantDocId(uid, auctionId));
@@ -93,18 +157,19 @@ export const placeAuctionBid = onCall(
       .collection(DEPOSITS)
       .doc(userLotDocId(uid, lotId));
 
-    const winningQuery = db
-      .collection(BIDS)
-      .where("lotId", "==", lotId)
-      .where("status", "==", BID_WINNING);
-
-    const bidRef = db.collection(BIDS).doc();
+    const winningQuery = lotRef.collection("bids").where("status", "==", BID_WINNING);
 
     const nowMs = Date.now();
 
-    const { newHighest, extendedEnd, newEndTimeMs } = await db.runTransaction(
-      async (t) => {
+    const {
+      newHighest,
+      extendedEnd,
+      newEndTimeMs,
+      idempotent,
+      outbidNotifyUid,
+    } = await db.runTransaction(async (t) => {
         const lotSnap = await t.get(lotRef);
+        const existingBidSnap = await t.get(bidRef);
         const partSnap = await t.get(participantRef);
         const permSnap = await t.get(permissionRef);
         const depSnap = await t.get(depositRef);
@@ -114,6 +179,32 @@ export const placeAuctionBid = onCall(
           throw new HttpsError("not-found", "Lot not found");
         }
         const lot = lotSnap.data()!;
+
+        if (existingBidSnap.exists && existingBidSnap.data()) {
+          const eb = existingBidSnap.data()!;
+          if (eb.userId !== uid) {
+            throw new HttpsError(
+              "permission-denied",
+              "This clientRequestId is already associated with another bid"
+            );
+          }
+          if (Math.abs(num(eb.amount) - amount) > 1e-9) {
+            throw new HttpsError(
+              "failed-precondition",
+              "clientRequestId was already used with a different amount"
+            );
+          }
+          const endTs = readLotEndsAt(lot);
+          const high = readCurrentHighBid(lot) ?? amount;
+          return {
+            newHighest: high,
+            extendedEnd: false,
+            newEndTimeMs: endTs ? endTs.toMillis() : nowMs,
+            idempotent: true,
+            outbidNotifyUid: null as string | null,
+          };
+        }
+
         if (lot.auctionId !== auctionId) {
           throw new HttpsError(
             "invalid-argument",
@@ -127,18 +218,23 @@ export const placeAuctionBid = onCall(
           );
         }
 
-        const endTs = readTimestamp(lot.endTime);
+        const endTs = readLotEndsAt(lot);
         if (!endTs) {
-          throw new HttpsError(
-            "failed-precondition",
-            "Lot endTime is missing"
-          );
+          throw new HttpsError("failed-precondition", "Lot endsAt is missing");
         }
         const endMs = endTs.toMillis();
-        if (nowMs > endMs) {
+        // Reject at endsAt instant and after (aligns with finalize eligibility).
+        if (nowMs >= endMs) {
           throw new HttpsError(
             "failed-precondition",
             "Bidding is closed: current time is after the lot end time"
+          );
+        }
+
+        if (readTimestamp(lot.finalizedAt)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Lot is already finalized; bidding is closed"
           );
         }
 
@@ -160,7 +256,26 @@ export const placeAuctionBid = onCall(
         if (lastBidAt && nowMs - lastBidAt.toMillis() < MIN_BID_INTERVAL_MS) {
           throw new HttpsError(
             "resource-exhausted",
-            "You can place at most one bid per second on this lot"
+            `Wait at least ${MIN_BID_INTERVAL_MS / 1000} seconds between bids on this lot`
+          );
+        }
+
+        let windowStart =
+          typeof perm.bidRateWindowStartMs === "number"
+            ? perm.bidRateWindowStartMs
+            : 0;
+        let windowCount =
+          typeof perm.bidRateWindowCount === "number"
+            ? perm.bidRateWindowCount
+            : 0;
+        if (windowStart === 0 || nowMs - windowStart > BID_RATE_WINDOW_MS) {
+          windowStart = nowMs;
+          windowCount = 0;
+        }
+        if (windowCount >= MAX_BIDS_PER_RATE_WINDOW) {
+          throw new HttpsError(
+            "resource-exhausted",
+            `Too many bids in the last ${BID_RATE_WINDOW_MS / 1000} seconds on this lot`
           );
         }
 
@@ -187,12 +302,8 @@ export const placeAuctionBid = onCall(
           );
         }
 
-        const highestBidRaw = lot.highestBid;
-        const hasHighest =
-          highestBidRaw !== undefined &&
-          highestBidRaw !== null &&
-          Number.isFinite(num(highestBidRaw));
-        const highestBid = hasHighest ? num(highestBidRaw) : null;
+        const highestBid = readCurrentHighBid(lot);
+        const hasHighest = highestBid !== null && highestBid > 0;
 
         if (hasHighest && highestBid !== null) {
           if (amount <= highestBid) {
@@ -270,6 +381,12 @@ export const placeAuctionBid = onCall(
           );
         }
 
+        const previousHighBidderId = readPreviousHighBidderId(lot);
+        const shouldNotifyOutbid =
+          hasHighest &&
+          previousHighBidderId !== null &&
+          previousHighBidderId !== uid;
+
         for (const doc of winningSnap.docs) {
           t.update(doc.ref, {
             status: BID_OUTBID,
@@ -284,24 +401,27 @@ export const placeAuctionBid = onCall(
           auctionId,
           lotId,
           amount,
-          timestamp: now,
           status: BID_WINNING,
           isAutoExtended: extendedEnd,
           createdAt: now,
+          clientRequestId,
         });
 
         const lotUpdate: Record<string, unknown> = {
-          highestBid: amount,
-          highestBidderId: uid,
+          currentHighBid: amount,
+          currentHighBidderId: uid,
+          bidCount: FieldValue.increment(1),
           updatedAt: now,
         };
         if (extendedEnd) {
-          lotUpdate.endTime = Timestamp.fromMillis(newEndTimeMs);
+          lotUpdate.endsAt = Timestamp.fromMillis(newEndTimeMs);
         }
         t.update(lotRef, lotUpdate);
 
         t.update(permissionRef, {
           lastBidAt: serverTs,
+          bidRateWindowStartMs: windowStart,
+          bidRateWindowCount: windowCount + 1,
           updatedAt: now,
         });
 
@@ -312,7 +432,8 @@ export const placeAuctionBid = onCall(
           action: "bid_placed",
           performedBy: uid,
           details: {
-            bidId: bidRef.id,
+            bidId: clientRequestId,
+            clientRequestId,
             amount,
             userId: uid,
             antiSnipeExtended: extendedEnd,
@@ -329,7 +450,7 @@ export const placeAuctionBid = onCall(
             action: "time_extended",
             performedBy: uid,
             details: {
-              bidId: bidRef.id,
+              bidId: clientRequestId,
               previousEndTimeMs: endMs,
               newEndTimeMs,
               extendMs: ANTI_SNIPE_EXTEND_MS,
@@ -343,16 +464,39 @@ export const placeAuctionBid = onCall(
           newHighest: amount,
           extendedEnd,
           newEndTimeMs,
+          idempotent: false,
+          outbidNotifyUid: shouldNotifyOutbid ? previousHighBidderId : null,
         };
-      }
-    );
+      });
+
+    if (outbidNotifyUid) {
+      void sendAuctionOutbidNotification({
+        recipientUid: outbidNotifyUid,
+        auctionId,
+        lotId,
+      });
+      void recordAuctionAnalyticsEvent(db, {
+        eventType: AuctionAnalyticsEventType.USER_OUTBID,
+        userId: outbidNotifyUid,
+        lotId,
+      });
+    }
+
+    if (idempotent !== true) {
+      void recordAuctionAnalyticsEvent(db, {
+        eventType: AuctionAnalyticsEventType.BID_PLACED,
+        userId: uid,
+        lotId,
+      });
+    }
 
     return {
       success: true,
-      highestBid: newHighest,
-      bidId: bidRef.id,
+      currentHighBid: newHighest,
+      bidId: clientRequestId,
       antiSnipeExtended: extendedEnd,
       lotEndTimeMs: extendedEnd ? newEndTimeMs : null,
+      idempotent: idempotent === true,
     };
   }
 );

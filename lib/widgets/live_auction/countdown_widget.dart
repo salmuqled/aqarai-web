@@ -49,6 +49,9 @@ class _CountdownWidgetState extends State<CountdownWidget>
     switch (widget.lot.status) {
       case LotStatus.sold:
       case LotStatus.closed:
+      case LotStatus.pendingAdminReview:
+      case LotStatus.rejected:
+      case LotStatus.ended:
         return LiveAuctionPhase.closed;
       case LotStatus.pending:
         return LiveAuctionPhase.waiting;
@@ -56,7 +59,7 @@ class _CountdownWidgetState extends State<CountdownWidget>
         if (widget.serverNow.isBefore(widget.lot.startTime)) {
           return LiveAuctionPhase.waiting;
         }
-        if (!widget.serverNow.isBefore(widget.lot.endTime)) {
+        if (!widget.serverNow.isBefore(widget.lot.endsAt)) {
           return LiveAuctionPhase.closed;
         }
         return LiveAuctionPhase.live;
@@ -64,7 +67,7 @@ class _CountdownWidgetState extends State<CountdownWidget>
   }
 
   Duration _remaining() {
-    final diff = widget.lot.endTime.difference(widget.serverNow);
+    final diff = widget.lot.endsAt.difference(widget.serverNow);
     return diff.isNegative ? Duration.zero : diff;
   }
 
@@ -188,6 +191,18 @@ class _CountdownWidgetState extends State<CountdownWidget>
                     ),
                   ),
                 ),
+                if (remaining != null &&
+                    remaining > Duration.zero &&
+                    remaining < const Duration(minutes: 1)) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    ar ? '⏳ باقي أقل من دقيقة' : '⏳ Less than a minute left',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: AuctionUiColors.urgencyRed,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -171,7 +171,7 @@ class _BidsListWidgetState extends State<BidsListWidget> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _formatTime(context, bid.timestamp),
+                            _formatTime(context, bid.createdAt),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),

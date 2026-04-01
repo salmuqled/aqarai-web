@@ -30,12 +30,27 @@ Production-oriented schema for ministry-approved real estate auctions (Kuwait).
 | `depositType` | string | `fixed` \| `percentage` |
 | `depositValue` | number | Amount or % depending on type |
 | `startTime` | timestamp | Lot window |
-| `endTime` | timestamp | |
-| `status` | string | `pending` \| `active` \| `closed` \| `sold` |
-| `highestBid` | number | optional until first bid |
-| `highestBidderId` | string | optional |
+| `endsAt` | timestamp | Canonical end (legacy `endTime` may exist) |
+| `status` | string | `pending` \| `active` \| `closed` \| `sold` \| `pending_admin_review` \| `rejected` \| `ended` |
+| `currentHighBid` | number | optional |
+| `currentHighBidderId` | string | optional |
+| `sellerApprovalStatus` | string | `pending` \| `approved` \| `rejected` (set during `pending_admin_review`) |
+| `adminApproved` | bool | Admin side of dual approval |
+| `sellerApprovalAt` | timestamp | optional |
+| `adminDecisionAt` | timestamp | optional |
+| `approvalDeadlineAt` | timestamp | When review auto-expires if still `pending_admin_review` (set on finalize with bids; cleared on `sold` / `closed`) |
+| `rejectionReason` | string | When `rejected`: `approval_timeout` (scheduler), `admin_rejected`, `seller_rejected`, or absent (legacy) |
+| `approvalOneHourWarningSent` | bool | After 1h-before FCM; cleared when lot leaves `pending_admin_review` |
+| `approvalTenMinWarningSent` | bool | After 10m-before FCM; cleared with other reminder flags |
+| `approvalOneMinWarningSent` | bool | After 1m-before FCM; cleared with other reminder flags |
+| `winnerId` / `winnerUserId` | string | Set only when status becomes `sold` |
+| `finalPrice` | number | Set when sold |
+| `finalizedAt` | timestamp | Set when sold (or when closed with no bids) |
+| `highestBid` / `highestBidderId` | number / string | Legacy mirrors (optional) |
 | `createdAt` | timestamp | |
 | `updatedAt` | timestamp | optional |
+
+**Post-auction flow:** When the lot ends **with** at least one `winning` bid, finalize sets `pending_admin_review` and does **not** mark bids `won` until both `sellerApprovalStatus == approved` and `adminApproved == true`. Then Cloud Functions set `sold` and resolve bids. Callables: `adminReviewAuction`, `sellerApproveAuction`.
 
 **Invariant:** At most one `lot` per auction with `status == active` (enforced operationally + Functions).
 
@@ -106,6 +121,19 @@ Production-oriented schema for ministry-approved real estate auctions (Kuwait).
 | `performedBy` | string | Admin UID or `system` |
 | `details` | map | Arbitrary JSON-safe payload |
 | `timestamp` | timestamp | |
+
+### `analytics_events/{eventId}`
+
+Append-only auction funnel metrics (query in BigQuery/Admin SDK exports as needed).
+
+| Field | Type | Notes |
+|--------|------|--------|
+| `eventType` | string | `bid_placed` \| `auction_viewed` \| `user_outbid` \| `auction_won` |
+| `userId` | string | Bidder, viewer, outbid user, or winner |
+| `lotId` | string | `lots/{lotId}` id |
+| `timestamp` | timestamp | Write time (server) |
+
+**Writers:** `bid_placed`, `user_outbid`, `auction_won` from Cloud Functions; `auction_viewed` from signed-in app clients (rules restrict event type + `userId == auth.uid`).
 
 ## Indexes (suggested)
 
