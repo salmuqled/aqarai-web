@@ -1783,6 +1783,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminInvoiceFieldPdfErrorAt => 'وقت خطأ PDF';
 
   @override
+  String get adminInvoiceFieldCancelledAt => 'تاريخ الإلغاء';
+
+  @override
+  String get adminInvoiceFieldCancelReason => 'سبب الإلغاء';
+
+  @override
   String get adminInvoiceActionResendEmail => 'إعادة إرسال الفاتورة';
 
   @override
@@ -1795,8 +1801,31 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminInvoiceEmailSentNo => 'لا';
 
   @override
-  String get adminInvoiceResendQueued => 'اكتمل إرسال البريد.';
+  String get adminInvoiceResendSuccess => 'تم إرسال الفاتورة بالبريد بنجاح.';
+
+  @override
+  String get adminInvoiceResendFailed => 'لم يُرسل البريد. راجع «خطأ البريد» على الفاتورة وإعدادات SMTP (كلمة مرور تطبيق Gmail).';
 
   @override
   String get adminInvoiceRetryPdfOk => 'أُعيد إنشاء ملف PDF.';
+
+  @override
+  String get adminInvoiceActionRecreate => 'إعادة إنشاء الفاتورة';
+
+  @override
+  String get adminInvoiceRecreateTitle => 'إعادة إنشاء الفاتورة؟';
+
+  @override
+  String get adminInvoiceRecreateDescription => 'سيتم إلغاء الفاتورة الحالية مع الإبقاء على السجل للمراجعة، وإنشاء فاتورة جديدة لنفس الدفعة، ثم توليد PDF وإرسال البريد. لن يُضاعَف قيد الإيراد في الدفتر.';
+
+  @override
+  String adminInvoiceRecreateSuccess(String number) {
+    return 'فاتورة جديدة $number';
+  }
+
+  @override
+  String get adminInvoiceNetworkError => 'لا يوجد اتصال بالإنترنت أو الخدمة غير متاحة حالياً. حاول مرة أخرى.';
+
+  @override
+  String get adminInvoiceRetryPdfUnavailableHint => 'ملف PDF جاهز بالفعل. استخدم «إعادة إنشاء الفاتورة» لاستبدال الفاتورة وإنشاء PDF جديد.';
 }

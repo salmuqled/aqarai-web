@@ -24,7 +24,8 @@ class AuthService {
 
     final tokenResult = await user.getIdTokenResult();
     final claims = tokenResult.claims;
+    final a = claims?['admin'];
 
-    return claims?['admin'] == true;
+    return a == true || a == 'true';
   }
 }

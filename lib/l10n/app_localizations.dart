@@ -3527,6 +3527,18 @@ abstract class AppLocalizations {
   /// **'PDF error at'**
   String get adminInvoiceFieldPdfErrorAt;
 
+  /// No description provided for @adminInvoiceFieldCancelledAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled at'**
+  String get adminInvoiceFieldCancelledAt;
+
+  /// No description provided for @adminInvoiceFieldCancelReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel reason'**
+  String get adminInvoiceFieldCancelReason;
+
   /// No description provided for @adminInvoiceActionResendEmail.
   ///
   /// In en, this message translates to:
@@ -3551,17 +3563,59 @@ abstract class AppLocalizations {
   /// **'No'**
   String get adminInvoiceEmailSentNo;
 
-  /// No description provided for @adminInvoiceResendQueued.
+  /// No description provided for @adminInvoiceResendSuccess.
   ///
   /// In en, this message translates to:
-  /// **'Email dispatch completed.'**
-  String get adminInvoiceResendQueued;
+  /// **'Invoice email sent successfully.'**
+  String get adminInvoiceResendSuccess;
+
+  /// No description provided for @adminInvoiceResendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Email was not sent. Check “Email error” on the invoice and SMTP settings (Gmail App Password).'**
+  String get adminInvoiceResendFailed;
 
   /// No description provided for @adminInvoiceRetryPdfOk.
   ///
   /// In en, this message translates to:
   /// **'PDF regenerated.'**
   String get adminInvoiceRetryPdfOk;
+
+  /// No description provided for @adminInvoiceActionRecreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Recreate invoice'**
+  String get adminInvoiceActionRecreate;
+
+  /// No description provided for @adminInvoiceRecreateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recreate invoice?'**
+  String get adminInvoiceRecreateTitle;
+
+  /// No description provided for @adminInvoiceRecreateDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The current invoice will be marked cancelled (data kept for audit). A new invoice will be created for the same payment, then PDF and email run again. Existing ledger revenue is not duplicated.'**
+  String get adminInvoiceRecreateDescription;
+
+  /// No description provided for @adminInvoiceRecreateSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'New invoice {number}'**
+  String adminInvoiceRecreateSuccess(String number);
+
+  /// No description provided for @adminInvoiceNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'No internet connection or the service is unreachable. Try again.'**
+  String get adminInvoiceNetworkError;
+
+  /// No description provided for @adminInvoiceRetryPdfUnavailableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF is already generated. Use “Recreate invoice” to replace the invoice and build a new PDF.'**
+  String get adminInvoiceRetryPdfUnavailableHint;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

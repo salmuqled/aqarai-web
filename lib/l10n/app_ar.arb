@@ -1234,11 +1234,27 @@
   "adminInvoiceFieldEmailAttemptAt": "آخر محاولة بريد",
   "adminInvoiceFieldPdfError": "خطأ PDF",
   "adminInvoiceFieldPdfErrorAt": "وقت خطأ PDF",
+  "adminInvoiceFieldCancelledAt": "تاريخ الإلغاء",
+  "adminInvoiceFieldCancelReason": "سبب الإلغاء",
   "adminInvoiceActionResendEmail": "إعادة إرسال الفاتورة",
   "adminInvoiceActionRetryPdf": "إعادة إنشاء PDF",
   "adminInvoiceEmailSentYes": "نعم",
   "adminInvoiceEmailSentNo": "لا",
-  "adminInvoiceResendQueued": "اكتمل إرسال البريد.",
-  "adminInvoiceRetryPdfOk": "أُعيد إنشاء ملف PDF."
+  "adminInvoiceResendSuccess": "تم إرسال الفاتورة بالبريد بنجاح.",
+  "adminInvoiceResendFailed": "لم يُرسل البريد. راجع «خطأ البريد» على الفاتورة وإعدادات SMTP (كلمة مرور تطبيق Gmail).",
+  "adminInvoiceRetryPdfOk": "أُعيد إنشاء ملف PDF.",
+  "adminInvoiceActionRecreate": "إعادة إنشاء الفاتورة",
+  "adminInvoiceRecreateTitle": "إعادة إنشاء الفاتورة؟",
+  "adminInvoiceRecreateDescription": "سيتم إلغاء الفاتورة الحالية مع الإبقاء على السجل للمراجعة، وإنشاء فاتورة جديدة لنفس الدفعة، ثم توليد PDF وإرسال البريد. لن يُضاعَف قيد الإيراد في الدفتر.",
+  "adminInvoiceRecreateSuccess": "فاتورة جديدة {number}",
+  "@adminInvoiceRecreateSuccess": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "adminInvoiceNetworkError": "لا يوجد اتصال بالإنترنت أو الخدمة غير متاحة حالياً. حاول مرة أخرى.",
+  "adminInvoiceRetryPdfUnavailableHint": "ملف PDF جاهز بالفعل. استخدم «إعادة إنشاء الفاتورة» لاستبدال الفاتورة وإنشاء PDF جديد."
 
 }

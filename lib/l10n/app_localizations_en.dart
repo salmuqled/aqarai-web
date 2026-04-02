@@ -1783,6 +1783,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminInvoiceFieldPdfErrorAt => 'PDF error at';
 
   @override
+  String get adminInvoiceFieldCancelledAt => 'Cancelled at';
+
+  @override
+  String get adminInvoiceFieldCancelReason => 'Cancel reason';
+
+  @override
   String get adminInvoiceActionResendEmail => 'Resend invoice email';
 
   @override
@@ -1795,8 +1801,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminInvoiceEmailSentNo => 'No';
 
   @override
-  String get adminInvoiceResendQueued => 'Email dispatch completed.';
+  String get adminInvoiceResendSuccess => 'Invoice email sent successfully.';
+
+  @override
+  String get adminInvoiceResendFailed => 'Email was not sent. Check “Email error” on the invoice and SMTP settings (Gmail App Password).';
 
   @override
   String get adminInvoiceRetryPdfOk => 'PDF regenerated.';
+
+  @override
+  String get adminInvoiceActionRecreate => 'Recreate invoice';
+
+  @override
+  String get adminInvoiceRecreateTitle => 'Recreate invoice?';
+
+  @override
+  String get adminInvoiceRecreateDescription => 'The current invoice will be marked cancelled (data kept for audit). A new invoice will be created for the same payment, then PDF and email run again. Existing ledger revenue is not duplicated.';
+
+  @override
+  String adminInvoiceRecreateSuccess(String number) {
+    return 'New invoice $number';
+  }
+
+  @override
+  String get adminInvoiceNetworkError => 'No internet connection or the service is unreachable. Try again.';
+
+  @override
+  String get adminInvoiceRetryPdfUnavailableHint => 'PDF is already generated. Use “Recreate invoice” to replace the invoice and build a new PDF.';
 }

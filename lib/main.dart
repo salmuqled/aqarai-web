@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,10 +22,31 @@ import 'package:aqarai_app/app/locale_notifier.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    if (Firebase.apps.isEmpty) {
+      throw StateError('Firebase.initializeApp completed but Firebase.apps is empty');
+    }
+    if (kDebugMode) {
+      final o = Firebase.app().options;
+      debugPrint(
+        '[Firebase] Initialized OK | projectId=${o.projectId} '
+        'appId=${o.appId}',
+      );
+    }
+  } catch (e, st) {
+    debugPrint('[Firebase] initializeApp FAILED: $e');
+    debugPrint('$st');
+    rethrow;
+  }
+
   FirebaseMessaging.onBackgroundMessage(
     NotificationService.firebaseMessagingBackgroundHandler,
   );
+
   runApp(const MyApp());
 }
 

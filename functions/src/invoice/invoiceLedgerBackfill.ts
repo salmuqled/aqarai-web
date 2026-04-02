@@ -11,6 +11,8 @@ import {
 } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
+import { isAdminFromCallableAuth } from "./adminAuth";
+
 const INVOICES = "invoices";
 const LEDGER = "financial_ledger";
 const BATCH_SIZE = 100;
@@ -21,7 +23,7 @@ function assertAdmin(request: { auth?: { token?: Record<string, unknown> } }) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
   }
-  if (request.auth.token?.admin !== true) {
+  if (!isAdminFromCallableAuth(request.auth)) {
     throw new HttpsError("permission-denied", "Admin only");
   }
 }

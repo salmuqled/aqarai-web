@@ -25,6 +25,8 @@ abstract final class InvoiceFields {
   static const String emailSentAt = 'emailSentAt';
   static const String emailAttemptAt = 'emailAttemptAt';
   static const String paidAt = 'paidAt';
+  static const String cancelledAt = 'cancelledAt';
+  static const String cancelReason = 'cancelReason';
 }
 
 /// Invoice lifecycle (Firestore `status`).
@@ -70,6 +72,8 @@ class Invoice {
     this.emailSentAt,
     this.emailAttemptAt,
     this.paidAt,
+    this.cancelledAt,
+    this.cancelReason,
   });
 
   final String docId;
@@ -92,6 +96,8 @@ class Invoice {
   final Timestamp? emailSentAt;
   final Timestamp? emailAttemptAt;
   final Timestamp? paidAt;
+  final Timestamp? cancelledAt;
+  final String? cancelReason;
 
   /// Normalized label for UI (issued / paid / cancelled).
   String get displayStatus {
@@ -138,6 +144,8 @@ class Invoice {
       emailSentAt: m[InvoiceFields.emailSentAt] as Timestamp?,
       emailAttemptAt: m[InvoiceFields.emailAttemptAt] as Timestamp?,
       paidAt: m[InvoiceFields.paidAt] as Timestamp?,
+      cancelledAt: m[InvoiceFields.cancelledAt] as Timestamp?,
+      cancelReason: m[InvoiceFields.cancelReason] as String?,
     );
   }
 }

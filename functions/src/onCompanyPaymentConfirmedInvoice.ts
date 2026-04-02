@@ -14,6 +14,10 @@ import {
   generateUploadInvoicePdf,
 } from "./invoice/invoicePdfPipeline";
 import { resolvePaymentInvoiceContext } from "./invoice/resolvePaymentInvoiceContext";
+import {
+  logInvoiceSmtpDiagnostics,
+  resolveInvoiceSmtp,
+} from "./invoice/invoiceSmtpRuntime";
 import { sendInvoiceEmails } from "./invoice/sendInvoiceEmail";
 
 const invoiceSmtpPass = defineSecret("INVOICE_SMTP_PASS");
@@ -21,9 +25,6 @@ const invoiceSmtpHost = defineString("INVOICE_SMTP_HOST", {
   default: "smtp.gmail.com",
 });
 const invoiceSmtpPort = defineString("INVOICE_SMTP_PORT", { default: "465" });
-const invoiceSmtpUser = defineString("INVOICE_SMTP_USER", {
-  default: "aqaraiapp@gmail.com",
-});
 
 function str(v: unknown): string {
   if (v == null) return "";
@@ -76,8 +77,8 @@ export const onCompanyPaymentConfirmedInvoice = onDocumentWritten(
     document: "company_payments/{paymentId}",
     region: "us-central1",
     secrets: [invoiceSmtpPass],
-    timeoutSeconds: 120,
-    memory: "512MiB",
+    timeoutSeconds: 180,
+    memory: "1GiB",
   },
   async (event) => {
     const paymentId = event.params.paymentId;
@@ -142,17 +143,20 @@ export const onCompanyPaymentConfirmedInvoice = onDocumentWritten(
           year,
           ctx,
           invoiceStatusForPdf: "paid",
+          paymentId,
         });
 
       await applyPdfSuccessToInvoice(invoiceRef, pdfUrl, pdfStoragePath);
 
-      const pass = invoiceSmtpPass.value();
-      const user = invoiceSmtpUser.value();
-      const host = invoiceSmtpHost.value();
-      const port = parseInt(invoiceSmtpPort.value(), 10) || 465;
+      const smtpResolved = resolveInvoiceSmtp(
+        invoiceSmtpHost.value(),
+        invoiceSmtpPort.value(),
+        invoiceSmtpPass.value()
+      );
+      logInvoiceSmtpDiagnostics("onCompanyPaymentConfirmedInvoice", smtpResolved);
 
       const emailResult = await sendInvoiceEmails({
-        smtp: { host, port, user, pass },
+        smtp: smtpResolved,
         companyEmail: ctx.companyEmail,
         pdfBuffer,
         pdfFileName: `${invoiceNumber}.pdf`,

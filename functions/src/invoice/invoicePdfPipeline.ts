@@ -19,13 +19,15 @@ export async function generateUploadInvoicePdf(params: {
   year: number;
   ctx: PaymentInvoiceContext;
   invoiceStatusForPdf: string;
+  paymentId?: string;
 }): Promise<{ pdfBuffer: Buffer; pdfUrl: string; pdfStoragePath: string }> {
-  const { invoiceNumber, year, ctx, invoiceStatusForPdf } = params;
+  const { invoiceNumber, year, ctx, invoiceStatusForPdf, paymentId } = params;
   const pdfBuffer = await renderInvoicePdfBuffer({
     invoiceNumber,
     invoiceDate: new Date(),
     ctx,
     statusLine: invoicePdfStatusLabel(invoiceStatusForPdf),
+    paymentId,
   });
   const storagePath = `invoices/${year}/${invoiceNumber}.pdf`;
   const { pdfUrl, pdfStoragePath } = await uploadInvoicePdfAndGetUrl({

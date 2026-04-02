@@ -1236,11 +1236,27 @@
   "adminInvoiceFieldEmailAttemptAt": "Last email attempt",
   "adminInvoiceFieldPdfError": "PDF error",
   "adminInvoiceFieldPdfErrorAt": "PDF error at",
+  "adminInvoiceFieldCancelledAt": "Cancelled at",
+  "adminInvoiceFieldCancelReason": "Cancel reason",
   "adminInvoiceActionResendEmail": "Resend invoice email",
   "adminInvoiceActionRetryPdf": "Retry PDF",
   "adminInvoiceEmailSentYes": "Yes",
   "adminInvoiceEmailSentNo": "No",
-  "adminInvoiceResendQueued": "Email dispatch completed.",
-  "adminInvoiceRetryPdfOk": "PDF regenerated."
+  "adminInvoiceResendSuccess": "Invoice email sent successfully.",
+  "adminInvoiceResendFailed": "Email was not sent. Check “Email error” on the invoice and SMTP settings (Gmail App Password).",
+  "adminInvoiceRetryPdfOk": "PDF regenerated.",
+  "adminInvoiceActionRecreate": "Recreate invoice",
+  "adminInvoiceRecreateTitle": "Recreate invoice?",
+  "adminInvoiceRecreateDescription": "The current invoice will be marked cancelled (data kept for audit). A new invoice will be created for the same payment, then PDF and email run again. Existing ledger revenue is not duplicated.",
+  "adminInvoiceRecreateSuccess": "New invoice {number}",
+  "@adminInvoiceRecreateSuccess": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "adminInvoiceNetworkError": "No internet connection or the service is unreachable. Try again.",
+  "adminInvoiceRetryPdfUnavailableHint": "PDF is already generated. Use “Recreate invoice” to replace the invoice and build a new PDF."
 
 }

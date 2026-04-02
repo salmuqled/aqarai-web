@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/models/invoice.dart';
 import 'package:aqarai_app/services/invoice_admin_functions_service.dart';
+import 'package:aqarai_app/widgets/admin_confirmation_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +25,7 @@ class AdminInvoiceDetailPage extends StatefulWidget {
 class _AdminInvoiceDetailPageState extends State<AdminInvoiceDetailPage> {
   bool _resendBusy = false;
   bool _retryBusy = false;
+  bool _recreateBusy = false;
 
   Future<void> _openPdf(String url) async {
     final uri = Uri.tryParse(url.trim());
@@ -49,16 +53,30 @@ class _AdminInvoiceDetailPageState extends State<AdminInvoiceDetailPage> {
     if (_resendBusy) return;
     setState(() => _resendBusy = true);
     try {
-      await InvoiceAdminFunctionsService.resendInvoiceEmail(widget.invoiceId);
+      final result =
+          await InvoiceAdminFunctionsService.resendInvoiceEmail(widget.invoiceId);
+      final sent = result['emailSent'] == true;
       if (mounted) {
+        final cs = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(loc.adminInvoiceResendQueued)),
+          SnackBar(
+            content: Text(
+              sent ? loc.adminInvoiceResendSuccess : loc.adminInvoiceResendFailed,
+              style: sent
+                  ? null
+                  : TextStyle(
+                      color: cs.onError,
+                      fontWeight: FontWeight.w500,
+                    ),
+            ),
+            backgroundColor: sent ? null : cs.error,
+          ),
         );
       }
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? e.code)),
+          SnackBar(content: Text(_functionsErrorMessage(loc, e))),
         );
       }
     } catch (e) {
@@ -85,7 +103,7 @@ class _AdminInvoiceDetailPageState extends State<AdminInvoiceDetailPage> {
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? e.code)),
+          SnackBar(content: Text(_functionsErrorMessage(loc, e))),
         );
       }
     } catch (e) {
@@ -97,6 +115,120 @@ class _AdminInvoiceDetailPageState extends State<AdminInvoiceDetailPage> {
     } finally {
       if (mounted) setState(() => _retryBusy = false);
     }
+  }
+
+  Future<void> _promptRecreate(
+    AppLocalizations loc,
+    bool isAr,
+    String paymentId,
+  ) async {
+    if (_recreateBusy) return;
+    setState(() => _recreateBusy = true);
+    ({String id, String number})? created;
+    try {
+      await showAdminConfirmationDialog(
+        context: context,
+        title: loc.adminInvoiceRecreateTitle,
+        description: loc.adminInvoiceRecreateDescription,
+        isAr: isAr,
+        onConfirm: () async {
+          created = await _recreateInvoiceCall(paymentId, loc);
+        },
+      );
+    } finally {
+      if (mounted) setState(() => _recreateBusy = false);
+    }
+
+    if (!mounted || created == null) return;
+    final c = created!;
+    if (c.id.isEmpty) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(loc.adminInvoiceRecreateSuccess(c.number))),
+    );
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => AdminInvoiceDetailPage(invoiceId: c.id),
+      ),
+    );
+  }
+
+  /// Cloud Function only — navigation and success UI happen after the dialog closes.
+  Future<({String id, String number})?> _recreateInvoiceCall(
+    String paymentId,
+    AppLocalizations loc,
+  ) async {
+    try {
+      final r = await InvoiceAdminFunctionsService.recreateInvoiceForPayment(
+        paymentId,
+      );
+      final newId = '${r['newInvoiceId'] ?? ''}'.trim();
+      final invNo = '${r['newInvoiceNumber'] ?? ''}'.trim();
+      if (newId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(loc.adminInvoicesError)),
+          );
+        }
+        return null;
+      }
+      return (id: newId, number: invNo.isEmpty ? newId : invNo);
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        final cs = Theme.of(context).colorScheme;
+        final msg = _functionsErrorMessage(loc, e);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              msg,
+              style: TextStyle(color: cs.onError),
+            ),
+            backgroundColor: cs.error,
+          ),
+        );
+      }
+      return null;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_recreateOrNetworkMessage(loc, e))),
+        );
+      }
+      return null;
+    }
+  }
+
+  /// Socket/timeout style failures (no dart:io on web — use types + strings).
+  static bool _looksLikeNetworkFailure(Object e) {
+    if (e is TimeoutException) return true;
+    final t = e.runtimeType.toString();
+    if (t == 'SocketException' || t == 'HandshakeException') return true;
+    if (t.contains('ClientException')) return true;
+    final s = e.toString().toLowerCase();
+    return s.contains('socket') ||
+        s.contains('network') ||
+        s.contains('host lookup') ||
+        s.contains('no route to host');
+  }
+
+  String _recreateOrNetworkMessage(AppLocalizations loc, Object e) {
+    if (e is FirebaseFunctionsException) return _functionsErrorMessage(loc, e);
+    if (_looksLikeNetworkFailure(e)) return loc.adminInvoiceNetworkError;
+    return '$e';
+  }
+
+  String _functionsErrorMessage(
+    AppLocalizations loc,
+    FirebaseFunctionsException e,
+  ) {
+    final code = e.code.toLowerCase();
+    if (code == 'unavailable' ||
+        code == 'deadline-exceeded' ||
+        code == 'network-error' ||
+        (e.message?.toLowerCase().contains('network') ?? false)) {
+      return loc.adminInvoiceNetworkError;
+    }
+    return e.message ?? e.code;
   }
 
   @override
@@ -196,6 +328,11 @@ class _AdminInvoiceDetailPageState extends State<AdminInvoiceDetailPage> {
                     _row(loc.adminInvoiceFieldPdfError, inv.pdfError!),
                   if (inv.pdfErrorAt != null)
                     _row(loc.adminInvoiceFieldPdfErrorAt, _ts(inv.pdfErrorAt)),
+                  if (inv.cancelledAt != null)
+                    _row(loc.adminInvoiceFieldCancelledAt, _ts(inv.cancelledAt)),
+                  if (inv.cancelReason != null &&
+                      inv.cancelReason!.trim().isNotEmpty)
+                    _row(loc.adminInvoiceFieldCancelReason, inv.cancelReason!),
                 ]),
               ),
               const SizedBox(height: 16),
@@ -233,6 +370,37 @@ class _AdminInvoiceDetailPageState extends State<AdminInvoiceDetailPage> {
                     ),
                   ),
                 ],
+              ),
+              if (!cancelled && !showRetry) ...[
+                const SizedBox(height: 8),
+                Text(
+                  loc.adminInvoiceRetryPdfUnavailableHint,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1.35,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: cancelled ||
+                          _recreateBusy ||
+                          inv.paymentId == null ||
+                          inv.paymentId!.isEmpty
+                      ? null
+                      : () => _promptRecreate(loc, isAr, inv.paymentId!),
+                  icon: _recreateBusy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.autorenew_outlined),
+                  label: Text(loc.adminInvoiceActionRecreate),
+                ),
               ),
               const SizedBox(height: 12),
               FilledButton.icon(

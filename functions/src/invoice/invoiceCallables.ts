@@ -13,21 +13,24 @@ import {
 } from "./invoicePdfPipeline";
 import { resolvePaymentInvoiceContext } from "./resolvePaymentInvoiceContext";
 import { sendInvoiceEmails } from "./sendInvoiceEmail";
+import {
+  logInvoiceSmtpDiagnostics,
+  resolveInvoiceSmtp,
+  smtpDiagnosticsPayload,
+} from "./invoiceSmtpRuntime";
+import { isAdminFromCallableAuth } from "./adminAuth";
 
 const invoiceSmtpPass = defineSecret("INVOICE_SMTP_PASS");
 const invoiceSmtpHost = defineString("INVOICE_SMTP_HOST", {
   default: "smtp.gmail.com",
 });
 const invoiceSmtpPort = defineString("INVOICE_SMTP_PORT", { default: "465" });
-const invoiceSmtpUser = defineString("INVOICE_SMTP_USER", {
-  default: "aqaraiapp@gmail.com",
-});
 
 function assertAdmin(request: { auth?: { token?: Record<string, unknown> } }) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
   }
-  if (request.auth.token?.admin !== true) {
+  if (!isAdminFromCallableAuth(request.auth)) {
     throw new HttpsError("permission-denied", "Admin only");
   }
 }
@@ -112,10 +115,12 @@ export const resendInvoiceEmail = onCall(
 
     const buf = await downloadPdfBufferForInvoice(data);
 
-    const pass = invoiceSmtpPass.value();
-    const user = invoiceSmtpUser.value();
-    const host = invoiceSmtpHost.value();
-    const port = parseInt(invoiceSmtpPort.value(), 10) || 465;
+    const smtpResolved = resolveInvoiceSmtp(
+      invoiceSmtpHost.value(),
+      invoiceSmtpPort.value(),
+      invoiceSmtpPass.value()
+    );
+    logInvoiceSmtpDiagnostics("resendInvoiceEmail", smtpResolved);
 
     const paymentId = str(data.paymentId);
     let companyEmail: string | null = null;
@@ -133,7 +138,7 @@ export const resendInvoiceEmail = onCall(
 
     const invoiceNumber = str(data.invoiceNumber);
     const emailResult = await sendInvoiceEmails({
-      smtp: { host, port, user, pass },
+      smtp: smtpResolved,
       companyEmail,
       pdfBuffer: buf,
       pdfFileName: `${invoiceNumber || invoiceId}.pdf`,
@@ -155,7 +160,8 @@ export const resendInvoiceEmail = onCall(
     return {
       ok: true,
       emailSent: emailResult.sent,
-      error: emailResult.error ?? null,
+      emailError: emailResult.error ?? null,
+      smtpDiagnostics: smtpDiagnosticsPayload(smtpResolved),
     };
   }
 );
@@ -163,8 +169,8 @@ export const resendInvoiceEmail = onCall(
 export const retryInvoicePdf = onCall(
   {
     region: "us-central1",
-    timeoutSeconds: 120,
-    memory: "512MiB",
+    timeoutSeconds: 180,
+    memory: "1GiB",
   },
   async (request) => {
     assertAdmin(request);
@@ -218,6 +224,7 @@ export const retryInvoicePdf = onCall(
         year: y,
         ctx,
         invoiceStatusForPdf: pdfStatus,
+        paymentId,
       });
       await applyPdfSuccessToInvoice(ref, pdfUrl, pdfStoragePath);
     } catch (e) {

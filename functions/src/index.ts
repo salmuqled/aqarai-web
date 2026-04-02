@@ -165,4 +165,5 @@ export {
 } from "./companyPaymentLogs";
 export { onCompanyPaymentConfirmedInvoice } from "./onCompanyPaymentConfirmedInvoice";
 export { resendInvoiceEmail, retryInvoicePdf } from "./invoice/invoiceCallables";
+export { recreateInvoiceForPayment } from "./invoice/recreateInvoiceForPayment";
 export { backfillLedgerForOldInvoices } from "./invoice/invoiceLedgerBackfill";

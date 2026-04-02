@@ -13,6 +13,12 @@ export interface PaymentInvoiceContext {
   area: string;
   descriptionAr: string;
   amount: number;
+  /** English invoice line item (empty when unknown). */
+  propertyType: string;
+  block: string;
+  street: string;
+  /** Formatted e.g. "12,345.000 KWD", or "". */
+  propertyPrice: string;
 }
 
 function str(v: unknown): string {
@@ -52,6 +58,67 @@ function serviceTypeFromReason(reason: string): InvoiceServiceType {
   if (reason === "rent") return "rent";
   if (reason === "sale") return "sale";
   return "sale";
+}
+
+function formatKwdDisplay(amount: number): string {
+  const n = Number.isFinite(amount) ? amount : 0;
+  if (n <= 0) return "";
+  const parts = n.toLocaleString("en-US", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  });
+  return `${parts} KWD`;
+}
+
+const emptyPropertyLines = (): Pick<
+  PaymentInvoiceContext,
+  "propertyType" | "block" | "street" | "propertyPrice"
+> => ({
+  propertyType: "",
+  block: "",
+  street: "",
+  propertyPrice: "",
+});
+
+async function propertyDetailsFromDeal(
+  db: admin.firestore.Firestore,
+  d: Record<string, unknown>
+): Promise<Pick<
+  PaymentInvoiceContext,
+  "propertyType" | "block" | "street" | "propertyPrice"
+>> {
+  let propertyType = str(d.propertyType);
+  let block = str(d.block ?? d.blockAr ?? d.blockEn);
+  let street = str(d.street ?? d.streetAr ?? d.streetEn);
+  let priceNum =
+    num(d.finalPrice) || num(d.listingPrice) || num(d.price);
+
+  const propertyId = str(d.propertyId);
+  if (propertyId) {
+    try {
+      const pSnap = await db.collection("properties").doc(propertyId).get();
+      const p = pSnap.data();
+      if (p) {
+        if (!propertyType) propertyType = str(p.type);
+        if (!block) block = str(p.block ?? p.blockAr ?? p.blockEn);
+        if (!street) {
+          street = str(
+            p.street ?? p.streetAr ?? p.streetEn ?? p.address ?? p.addressLine
+          );
+        }
+        if (!priceNum) priceNum = num(p.price);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return {
+    propertyType,
+    block,
+    street,
+    propertyPrice: priceNum > 0 ? formatKwdDisplay(priceNum) : "",
+  };
 }
 
 async function loadClientProfile(uid: string): Promise<{
@@ -122,6 +189,7 @@ export async function resolvePaymentInvoiceContext(
     }
 
     const profile = await loadClientProfile(ownerId);
+    const propLines = await propertyDetailsFromDeal(db, d);
     return {
       companyId: ownerId,
       companyName: profile.name,
@@ -130,6 +198,7 @@ export async function resolvePaymentInvoiceContext(
       area,
       descriptionAr: descriptionAr(serviceType, area),
       amount,
+      ...propLines,
     };
   }
 
@@ -148,6 +217,7 @@ export async function resolvePaymentInvoiceContext(
       : "sale";
 
     const profile = await loadClientProfile(userId);
+    const priceVal = num(r.price);
     return {
       companyId: userId,
       companyName: profile.name,
@@ -156,6 +226,10 @@ export async function resolvePaymentInvoiceContext(
       area,
       descriptionAr: descriptionAr(serviceType, area),
       amount,
+      propertyType: str(r.propertyType),
+      block: "",
+      street: "",
+      propertyPrice: priceVal > 0 ? formatKwdDisplay(priceVal) : "",
     };
   }
 
@@ -179,5 +253,6 @@ export async function resolvePaymentInvoiceContext(
     area,
     descriptionAr: descriptionAr(st, area),
     amount,
+    ...emptyPropertyLines(),
   };
 }
