@@ -12,6 +12,7 @@ import 'package:aqarai_app/pages/admin_dashboard_page.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/pages/wanted_details_page.dart';
 import 'package:aqarai_app/pages/valuation_details_page.dart';
+import 'package:aqarai_app/pages/admin_deal_detail_page.dart';
 import 'package:aqarai_app/services/property_closure_service.dart';
 import 'package:aqarai_app/services/admin_action_service.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
@@ -37,6 +38,7 @@ enum AdminFilter {
   expiry,
   interested,
   closureRequests,
+  deals,
   support,
 }
 
@@ -281,8 +283,10 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       .limit(100)
       .snapshots();
 
+  /// Interest taps — same rows as `ensureInterestDeal` (`interestSource` discriminator).
   Stream<QuerySnapshot<Map<String, dynamic>>> _interested() => firestore
-      .collection('interested_leads')
+      .collection('deals')
+      .where('interestSource', whereIn: ['property_detail', 'wanted_detail'])
       .orderBy('createdAt', descending: true)
       .limit(100)
       .snapshots();
@@ -309,10 +313,18 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         return _interested();
       case AdminFilter.closureRequests:
         return _closureRequests();
+      case AdminFilter.deals:
+        return _deals();
       case AdminFilter.support:
         return _supportTickets();
     }
   }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _deals() => firestore
+      .collection('deals')
+      .orderBy('createdAt', descending: true)
+      .limit(100)
+      .snapshots();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _supportTickets() => firestore
       .collection('support_tickets')
@@ -668,10 +680,10 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     );
   }
 
-  Future<void> _deleteInterestedLead(String leadId) async {
+  Future<void> _deleteInterestDeal(String dealId) async {
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
     try {
-      await firestore.collection('interested_leads').doc(leadId).delete();
+      await firestore.collection('deals').doc(dealId).delete();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -687,13 +699,14 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     }
   }
 
-  // كارد المهتم — من ضغط "أنا مهتم" في تفاصيل العقار أو طلب مطلوب
+  // كارد المهتم — صف `deals` من زر "أنا مهتم" (interestSource)
   Widget _buildInterestedTile(
     AppLocalizations loc,
     Map<String, dynamic> d,
-    String leadId,
+    String dealId,
   ) {
-    final createdAt = d['createdAt'] as Timestamp?;
+    final createdAt =
+        (d['leadCreatedAt'] as Timestamp?) ?? (d['createdAt'] as Timestamp?);
     final propertyId = (d['propertyId'] ?? '').toString();
     final wantedId = (d['wantedId'] ?? '').toString();
     final typeEn = (d['type'] ?? '').toString();
@@ -702,7 +715,14 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     final area = isAr
         ? ((d['areaAr'] ?? d['area']) ?? '-').toString()
         : ((d['areaEn'] ?? d['area']) ?? '-').toString();
-    final typeLabel = _translateType(context, typeEn);
+    final typeLabel = typeEn.isEmpty
+        ? (wantedId.isNotEmpty ? loc.wanted : '')
+        : _translateType(context, typeEn);
+    final propertyTitle = (d['propertyTitle'] ?? '').toString();
+    final headline = propertyTitle.isNotEmpty
+        ? propertyTitle
+        : (typeLabel.isNotEmpty ? '$area • $typeLabel' : area);
+    final clientPhone = (d['clientPhone'] ?? '').toString().trim();
     final isWantedLead = typeEn == 'wanted' || wantedId.isNotEmpty;
     final serviceLabel = isWantedLead
         ? loc.wanted
@@ -771,7 +791,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            '$area • $typeLabel',
+                            headline,
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -786,6 +806,13 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                          if (clientPhone.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              '☎ $clientPhone',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ],
                           const SizedBox(height: 6),
                           Text(
                             '${loc.addedOn}: ${_fmtDate(createdAt)}',
@@ -799,17 +826,29 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
+            IconButton(
+              onPressed: () {
+                Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => AdminDealDetailPage(dealId: dealId),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.open_in_new, color: Color(0xFF101046)),
+              tooltip: isAr ? 'تفاصيل الصفقة' : 'Deal details',
+            ),
             IconButton(
               onPressed: () async {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                    title: Text(isAr ? 'حذف' : 'Delete'),
+                    title: Text(isAr ? 'حذف الصفقة' : 'Delete deal'),
                     content: Text(
                       isAr
-                          ? 'هل تريد حذف هذا السجل بعد الانتهاء منه؟'
-                          : 'Delete this lead after you\'re done?',
+                          ? 'سيتم حذف سجل الصفقة نهائياً من النظام. متابعة؟'
+                          : 'This removes the deal document permanently. Continue?',
                     ),
                     actions: [
                       TextButton(
@@ -824,10 +863,10 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                     ],
                   ),
                 );
-                if (confirm == true) await _deleteInterestedLead(leadId);
+                if (confirm == true) await _deleteInterestDeal(dealId);
               },
               icon: const Icon(Icons.delete_outline, color: Colors.red),
-              tooltip: isAr ? 'حذف بعد الانتهاء' : 'Delete when done',
+              tooltip: isAr ? 'حذف الصفقة' : 'Delete deal',
             ),
           ],
         ),
@@ -1498,15 +1537,20 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     Future<void> approve() async {
       final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
       try {
-        await PropertyClosureService().approveClosureRequest(
+        final dealId = await PropertyClosureService().approveClosureRequest(
           requestId: requestId,
           adminUid: uid,
         );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(isAr ? 'تم اعتماد الإغلاق' : 'Closure approved')),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(isAr ? 'تم اعتماد الإغلاق' : 'Closure approved')),
+        );
+        await Navigator.push<void>(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => AdminDealDetailPage(dealId: dealId),
+          ),
+        );
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -1638,9 +1682,59 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         return _buildInterestedTile(loc, d, doc.id);
       case AdminFilter.closureRequests:
         return _buildClosureRequestTile(loc, d, doc.id, isAr);
+      case AdminFilter.deals:
+        return _buildDealTile(loc, d, doc.id, isAr);
       case AdminFilter.support:
         return _buildSupportTicketTile(loc, d, doc.id, isAr);
     }
+  }
+
+  Widget _buildDealTile(
+    AppLocalizations loc,
+    Map<String, dynamic> d,
+    String dealId,
+    bool isAr,
+  ) {
+    final title = (d['propertyTitle'] ?? d['title'] ?? '').toString();
+    final st = (d['dealStatus'] ?? '').toString();
+    final fp = _fmtPrice(d['finalPrice']);
+    final lp = _fmtPrice(d['propertyPrice'] ?? d['listingPrice']);
+    final pid = (d['propertyId'] ?? '').toString();
+    return Card(
+      child: InkWell(
+        onTap: () {
+          Navigator.push<void>(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => AdminDealDetailPage(dealId: dealId),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title.isEmpty ? dealId : title,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${isAr ? "حالة الصفقة" : "Status"}: ${st.isEmpty ? (isAr ? "—" : "—") : st}',
+              ),
+              Text('${loc.adminDealPropertyPrice}: $lp KWD'),
+              Text('${loc.adminDealFinalPrice}: $fp KWD'),
+              if (pid.isNotEmpty)
+                Text(
+                  'propertyId: $pid',
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _supportCategoryLabel(AppLocalizations loc, String key) {
@@ -1937,6 +2031,12 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                     'طلبات الإغلاق',
                     AdminFilter.closureRequests,
                     _closureRequests(),
+                  ),
+                  _badge(
+                    loc.adminDealsTab,
+                    loc.adminDealsTab,
+                    AdminFilter.deals,
+                    _deals(),
                   ),
                   _badge(
                     loc.supportTabEn,
@@ -2242,6 +2342,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         emptyMsg = isAr ? 'لا يوجد مهتمون' : 'No interested leads';
       } else if (_current == AdminFilter.closureRequests) {
         emptyMsg = isAr ? 'لا توجد طلبات إغلاق معلّقة' : 'No pending closure requests';
+      } else if (_current == AdminFilter.deals) {
+        emptyMsg = isAr ? 'لا توجد صفقات' : 'No deals yet';
       } else if (_current == AdminFilter.wanted) {
         emptyMsg = isAr
             ? 'لا توجد طلبات مطلوب.\nإذا أضفت طلباً ولم يظهر، تحقق من الاتصال بالإنترنت وأعد المحاولة.'

@@ -5,6 +5,7 @@ import 'package:aqarai_app/models/admin_analytics_models.dart';
 import 'package:aqarai_app/models/notification_ab_models.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/analytics_service.dart';
+import 'package:aqarai_app/utils/financial_rules.dart';
 
 /// Client-side aggregation of `deals` for the admin dashboard.
 ///
@@ -32,6 +33,7 @@ class AdminAnalyticsService {
     DealLeadSource.search,
     DealLeadSource.featured,
     DealLeadSource.direct,
+    DealLeadSource.interestedButton,
     DealLeadSource.unknown,
   ];
 
@@ -54,7 +56,7 @@ class AdminAnalyticsService {
 
   Query<Map<String, dynamic>> get dealsQueryForDashboard => _db
       .collection('deals')
-      .orderBy('closedAt', descending: true)
+      .orderBy('createdAt', descending: true)
       .limit(kDashboardDealsLimit);
 
   Stream<QuerySnapshot<Map<String, dynamic>>> watchDealsForDashboard() =>
@@ -96,6 +98,9 @@ class AdminAnalyticsService {
   static String _normalizeLeadSource(Map<String, dynamic> m) {
     final raw = m['leadSource']?.toString().trim();
     if (raw == null || raw.isEmpty) return DealLeadSource.unknown;
+    if (raw == DealLeadSource.interestedButton) {
+      return DealLeadSource.interestedButton;
+    }
     if (DealLeadSource.isAttributionSource(raw)) return raw;
     return DealLeadSource.unknown;
   }
@@ -120,7 +125,9 @@ class AdminAnalyticsService {
       final row = agg.putIfAbsent(src, _MoneyCount.new);
       row.count++;
       row.revenue += _dealRevenue(m);
-      row.commission += _money(m['commissionAmount']);
+      if (isFinalizedDeal(m)) {
+        row.commission += getCommission(m);
+      }
     }
 
     return _canonicalSources.map((k) {

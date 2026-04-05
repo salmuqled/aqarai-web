@@ -560,25 +560,25 @@ abstract class AppLocalizations {
   /// Terms link label
   ///
   /// In en, this message translates to:
-  /// **'Terms and Conditions'**
+  /// **'Terms & Conditions'**
   String get addPropertyTermsLink;
 
   /// Toast when publishing without acceptance
   ///
   /// In en, this message translates to:
-  /// **'Please accept the terms and conditions before publishing.'**
+  /// **'Please accept the Terms & Conditions before publishing.'**
   String get addPropertyTermsMustAccept;
 
-  /// Terms dialog title
+  /// Terms dialog title (shared)
   ///
   /// In en, this message translates to:
-  /// **'Property Listing Agreement — AqarAi'**
+  /// **'Terms & Conditions — AqarAi'**
   String get addPropertyTermsDialogTitle;
 
-  /// Full property listing terms (English)
+  /// Full Terms & Conditions (English)
   ///
   /// In en, this message translates to:
-  /// **'Property Listing Terms and Conditions — AqarAi Platform\n\nIntroduction:\nThese terms and conditions constitute a legally binding agreement between a user of the AqarAi platform (the advertiser) and the platform administration. By tapping \"I agree\" or \"Publish property\", the user acknowledges that they have read, understood, and agree to comply with all of the following provisions:\n\n1. Advertiser capacity and accuracy of data:\n• Ownership and agency: The advertiser warrants that they are the lawful owner of the listed property, or a licensed real estate office with valid authorization or a marketing agreement in effect from the owner.\n• Accuracy of information: The advertiser confirms that all property details (area, location, price, legal status) are fully accurate and reflect reality.\n• Images: Attached images must be genuine images of the same property. Stock images or images of other properties are strictly prohibited; the platform may remove the listing if misleading images are proven.\n\n2. Commissions and fees (brokerage policy):\n• Sale commission: Upon completion of a sale, the advertiser/seller undertakes to pay a commission of 1% of the total sold property value to AqarAi.\n• Rental commission: Upon completion of a rental, the advertiser/landlord undertakes to pay a commission equal to half of one month\'s rent once, to the platform.\n• Commission evasion: Any attempt to complete a transaction off-platform to avoid paying commission may subject the account holder to legal action and recovery of the due commission, as well as permanent account suspension.\n\n3. Featured listings and paid services:\n• \"Featured listing\" fees are for a technical service to increase visibility in designated areas of the app; the platform does not guarantee that a sale or lease will occur.\n• Amounts paid for featuring listings are non-refundable once the service is activated and the listing appears.\n\n4. Exchange and AI property valuation:\n• Exchange: The platform\'s responsibility is limited to connecting parties interested in exchange; it assumes no legal liability for the validity of exchanged properties or transfer procedures.\n• AI valuation: The user acknowledges that the appraisal service provided via artificial intelligence is indicative and approximate, based on current market data, and is not an official valuation approved by government or banking authorities.\n\n5. Platform disclaimer:\n• AqarAi is a technical intermediary only and assumes no liability for disputes between advertiser and buyer/tenant, or for property quality or hidden defects.\n• On-site inspection and verification of title deeds and official documents are solely the responsibility of the contracting parties.\n\n6. Amendment and removal:\n• AqarAi administration reserves the right to amend these terms at any time and to delete any listing or suspend any account that violates these policies without prior notice.'**
+  /// **'Terms & Conditions — AqarAi\n\n1. Agreement\nBy using the \"AqarAi\" application or creating an account, you agree to these Terms & Conditions and to the app\'s Privacy Policy. If you do not agree, please do not use the service.\n\n2. Nature of the Service\nThe \"AqarAi\" platform operates as a digital real estate intermediary intended to facilitate the presentation of properties, communication between parties, and the management of sale and lease transactions.\nThe platform does not represent the owner directly unless a separate mandate applies.\n\n3. Property Listings (User Content)\nUsers may publish property advertisements within the application and acknowledge that:\n- They are the owner of the property or duly authorised by the owner;\n- All information submitted is true and accurate;\n- They bear full legal responsibility for the content.\n\nThe platform may delete or amend any content that is unlawful, misleading, or non-compliant.\n\n4. Initiation of Contact (\"I\'m Interested\")\nTapping the \"I\'m Interested\" button constitutes the commencement of formal engagement through the platform and entails:\n- Transfer of request handling to the platform team; and\n- Treatment of this interaction as a basis for any subsequent transaction.\n\n5. Commission and Brokerage\nThe platform acts as a real estate intermediary and is entitled to a commission where a sale or lease is completed following contact that began through the application, whether directly or indirectly, or within a subsequent period involving the same parties.\n\nCommission rates are as follows:\n- Sale: 1% of the property value;\n- Lease: the equivalent of one half (½) of one month\'s rent.\n\nCommission becomes payable:\n- Upon payment of a deposit or reservation fee (if any); or\n- Upon execution of the contract where no reservation applies.\n\nCommission remains due if the transaction between the same parties is completed within a period of up to six (6) months from the date contact was initiated via the platform.\n\n6. Anti-Circumvention\nUsers must not:\n- Complete a transaction off-platform for the purpose of avoiding commission; or\n- Attempt direct contact between parties without the platform\'s knowledge.\n\nSuch conduct constitutes a material breach of these Terms, and the platform may take appropriate action.\n\n7. Payments\nPayments may be processed through the application or by methods designated by the platform.\nUsers are responsible for the accuracy of payment details. Payments are subject to the terms of the applicable certified payment service providers.\n\n8. AI Assistant\nThe AI assistant provides general information only, which may be inaccurate or incomplete, and does not constitute legal or financial advice.\n\n9. Disclaimer\nThe service is provided \"as is\" without warranties.\nThe platform is not liable for:\n- The accuracy of listings;\n- Users\' conduct; or\n- Any losses arising from use of the application.\n\n10. Termination\nThe platform may suspend or terminate any user account for breach of these Terms or misuse of the service.\n\n11. Governing Law\nThese Terms are governed by and construed in accordance with the laws of the State of Kuwait. The courts of Kuwait shall have exclusive jurisdiction over disputes.\n\n12. Contact\nFor enquiries:\naqaraiapp@gmail.com'**
   String get addPropertyTermsDialogBody;
 
   /// Close terms dialog
@@ -586,6 +586,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'OK'**
   String get addPropertyTermsDialogClose;
+
+  /// App bar title for full property listing terms screen
+  ///
+  /// In en, this message translates to:
+  /// **'Terms & Conditions'**
+  String get termsConditionsScreenTitle;
+
+  /// Opens full-screen terms from Add Property
+  ///
+  /// In en, this message translates to:
+  /// **'View Terms & Conditions'**
+  String get addPropertyViewFullTerms;
+
+  /// Notice under terms checkbox on Add Property
+  ///
+  /// In en, this message translates to:
+  /// **'By using the app, you agree to the commission system and deal management through the platform'**
+  String get addPropertyTermsCommissionNotice;
+
+  /// Bottom sheet before I'm interested submission
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your phone number and you will be redirected to WhatsApp to complete your request.'**
+  String get interestedLeadConfirmationBody;
+
+  /// Phone field label in interest sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Phone Number'**
+  String get interestedLeadPhoneLabel;
+
+  /// Validation when phone empty
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter your phone number'**
+  String get interestedLeadPhoneRequired;
+
+  /// Confirm interested lead sheet primary action
+  ///
+  /// In en, this message translates to:
+  /// **'Continue to WhatsApp'**
+  String get interestedLeadConfirmationContinue;
 
   /// No items
   ///
@@ -2840,7 +2882,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminRealEarningsLegacyNote.
   ///
   /// In en, this message translates to:
-  /// **'Only deals with status \"sold\" are included. New approved closures write this field; older deal rows may need a one-time backfill.'**
+  /// **'Commission includes deals with dealStatus signed or closed (CRM finalized). Legacy status \"sold\" is not used for this total.'**
   String get adminRealEarningsLegacyNote;
 
   /// No description provided for @adminRealEarningsChartEmpty.
@@ -3616,6 +3658,360 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'PDF is already generated. Use “Recreate invoice” to replace the invoice and build a new PDF.'**
   String get adminInvoiceRetryPdfUnavailableHint;
+
+  /// Admin requests filter: brokerage deals
+  ///
+  /// In en, this message translates to:
+  /// **'Deals'**
+  String get adminDealsTab;
+
+  /// No description provided for @adminDealDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deal'**
+  String get adminDealDetailTitle;
+
+  /// No description provided for @adminDealPropertyPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing price'**
+  String get adminDealPropertyPrice;
+
+  /// No description provided for @adminDealFinalPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Final deal price'**
+  String get adminDealFinalPrice;
+
+  /// No description provided for @adminDealCommission.
+  ///
+  /// In en, this message translates to:
+  /// **'Commission'**
+  String get adminDealCommission;
+
+  /// No description provided for @adminDealSaveFinancials.
+  ///
+  /// In en, this message translates to:
+  /// **'Save price & commission'**
+  String get adminDealSaveFinancials;
+
+  /// No description provided for @adminDealCalculateCommission.
+  ///
+  /// In en, this message translates to:
+  /// **'Calculate commission'**
+  String get adminDealCalculateCommission;
+
+  /// No description provided for @adminDealFinalPriceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'You must enter final price first'**
+  String get adminDealFinalPriceRequired;
+
+  /// No description provided for @adminDealPipelineStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Deal status'**
+  String get adminDealPipelineStatus;
+
+  /// No description provided for @adminDealBookingAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking / deposit amount'**
+  String get adminDealBookingAmount;
+
+  /// No description provided for @adminDealCommissionPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Commission received'**
+  String get adminDealCommissionPaid;
+
+  /// No description provided for @adminDealOpenListing.
+  ///
+  /// In en, this message translates to:
+  /// **'Open listing'**
+  String get adminDealOpenListing;
+
+  /// No description provided for @adminDealSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get adminDealSaved;
+
+  /// No description provided for @adminDealServiceSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Sale'**
+  String get adminDealServiceSale;
+
+  /// No description provided for @adminDealServiceRent.
+  ///
+  /// In en, this message translates to:
+  /// **'Rent'**
+  String get adminDealServiceRent;
+
+  /// Dashboard section: deal stages
+  ///
+  /// In en, this message translates to:
+  /// **'Deal Pipeline'**
+  String get adminDealPipelineSectionTitle;
+
+  /// Explains pipeline counts are from bounded deals query
+  ///
+  /// In en, this message translates to:
+  /// **'Counts from latest deals sample (same query as dashboard)'**
+  String get adminDealPipelineSectionSubtitle;
+
+  /// Insight under pipeline cards
+  ///
+  /// In en, this message translates to:
+  /// **'These numbers represent deal progression stages'**
+  String get adminDealPipelineSectionFootnote;
+
+  /// No description provided for @adminDealPipelineNewLeads.
+  ///
+  /// In en, this message translates to:
+  /// **'New leads'**
+  String get adminDealPipelineNewLeads;
+
+  /// No description provided for @adminDealPipelineContacted.
+  ///
+  /// In en, this message translates to:
+  /// **'Contacted'**
+  String get adminDealPipelineContacted;
+
+  /// No description provided for @adminDealPipelineQualified.
+  ///
+  /// In en, this message translates to:
+  /// **'Qualified'**
+  String get adminDealPipelineQualified;
+
+  /// No description provided for @adminDealPipelineBooked.
+  ///
+  /// In en, this message translates to:
+  /// **'Booked'**
+  String get adminDealPipelineBooked;
+
+  /// No description provided for @adminDealPipelineSigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed'**
+  String get adminDealPipelineSigned;
+
+  /// No description provided for @adminDealPipelineClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get adminDealPipelineClosed;
+
+  /// Shown when some deals have non-standard dealStatus
+  ///
+  /// In en, this message translates to:
+  /// **'Incomplete data: {count}'**
+  String adminDealPipelineOtherCount(int count);
+
+  /// Dashboard: deal stage conversion
+  ///
+  /// In en, this message translates to:
+  /// **'Conversion Funnel'**
+  String get adminConversionSectionTitle;
+
+  /// Explains funnel counts
+  ///
+  /// In en, this message translates to:
+  /// **'Valid deal statuses only (same deals sample as above)'**
+  String get adminConversionSectionSubtitle;
+
+  /// Insight under conversion funnel
+  ///
+  /// In en, this message translates to:
+  /// **'This shows how leads move through deal stages'**
+  String get adminConversionSectionFootnote;
+
+  /// No description provided for @adminConversionFunnelNewToContacted.
+  ///
+  /// In en, this message translates to:
+  /// **'New → Contacted'**
+  String get adminConversionFunnelNewToContacted;
+
+  /// No description provided for @adminConversionFunnelContactedToQualified.
+  ///
+  /// In en, this message translates to:
+  /// **'Contacted → Qualified'**
+  String get adminConversionFunnelContactedToQualified;
+
+  /// No description provided for @adminConversionFunnelQualifiedToBooked.
+  ///
+  /// In en, this message translates to:
+  /// **'Qualified → Booked'**
+  String get adminConversionFunnelQualifiedToBooked;
+
+  /// No description provided for @adminConversionFunnelBookedToSigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Booked → Signed'**
+  String get adminConversionFunnelBookedToSigned;
+
+  /// Dashboard commission block title
+  ///
+  /// In en, this message translates to:
+  /// **'Commission Overview'**
+  String get adminCommissionSectionTitle;
+
+  /// Explains commission scope
+  ///
+  /// In en, this message translates to:
+  /// **'Deals with commission > 0 in this sample (same query as dashboard)'**
+  String get adminCommissionSectionSubtitle;
+
+  /// No description provided for @adminCommissionTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total commission'**
+  String get adminCommissionTotal;
+
+  /// No description provided for @adminCommissionPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid commission'**
+  String get adminCommissionPaid;
+
+  /// No description provided for @adminCommissionPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending commission'**
+  String get adminCommissionPending;
+
+  /// paid/total as percentage string
+  ///
+  /// In en, this message translates to:
+  /// **'Collection rate: {rate}'**
+  String adminCommissionCollectionRate(String rate);
+
+  /// No description provided for @adminCommissionNoDealsInSample.
+  ///
+  /// In en, this message translates to:
+  /// **'No deals with commission in this sample.'**
+  String get adminCommissionNoDealsInSample;
+
+  /// Commission breakdown: sale and exchange deals
+  ///
+  /// In en, this message translates to:
+  /// **'Sales'**
+  String get adminCommissionSplitSalesLabel;
+
+  /// Commission breakdown: rent deals
+  ///
+  /// In en, this message translates to:
+  /// **'Rental'**
+  String get adminCommissionSplitRentalLabel;
+
+  /// Commission breakdown: uncategorized service type
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get adminCommissionSplitOtherLabel;
+
+  /// Alert block for unpaid commission on finalized deals
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding Commissions'**
+  String get adminOutstandingSectionTitle;
+
+  /// No description provided for @adminOutstandingEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No outstanding commissions'**
+  String get adminOutstandingEmpty;
+
+  /// No description provided for @adminOutstandingAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding'**
+  String get adminOutstandingAmountLabel;
+
+  /// No description provided for @adminOutstandingDealsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Deals: {count}'**
+  String adminOutstandingDealsCount(int count);
+
+  /// No description provided for @adminOutstandingTopTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Largest outstanding'**
+  String get adminOutstandingTopTitle;
+
+  /// Dashboard: ranked follow-ups for unpaid commission
+  ///
+  /// In en, this message translates to:
+  /// **'Follow-up Priority'**
+  String get adminPrioritySectionTitle;
+
+  /// Scope of priority list
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid commission — booked, signed, or closed (same deals sample)'**
+  String get adminPrioritySectionSubtitle;
+
+  /// No description provided for @adminPriorityEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No deals match follow-up criteria in this sample.'**
+  String get adminPriorityEmpty;
+
+  /// No description provided for @adminPriorityLabelHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High 🔥'**
+  String get adminPriorityLabelHigh;
+
+  /// No description provided for @adminPriorityLabelMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium ⚡'**
+  String get adminPriorityLabelMedium;
+
+  /// No description provided for @adminPriorityLabelLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get adminPriorityLabelLow;
+
+  /// Dashboard: sale vs rental split
+  ///
+  /// In en, this message translates to:
+  /// **'Leads Overview'**
+  String get adminLeadsSplitSectionTitle;
+
+  /// Explains lead split and active definition
+  ///
+  /// In en, this message translates to:
+  /// **'By serviceType (sale / rent) in this sample · Active = new, contacted, qualified'**
+  String get adminLeadsSplitSectionSubtitle;
+
+  /// No description provided for @adminLeadsSplitSalesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sales leads'**
+  String get adminLeadsSplitSalesLabel;
+
+  /// No description provided for @adminLeadsSplitRentalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rental leads'**
+  String get adminLeadsSplitRentalLabel;
+
+  /// No description provided for @adminLeadsSplitActivePipeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Active pipeline: {count}'**
+  String adminLeadsSplitActivePipeline(int count);
+
+  /// No description provided for @adminLeadsSplitOtherServiceTypes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} deals with other or missing service type (excluded from split)'**
+  String adminLeadsSplitOtherServiceTypes(int count);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

@@ -14,6 +14,8 @@ import 'package:aqarai_app/models/auction/public_auction_lot.dart';
 import 'package:aqarai_app/pages/seller_auction_approval_page.dart';
 import 'package:aqarai_app/widgets/auction/auction_lot_rejection_strip.dart';
 import 'package:aqarai_app/widgets/auction_registration_status_widget.dart';
+import 'package:aqarai_app/services/interest_lead_flow_service.dart';
+import 'package:aqarai_app/widgets/interested_lead_confirmation_sheet.dart';
 
 class PropertyDetailsPage extends StatelessWidget {
   final String propertyId;
@@ -321,6 +323,7 @@ class PropertyDetailsPage extends StatelessWidget {
 
   Future<void> _onInterestedTap(
     BuildContext context,
+    String phone,
     String propertyId,
     String type,
     String areaAr,
@@ -333,17 +336,48 @@ class PropertyDetailsPage extends StatelessWidget {
   ) async {
     final loc = AppLocalizations.of(context)!;
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
     try {
-      await FirebaseFirestore.instance.collection('interested_leads').add({
-        'propertyId': propertyId,
-        'type': type,
-        'areaAr': areaAr,
-        'areaEn': areaEn,
-        'serviceType': serviceType,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {}
+      await InterestLeadFlowService.saveUserPhone(uid: user.uid, phone: phone);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isAr
+                  ? 'تعذر حفظ رقم الهاتف. حاول مرة أخرى.'
+                  : 'Could not save your phone number. Please try again.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      await InterestLeadFlowService.ensureInterestDeal(
+        phone: phone,
+        propertyId: propertyId,
+        propertyTitle: '$areaLabel • $typeLabel',
+        propertyPrice: price,
+        serviceTypeRaw: serviceType,
+      );
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isAr
+                  ? 'تعذر إتمام الطلب. حاول لاحقاً.'
+                  : 'Could not complete your request. Try again later.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
 
     final message = _buildWhatsAppMessage(
       isAr,
@@ -383,18 +417,23 @@ class PropertyDetailsPage extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: () => _onInterestedTap(
-          context,
-          propertyId,
-          type,
-          areaAr,
-          areaEn,
-          serviceType,
-          price,
-          typeLabel,
-          serviceLabel,
-          areaLabel,
-        ),
+        onPressed: () async {
+          final phone = await showInterestedLeadPhoneSheet(context);
+          if (!context.mounted || phone == null) return;
+          await _onInterestedTap(
+            context,
+            phone,
+            propertyId,
+            type,
+            areaAr,
+            areaEn,
+            serviceType,
+            price,
+            typeLabel,
+            serviceLabel,
+            areaLabel,
+          );
+        },
         icon: const Icon(Icons.thumb_up, color: Colors.white),
         label: Text(
           loc.imInterested,

@@ -22,6 +22,8 @@ abstract final class AnalyticsService {
         return 'featured';
       case DealLeadSource.direct:
         return 'direct';
+      case DealLeadSource.interestedButton:
+        return 'direct';
       default:
         return 'unknown';
     }
@@ -47,4 +49,22 @@ abstract final class AnalyticsService {
   static DocumentReference<Map<String, dynamic>> globalRef(
     FirebaseFirestore db,
   ) => db.collection(collection).doc(globalDocId);
+
+  /// Adjust volume/commission when a deal's final price or commission changes (delta only).
+  static Map<String, dynamic> buildGlobalVolumeCommissionDelta({
+    required String leadSource,
+    required double deltaVolumeKwd,
+    required double deltaCommissionKwd,
+  }) {
+    final prefix = _metricsPrefix(leadSource);
+    return {
+      if (deltaVolumeKwd != 0) ...{
+        'totalVolume': FieldValue.increment(deltaVolumeKwd),
+        '${prefix}Revenue': FieldValue.increment(deltaVolumeKwd),
+      },
+      if (deltaCommissionKwd != 0)
+        'totalCommission': FieldValue.increment(deltaCommissionKwd),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
 }

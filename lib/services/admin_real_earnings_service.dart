@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:aqarai_app/constants/deal_constants.dart';
 import 'package:aqarai_app/models/auction/auction_firestore_paths.dart';
+import 'package:aqarai_app/utils/financial_rules.dart';
 import 'package:aqarai_app/utils/kuwait_calendar.dart';
 
 /// Earnings time window (drives Firestore queries).
@@ -89,7 +91,8 @@ class EarningsDateRange {
 /// All filtering is in Firestore:
 /// - Paid requests: `auctionFeeStatus == paid`, and when windowed,
 ///   `auctionFeePaidAt` in `[start, end)`.
-/// - Sold deals: `status == sold`, and when windowed, `createdAt` in `[start, end)`.
+/// - Commission deals: `dealStatus` in signed/closed, and when windowed,
+///   `createdAt` in `[start, end)` (rows still filtered with [isFinalizedDeal] in memory).
 ///
 /// Window bounds are **UTC**; grouping uses **Kuwait civil calendar** via
 /// [KuwaitCalendar] (UTC+3). See `lib/utils/kuwait_calendar.dart`.
@@ -114,17 +117,19 @@ abstract final class AdminRealEarningsService {
         .orderBy('auctionFeePaidAt');
   }
 
+  /// Finalized CRM deals (`dealStatus` signed/closed) — not legacy `status`.
   static Query<Map<String, dynamic>> soldDealsQuery(
     FirebaseFirestore db, {
     required EarningsDateRangePreset preset,
   }) {
     final col = db.collection('deals');
+    const finalized = [DealStatus.signed, DealStatus.closed];
     if (preset == EarningsDateRangePreset.allTime) {
-      return col.where('status', isEqualTo: 'sold');
+      return col.where('dealStatus', whereIn: finalized);
     }
     final w = EarningsDateRange.windowed(preset);
     return col
-        .where('status', isEqualTo: 'sold')
+        .where('dealStatus', whereIn: finalized)
         .where('createdAt', isGreaterThanOrEqualTo: w.startInclusive!)
         .where('createdAt', isLessThan: w.endExclusive!)
         .orderBy('createdAt');
@@ -195,8 +200,12 @@ abstract final class AdminRealEarningsService {
     }
 
     var commissionSum = 0.0;
+    var finalizedDealCount = 0;
     for (final d in soldDocs) {
-      commissionSum += _money(d.data()['commissionAmount']);
+      final m = d.data();
+      if (!isFinalizedDeal(m)) continue;
+      finalizedDealCount++;
+      commissionSum += getCommission(m);
     }
 
     final daily = <String, double>{};
@@ -211,10 +220,11 @@ abstract final class AdminRealEarningsService {
 
     for (final d in soldDocs) {
       final m = d.data();
+      if (!isFinalizedDeal(m)) continue;
       final day = _dayFromSoldDeal(m);
       if (day == null) continue;
       final k = _dayKeyKuwait(day);
-      daily[k] = (daily[k] ?? 0) + _money(m['commissionAmount']);
+      daily[k] = (daily[k] ?? 0) + getCommission(m);
     }
 
     final List<DailyRevenuePoint> series = filterRange.isWindowed
@@ -223,7 +233,7 @@ abstract final class AdminRealEarningsService {
 
     return RealEarningsSnapshot(
       paidAuctionCount: paidDocs.length,
-      soldDealCount: soldDocs.length,
+      soldDealCount: finalizedDealCount,
       totalAuctionFeesKwd: feesSum,
       totalCommissionKwd: commissionSum,
       totalRevenueKwd: feesSum + commissionSum,
@@ -248,7 +258,7 @@ class RealEarningsSnapshot {
   final double totalAuctionFeesKwd;
   final double totalCommissionKwd;
 
-  /// Sum(auction fees on paid requests) + sum(commission on sold deals).
+  /// Sum(auction fees on paid requests) + sum(commission on finalized deals).
   final double totalRevenueKwd;
 
   /// Chronological days in the selected filter (including zeros).

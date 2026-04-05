@@ -9,6 +9,7 @@ import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/models/company_payment.dart';
 import 'package:aqarai_app/services/auth_service.dart';
 import 'package:aqarai_app/services/company_payments_service.dart';
+import 'package:aqarai_app/utils/financial_rules.dart';
 
 /// Admin-only: append a row to `company_payments` (bank / check / cash).
 class AddCompanyPaymentPage extends StatefulWidget {
@@ -116,10 +117,11 @@ class _AddCompanyPaymentPageState extends State<AddCompanyPaymentPage> {
   }
 
   String _shortDealSubtitle(QueryDocumentSnapshot<Map<String, dynamic>> d) {
-    final c = d.data()['commissionAmount'];
+    final comm = getCommission(d.data());
     final id = d.id;
     final head = id.length <= 10 ? id : '${id.substring(0, 10)}…';
-    return '$head · ${c ?? '—'} KWD';
+    final cStr = comm == 0 ? '—' : comm.toString();
+    return '$head · $cStr KWD';
   }
 
   Future<void> _submit(AppLocalizations loc) async {

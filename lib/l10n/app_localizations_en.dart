@@ -240,19 +240,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addPropertyTermsLead => 'I agree to the ';
 
   @override
-  String get addPropertyTermsLink => 'Terms and Conditions';
+  String get addPropertyTermsLink => 'Terms & Conditions';
 
   @override
-  String get addPropertyTermsMustAccept => 'Please accept the terms and conditions before publishing.';
+  String get addPropertyTermsMustAccept => 'Please accept the Terms & Conditions before publishing.';
 
   @override
-  String get addPropertyTermsDialogTitle => 'Property Listing Agreement — AqarAi';
+  String get addPropertyTermsDialogTitle => 'Terms & Conditions — AqarAi';
 
   @override
-  String get addPropertyTermsDialogBody => 'Property Listing Terms and Conditions — AqarAi Platform\n\nIntroduction:\nThese terms and conditions constitute a legally binding agreement between a user of the AqarAi platform (the advertiser) and the platform administration. By tapping \"I agree\" or \"Publish property\", the user acknowledges that they have read, understood, and agree to comply with all of the following provisions:\n\n1. Advertiser capacity and accuracy of data:\n• Ownership and agency: The advertiser warrants that they are the lawful owner of the listed property, or a licensed real estate office with valid authorization or a marketing agreement in effect from the owner.\n• Accuracy of information: The advertiser confirms that all property details (area, location, price, legal status) are fully accurate and reflect reality.\n• Images: Attached images must be genuine images of the same property. Stock images or images of other properties are strictly prohibited; the platform may remove the listing if misleading images are proven.\n\n2. Commissions and fees (brokerage policy):\n• Sale commission: Upon completion of a sale, the advertiser/seller undertakes to pay a commission of 1% of the total sold property value to AqarAi.\n• Rental commission: Upon completion of a rental, the advertiser/landlord undertakes to pay a commission equal to half of one month\'s rent once, to the platform.\n• Commission evasion: Any attempt to complete a transaction off-platform to avoid paying commission may subject the account holder to legal action and recovery of the due commission, as well as permanent account suspension.\n\n3. Featured listings and paid services:\n• \"Featured listing\" fees are for a technical service to increase visibility in designated areas of the app; the platform does not guarantee that a sale or lease will occur.\n• Amounts paid for featuring listings are non-refundable once the service is activated and the listing appears.\n\n4. Exchange and AI property valuation:\n• Exchange: The platform\'s responsibility is limited to connecting parties interested in exchange; it assumes no legal liability for the validity of exchanged properties or transfer procedures.\n• AI valuation: The user acknowledges that the appraisal service provided via artificial intelligence is indicative and approximate, based on current market data, and is not an official valuation approved by government or banking authorities.\n\n5. Platform disclaimer:\n• AqarAi is a technical intermediary only and assumes no liability for disputes between advertiser and buyer/tenant, or for property quality or hidden defects.\n• On-site inspection and verification of title deeds and official documents are solely the responsibility of the contracting parties.\n\n6. Amendment and removal:\n• AqarAi administration reserves the right to amend these terms at any time and to delete any listing or suspend any account that violates these policies without prior notice.';
+  String get addPropertyTermsDialogBody => 'Terms & Conditions — AqarAi\n\n1. Agreement\nBy using the \"AqarAi\" application or creating an account, you agree to these Terms & Conditions and to the app\'s Privacy Policy. If you do not agree, please do not use the service.\n\n2. Nature of the Service\nThe \"AqarAi\" platform operates as a digital real estate intermediary intended to facilitate the presentation of properties, communication between parties, and the management of sale and lease transactions.\nThe platform does not represent the owner directly unless a separate mandate applies.\n\n3. Property Listings (User Content)\nUsers may publish property advertisements within the application and acknowledge that:\n- They are the owner of the property or duly authorised by the owner;\n- All information submitted is true and accurate;\n- They bear full legal responsibility for the content.\n\nThe platform may delete or amend any content that is unlawful, misleading, or non-compliant.\n\n4. Initiation of Contact (\"I\'m Interested\")\nTapping the \"I\'m Interested\" button constitutes the commencement of formal engagement through the platform and entails:\n- Transfer of request handling to the platform team; and\n- Treatment of this interaction as a basis for any subsequent transaction.\n\n5. Commission and Brokerage\nThe platform acts as a real estate intermediary and is entitled to a commission where a sale or lease is completed following contact that began through the application, whether directly or indirectly, or within a subsequent period involving the same parties.\n\nCommission rates are as follows:\n- Sale: 1% of the property value;\n- Lease: the equivalent of one half (½) of one month\'s rent.\n\nCommission becomes payable:\n- Upon payment of a deposit or reservation fee (if any); or\n- Upon execution of the contract where no reservation applies.\n\nCommission remains due if the transaction between the same parties is completed within a period of up to six (6) months from the date contact was initiated via the platform.\n\n6. Anti-Circumvention\nUsers must not:\n- Complete a transaction off-platform for the purpose of avoiding commission; or\n- Attempt direct contact between parties without the platform\'s knowledge.\n\nSuch conduct constitutes a material breach of these Terms, and the platform may take appropriate action.\n\n7. Payments\nPayments may be processed through the application or by methods designated by the platform.\nUsers are responsible for the accuracy of payment details. Payments are subject to the terms of the applicable certified payment service providers.\n\n8. AI Assistant\nThe AI assistant provides general information only, which may be inaccurate or incomplete, and does not constitute legal or financial advice.\n\n9. Disclaimer\nThe service is provided \"as is\" without warranties.\nThe platform is not liable for:\n- The accuracy of listings;\n- Users\' conduct; or\n- Any losses arising from use of the application.\n\n10. Termination\nThe platform may suspend or terminate any user account for breach of these Terms or misuse of the service.\n\n11. Governing Law\nThese Terms are governed by and construed in accordance with the laws of the State of Kuwait. The courts of Kuwait shall have exclusive jurisdiction over disputes.\n\n12. Contact\nFor enquiries:\naqaraiapp@gmail.com';
 
   @override
   String get addPropertyTermsDialogClose => 'OK';
+
+  @override
+  String get termsConditionsScreenTitle => 'Terms & Conditions';
+
+  @override
+  String get addPropertyViewFullTerms => 'View Terms & Conditions';
+
+  @override
+  String get addPropertyTermsCommissionNotice => 'By using the app, you agree to the commission system and deal management through the platform';
+
+  @override
+  String get interestedLeadConfirmationBody => 'Enter your phone number and you will be redirected to WhatsApp to complete your request.';
+
+  @override
+  String get interestedLeadPhoneLabel => 'Phone Number';
+
+  @override
+  String get interestedLeadPhoneRequired => 'Please enter your phone number';
+
+  @override
+  String get interestedLeadConfirmationContinue => 'Continue to WhatsApp';
 
   @override
   String get noWantedItems => 'No items found';
@@ -1436,7 +1457,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRealEarningsTotalRevenue => 'Total revenue';
 
   @override
-  String get adminRealEarningsLegacyNote => 'Only deals with status \"sold\" are included. New approved closures write this field; older deal rows may need a one-time backfill.';
+  String get adminRealEarningsLegacyNote => 'Commission includes deals with dealStatus signed or closed (CRM finalized). Legacy status \"sold\" is not used for this total.';
 
   @override
   String get adminRealEarningsChartEmpty => 'No dated fee or commission events to plot.';
@@ -1828,4 +1849,191 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminInvoiceRetryPdfUnavailableHint => 'PDF is already generated. Use “Recreate invoice” to replace the invoice and build a new PDF.';
+
+  @override
+  String get adminDealsTab => 'Deals';
+
+  @override
+  String get adminDealDetailTitle => 'Deal';
+
+  @override
+  String get adminDealPropertyPrice => 'Listing price';
+
+  @override
+  String get adminDealFinalPrice => 'Final deal price';
+
+  @override
+  String get adminDealCommission => 'Commission';
+
+  @override
+  String get adminDealSaveFinancials => 'Save price & commission';
+
+  @override
+  String get adminDealCalculateCommission => 'Calculate commission';
+
+  @override
+  String get adminDealFinalPriceRequired => 'You must enter final price first';
+
+  @override
+  String get adminDealPipelineStatus => 'Deal status';
+
+  @override
+  String get adminDealBookingAmount => 'Booking / deposit amount';
+
+  @override
+  String get adminDealCommissionPaid => 'Commission received';
+
+  @override
+  String get adminDealOpenListing => 'Open listing';
+
+  @override
+  String get adminDealSaved => 'Saved';
+
+  @override
+  String get adminDealServiceSale => 'Sale';
+
+  @override
+  String get adminDealServiceRent => 'Rent';
+
+  @override
+  String get adminDealPipelineSectionTitle => 'Deal Pipeline';
+
+  @override
+  String get adminDealPipelineSectionSubtitle => 'Counts from latest deals sample (same query as dashboard)';
+
+  @override
+  String get adminDealPipelineSectionFootnote => 'These numbers represent deal progression stages';
+
+  @override
+  String get adminDealPipelineNewLeads => 'New leads';
+
+  @override
+  String get adminDealPipelineContacted => 'Contacted';
+
+  @override
+  String get adminDealPipelineQualified => 'Qualified';
+
+  @override
+  String get adminDealPipelineBooked => 'Booked';
+
+  @override
+  String get adminDealPipelineSigned => 'Signed';
+
+  @override
+  String get adminDealPipelineClosed => 'Closed';
+
+  @override
+  String adminDealPipelineOtherCount(int count) {
+    return 'Incomplete data: $count';
+  }
+
+  @override
+  String get adminConversionSectionTitle => 'Conversion Funnel';
+
+  @override
+  String get adminConversionSectionSubtitle => 'Valid deal statuses only (same deals sample as above)';
+
+  @override
+  String get adminConversionSectionFootnote => 'This shows how leads move through deal stages';
+
+  @override
+  String get adminConversionFunnelNewToContacted => 'New → Contacted';
+
+  @override
+  String get adminConversionFunnelContactedToQualified => 'Contacted → Qualified';
+
+  @override
+  String get adminConversionFunnelQualifiedToBooked => 'Qualified → Booked';
+
+  @override
+  String get adminConversionFunnelBookedToSigned => 'Booked → Signed';
+
+  @override
+  String get adminCommissionSectionTitle => 'Commission Overview';
+
+  @override
+  String get adminCommissionSectionSubtitle => 'Deals with commission > 0 in this sample (same query as dashboard)';
+
+  @override
+  String get adminCommissionTotal => 'Total commission';
+
+  @override
+  String get adminCommissionPaid => 'Paid commission';
+
+  @override
+  String get adminCommissionPending => 'Pending commission';
+
+  @override
+  String adminCommissionCollectionRate(String rate) {
+    return 'Collection rate: $rate';
+  }
+
+  @override
+  String get adminCommissionNoDealsInSample => 'No deals with commission in this sample.';
+
+  @override
+  String get adminCommissionSplitSalesLabel => 'Sales';
+
+  @override
+  String get adminCommissionSplitRentalLabel => 'Rental';
+
+  @override
+  String get adminCommissionSplitOtherLabel => 'Other';
+
+  @override
+  String get adminOutstandingSectionTitle => 'Outstanding Commissions';
+
+  @override
+  String get adminOutstandingEmpty => 'No outstanding commissions';
+
+  @override
+  String get adminOutstandingAmountLabel => 'Outstanding';
+
+  @override
+  String adminOutstandingDealsCount(int count) {
+    return 'Deals: $count';
+  }
+
+  @override
+  String get adminOutstandingTopTitle => 'Largest outstanding';
+
+  @override
+  String get adminPrioritySectionTitle => 'Follow-up Priority';
+
+  @override
+  String get adminPrioritySectionSubtitle => 'Unpaid commission — booked, signed, or closed (same deals sample)';
+
+  @override
+  String get adminPriorityEmpty => 'No deals match follow-up criteria in this sample.';
+
+  @override
+  String get adminPriorityLabelHigh => 'High 🔥';
+
+  @override
+  String get adminPriorityLabelMedium => 'Medium ⚡';
+
+  @override
+  String get adminPriorityLabelLow => 'Low';
+
+  @override
+  String get adminLeadsSplitSectionTitle => 'Leads Overview';
+
+  @override
+  String get adminLeadsSplitSectionSubtitle => 'By serviceType (sale / rent) in this sample · Active = new, contacted, qualified';
+
+  @override
+  String get adminLeadsSplitSalesLabel => 'Sales leads';
+
+  @override
+  String get adminLeadsSplitRentalLabel => 'Rental leads';
+
+  @override
+  String adminLeadsSplitActivePipeline(int count) {
+    return 'Active pipeline: $count';
+  }
+
+  @override
+  String adminLeadsSplitOtherServiceTypes(int count) {
+    return '$count deals with other or missing service type (excluded from split)';
+  }
 }

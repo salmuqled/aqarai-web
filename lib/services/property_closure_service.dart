@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:aqarai_app/config/deals_financial_config.dart';
+import 'package:aqarai_app/constants/deal_constants.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/analytics_service.dart';
 import 'package:aqarai_app/services/lead_source_attribution.dart';
@@ -11,8 +12,6 @@ num? _parseNum(dynamic v) {
   if (v is num) return v;
   return num.tryParse(v.toString().trim());
 }
-
-double _toDouble(num n) => n.toDouble();
 
 /// Owner closure requests + admin approve/reject + `deals` record.
 class PropertyClosureService {
@@ -128,14 +127,14 @@ class PropertyClosureService {
   }
 
   /// Admin: finalize sale/rent/exchange → `deals` + property terminal status.
-  Future<void> approveClosureRequest({
+  ///
+  /// Creates a deal with **finalPrice = 0**; admin must set the agreed price in
+  /// [AdminDealDetailPage] so commission is based on the real deal price.
+  Future<String> approveClosureRequest({
     required String requestId,
     required String adminUid,
     String? adminNote,
     String leadSource = DealLeadSource.unknown,
-    num? finalPrice,
-    num? commissionRate,
-    num? commissionAmount,
     String? buyerId,
   }) async {
     final reqRef = _db.collection('closure_requests').doc(requestId);
@@ -164,22 +163,9 @@ class PropertyClosureService {
       throw StateError('listing_price_required');
     }
 
-    final finalFromParam = finalPrice != null ? _parseNum(finalPrice) : null;
-    final resolvedFinal = finalFromParam ?? listingPriceNum;
-
-    final rateFromParam = commissionRate != null
-        ? _parseNum(commissionRate)
-        : null;
-    final resolvedRate = _toDouble(
-      rateFromParam ?? DealsFinancialConfig.defaultCommissionRate,
-    );
-
-    final commissionFromParam = commissionAmount != null
-        ? _parseNum(commissionAmount)
-        : null;
-    final resolvedCommission = _toDouble(
-      commissionFromParam ?? (resolvedFinal * resolvedRate),
-    );
+    // Final price & commission are entered later on the deal (brokerage accuracy).
+    final serviceTypeForDeal =
+        requestType == CloseRequestType.rent ? 'rent' : 'sale';
 
     // Copy from closure request when present (new pipeline); else admin-supplied param (legacy / override).
     final fromRequest = r['leadSource']?.toString().trim();
@@ -200,6 +186,7 @@ class PropertyClosureService {
       'adminNote': adminNote,
       'reviewedAt': FieldValue.serverTimestamp(),
       'reviewedBy': adminUid,
+      'dealId': dealRef.id,
     });
 
     batch.update(propRef, {
@@ -211,24 +198,37 @@ class PropertyClosureService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
+    final dealTitle = r['title'] ?? listingDisplayTitleFromProperty(p);
+
     final dealPayload = <String, dynamic>{
       'status': 'sold',
       'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
       'propertyId': propertyId,
+      'propertyTitle': dealTitle,
+      'propertyPrice': listingPriceNum,
       'ownerId': p['ownerId'] ?? r['ownerId'],
       'buyerId': buyerId,
       'dealType': requestType,
+      'serviceType': serviceTypeForDeal,
       'propertyType': p['type'] ?? r['propertyType'],
       'listingCategory': p['listingCategory'] ?? ListingCategory.normal,
       'governorateAr': p['governorateAr'] ?? r['governorateAr'] ?? '',
       'areaAr': p['areaAr'] ?? r['areaAr'] ?? '',
       'governorateEn': p['governorateEn'] ?? r['governorateEn'] ?? '',
       'areaEn': p['areaEn'] ?? r['areaEn'] ?? '',
-      'title': r['title'] ?? listingDisplayTitleFromProperty(p),
+      'title': dealTitle,
       'listingPrice': listingPriceNum,
-      'finalPrice': resolvedFinal,
-      'commissionRate': resolvedRate,
-      'commissionAmount': resolvedCommission,
+      'finalPrice': 0.0,
+      'commission': 0.0,
+      'commissionAmount': 0.0,
+      'commissionCalculated': false,
+      'commissionRate': 0.0,
+      'bookingAmount': 0.0,
+      'dealStatus': DealStatus.booked,
+      'isBooked': true,
+      'isSigned': false,
+      'isCommissionPaid': false,
       'currency': DealsFinancialConfig.currency,
       'leadSource': dealLeadSource,
       'closedAt': FieldValue.serverTimestamp(),
@@ -241,19 +241,19 @@ class PropertyClosureService {
     }
     batch.set(dealRef, dealPayload);
 
-    // Same batch: atomic business counters (admin-only via rules).
-    final volumeForAnalytics = _toDouble(resolvedFinal);
+    // Count the deal now; volume & commission increment when admin sets finalPrice.
     batch.set(
       AnalyticsService.globalRef(_db),
       AnalyticsService.buildGlobalIncrementPayload(
         leadSource: dealLeadSource,
-        volumeKwd: volumeForAnalytics,
-        commissionKwd: resolvedCommission,
+        volumeKwd: 0,
+        commissionKwd: 0,
       ),
       SetOptions(merge: true),
     );
 
     await batch.commit();
+    return dealRef.id;
   }
 
   /// Admin: restore listing to public active feed.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
+import 'package:aqarai_app/widgets/terms_content_view.dart';
 
 /// Privacy Policy & Terms of Service (Arabic / English by app locale).
 /// Contact: aqaraiapp@gmail.com — general information only; not legal advice.
@@ -27,8 +28,8 @@ class LegalScreen extends StatelessWidget {
         ),
         body: const TabBarView(
           children: [
-            _LegalDocumentBody(document: _LegalDocumentKind.privacy),
-            _LegalDocumentBody(document: _LegalDocumentKind.terms),
+            _PrivacyPolicyBody(),
+            _LegalTermsFromLocalization(),
           ],
         ),
       ),
@@ -36,21 +37,33 @@ class LegalScreen extends StatelessWidget {
   }
 }
 
-enum _LegalDocumentKind { privacy, terms }
+class _LegalTermsFromLocalization extends StatelessWidget {
+  const _LegalTermsFromLocalization();
 
-class _LegalDocumentBody extends StatelessWidget {
-  const _LegalDocumentBody({required this.document});
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      children: [
+        TermsContentView(
+          bodyText: loc.addPropertyTermsDialogBody,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
+        ),
+      ],
+    );
+  }
+}
 
-  final _LegalDocumentKind document;
+class _PrivacyPolicyBody extends StatelessWidget {
+  const _PrivacyPolicyBody();
 
   @override
   Widget build(BuildContext context) {
     final code = Localizations.localeOf(context).languageCode;
     final isAr = code == 'ar';
-    final sections = switch (document) {
-      _LegalDocumentKind.privacy => isAr ? _privacyAr : _privacyEn,
-      _LegalDocumentKind.terms => isAr ? _termsAr : _termsEn,
-    };
+    final sections = isAr ? _privacyAr : _privacyEn;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
@@ -143,7 +156,7 @@ const List<_Section> _privacyAr = [
   ),
   _Section(
     '٢. البيانات التي قد نجمعها',
-    'قد نجمع: (أ) بيانات الهوية والتواصل مثل الاسم والبريد الإلكتروني ورقم الهاتف؛ (ب) بيانات الحساب والمصادقة عند تسجيل الدخول (مثل تسجيل الدخول عبر Google) بما في ذلك المعرفات التي يقدمها مزود الخدمة؛ (ج) تفضيلات العقارات والإعلانات المحفوظة وبيانات الاستخدام؛ (د) بيانات الموقع عند تفعيل اكتشاف العقارات حسب الموقع، بما في ذلك إحداثيات GPS عند السماح بذلك من إعدادات الجهاز والقانون المعمول به.',
+    'قد نجمع: (أ) بيانات الهوية والتواصل مثل الاسم والبريد الإلكتروني ورقم الهاتف؛ (ب) بيانات الحساب والمصادقة عند تسجيل الدخول (مثل تسجيل الدخول عبر Google) بما في ذلك المعرفات التي يقدمها مزوّد الخدمة؛ (ج) تفضيلات العقارات والإعلانات المحفوظة وبيانات الاستخدام؛ (د) بيانات الموقع عند تفعيل اكتشاف العقارات حسب الموقع، بما في ذلك إحداثيات GPS عند السماح بذلك من إعدادات الجهاز والقانون المعمول به.',
   ),
   _Section(
     '٣. كيف نستخدم المعلومات',
@@ -184,101 +197,5 @@ const List<_Section> _privacyAr = [
   _Section(
     '١٢. التواصل',
     'للاستفسارات حول سياسة الخصوصية: aqaraiapp@gmail.com',
-  ),
-];
-
-// --- Terms of Service ---
-
-const List<_Section> _termsEn = [
-  _Section(
-    '1. Agreement',
-    'These Terms of Service (“Terms”) govern your access to and use of AqarAi. By creating an account or using the app, you agree to these Terms and to our Privacy Policy. If you do not agree, do not use the services.',
-  ),
-  _Section(
-    '2. Eligibility and accounts',
-    'You must provide accurate registration information. You are responsible for safeguarding your credentials. Social login (e.g. Google) is subject to the provider’s terms as well. We may suspend or terminate accounts that violate these Terms or applicable law.',
-  ),
-  _Section(
-    '3. Property listings (user-generated content)',
-    'You may publish property listings and related media. You represent that you have rights to the content and that information is materially accurate. You grant AqarAi a license to host, display, distribute, and promote your listings within the service. We may remove or moderate content that is illegal, misleading, infringing, or harmful. You remain responsible for compliance with real-estate advertising rules in your jurisdiction.',
-  ),
-  _Section(
-    '4. Auctions and bidding',
-    'Where auctions or bidding features are offered, bids you place may be binding according to the auction rules displayed in the app. False bids, manipulation, shill bidding, or abuse may result in suspension, forfeiture of deposits where applicable, and legal action. Fees, deposits, taxes, and transfer procedures (if any) will be disclosed before you commit. AqarAi may facilitate discovery and bidding technology but is not a substitute for formal legal transfer of title unless expressly stated in a separate agreement.',
-  ),
-  _Section(
-    '5. Live video streaming',
-    'Live streaming of property auctions or events may require camera and microphone access. You must grant OS permissions when prompted. Streams must not include unlawful content, harassment, hate speech, invasion of privacy, or intellectual property violations. We may terminate streams or accounts for violations. Other participants must follow respectful conduct; recording or redistribution may be restricted by law or by in-app rules.',
-  ),
-  _Section(
-    '6. Payments',
-    'Payments processed through third-party gateways are subject to those providers’ terms. You authorize charges you confirm in the app. Disputes regarding card or wallet charges may need to be raised with your bank or the payment provider as well as with us where relevant.',
-  ),
-  _Section(
-    '7. AI assistant',
-    'The AI assistant provides general information only. It may be wrong or incomplete. Decisions about purchases, leases, investments, or legal matters should be confirmed with qualified professionals.',
-  ),
-  _Section(
-    '8. Disclaimers',
-    'The service is provided “as is” to the extent permitted by law. We do not guarantee uninterrupted or error-free operation. We are not liable for indirect or consequential damages except where liability cannot be excluded by mandatory law.',
-  ),
-  _Section(
-    '9. Changes and termination',
-    'We may modify these Terms or discontinue features. We may suspend or terminate access for breach or risk. Provisions that by nature should survive (e.g. liability limits where allowed, intellectual property) will survive termination.',
-  ),
-  _Section(
-    '10. Governing law',
-    'Unless mandatory consumer protections require otherwise, these Terms are intended to be interpreted in a manner consistent with the laws of the State of Kuwait, without regard to conflict-of-law rules. Courts of Kuwait may have jurisdiction for disputes arising from use of the service, subject to applicable mandatory rules.',
-  ),
-  _Section(
-    '11. Contact',
-    'For questions about these Terms: aqaraiapp@gmail.com',
-  ),
-];
-
-const List<_Section> _termsAr = [
-  _Section(
-    '١. الاتفاق',
-    'تحكم شروط الاستخدام هذه («الشروط») وصولك إلى تطبيق عقار أي واستخدامك له. بإنشاء حساب أو استخدام التطبيق فإنك توافق على هذه الشروط وعلى سياسة الخصوصية. إذا لم توافق فلا تستخدم الخدمات.',
-  ),
-  _Section(
-    '٢. الأهلية والحسابات',
-    'يجب أن تقدم معلومات تسجيل صحيحة. أنت مسؤول عن حماية بيانات الدخول. تسجيل الدخول الاجتماعي (مثل Google) يخضع أيضاً لشروط المزوّد. قد نعلق أو ننهي الحسابات التي تخالف هذه الشروط أو القانون.',
-  ),
-  _Section(
-    '٣. إعلانات العقارات (محتوى المستخدم)',
-    'قد تنشر إعلانات عقارات ووسائط مرتبطة. تقر بأنك تملك الحق في المحتوى وأن المعلومات دقيقة في الجوهر. تمنح عقار أي ترخيصاً لاستضافة عرض إعلاناتك والترويج لها ضمن الخدمة. قد نزيل أو نعدّل محتوى غير قانوني أو مضلل أو منتهكاً أو ضارّاً. تبقى مسؤولاً عن الامتثال لقواعد الإعلان العقاري في نطاق اختصاصك.',
-  ),
-  _Section(
-    '٤. المزادات والمزايدة',
-    'حيث تُتاح ميزات المزاد أو المزايدة، قد تكون مزايداتك ملزمة وفق قواعد المزاد المعروضة في التطبيق. المزايدات الوهمية أو التلاعب أو المزايدة الصورية أو الإساءة قد تؤدي إلى إيقاف الحساب أو مصادرة عربون حيث ينطبق ذلك، وإجراءات قانونية. تُعرض الرسوم والعربون والضرائب وإجراءات النقل (إن وُجدت) قبل الالتزام. قد يوفّر عقار أي تقنية للاكتشاف والمزايدة دون أن يغني ذلك عن الإجراءات القانونية لنقل الملكية ما لم يُنص على خلاف ذلك في اتفاق منفصل.',
-  ),
-  _Section(
-    '٥. البث المباشر بالفيديو',
-    'قد يتطلب بث مزادات العقارات أو الفعاليات مباشرة الوصول إلى الكاميرا والميكروفون. يجب منح أذونات النظام عند الطلب. يجب ألا يتضمن البث محتوى غير قانوني أو مضايقة أو كراهية أو انتهاك خصوصية أو حقوق ملكية. قد نوقف البث أو الحساب عند المخالفة. يلتزم المشاركون بسلوك محترم؛ قد يقيّد القانون أو قواعد التطبيق التسجيل أو إعادة النشر.',
-  ),
-  _Section(
-    '٦. المدفوعات',
-    'المدفوعات عبر بوابات خارجية تخضع لشروط تلك الجهات. تفوّض الخصم الذي تؤكده في التطبيق. قد تُرفع نزاعات البطاقة أو المحفظة إلى البنك أو مزوّد الدفع وإلينا حيث ينطبق ذلك.',
-  ),
-  _Section(
-    '٧. المساعد الذكي',
-    'المساعد الذكي يقدّم معلومات عامة فقط وقد يكون خاطئاً أو ناقصاً. يجب التحقق من قرارات الشراء أو الإيجار أو الاستثمار أو الأمور القانونية مع مختصين مؤهلين.',
-  ),
-  _Section(
-    '٨. إخلاء المسؤولية',
-    'تُقدَّم الخدمة «كما هي» في الحدود التي يسمح بها القانون. لا نضمن تشغيلاً بلا انقطاع أو بلا أخطاء. لا نتحمل الأضرار غير المباشرة أو التبعية إلا حيث يمنع القانون إخلاء المسؤولية.',
-  ),
-  _Section(
-    '٩. التعديل والإنهاء',
-    'قد نعدّل الشروط أو نوقف ميزات. قد نعلق أو ننهي الوصول عند المخالفة أو الخطر. تبقى أحكام بطبيعتها مستمرة (مثل حدود المسؤولية حيث يُسمح، الملكية الفكرية) بعد الإنهاء.',
-  ),
-  _Section(
-    '١٠. القانون الواجب التطبيق',
-    'ما لم تفرض قواعد إلزامية لحماية المستهلك خلاف ذلك، تُفسَّر هذه الشروط بما يتسق مع قوانين دولة الكويت دون إخلال بقواعد تنازع القوانين. قد تكون محاكم الكويت مختصة بالنزاعات الناشئة عن استخدام الخدمة مع مراعاة القواعد الإلزامية.',
-  ),
-  _Section(
-    '١١. التواصل',
-    'للاستفسارات حول شروط الاستخدام: aqaraiapp@gmail.com',
   ),
 ];

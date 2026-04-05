@@ -63,6 +63,8 @@ class SourceStats {
         return 'Featured';
       case DealLeadSource.direct:
         return 'Direct';
+      case DealLeadSource.interestedButton:
+        return 'I\'m interested';
       default:
         return 'Unknown';
     }
@@ -78,6 +80,8 @@ class SourceStats {
         return 'مميز';
       case DealLeadSource.direct:
         return 'مباشر';
+      case DealLeadSource.interestedButton:
+        return 'زر أنا مهتم';
       default:
         return 'غير معروف';
     }

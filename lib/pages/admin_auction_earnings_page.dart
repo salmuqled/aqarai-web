@@ -10,7 +10,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 /// Admin-only: **real** revenue from Firestore (`auction_requests` paid fees +
-/// `deals` with `status == 'sold'`). Full query snapshots, no artificial cap.
+/// `deals` with finalized `dealStatus` signed/closed). Full query snapshots.
 class AdminAuctionEarningsPage extends StatefulWidget {
   const AdminAuctionEarningsPage({super.key});
 

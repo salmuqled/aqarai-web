@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/services/firestore.dart';
+import 'package:aqarai_app/services/interest_lead_flow_service.dart';
+import 'package:aqarai_app/widgets/interested_lead_confirmation_sheet.dart';
 
 /// صفحة تفاصيل طلب مطلوب — للمستخدم (أنا مهتم) أو للأدمن (اعتماد/رفض)
 class WantedDetailsPage extends StatelessWidget {
@@ -190,17 +193,33 @@ class WantedDetailsPage extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () => _onInterestedTap(
-                        context,
-                        wantedId: wantedId,
-                        area: area,
-                        governorate: governorate,
-                        typeLabel: typeLabel,
-                        minP: minP,
-                        maxP: maxP,
-                        isAr: isAr,
-                        loc: loc,
-                      ),
+                      onPressed: () async {
+                        final phone = await showInterestedLeadPhoneSheet(context);
+                        if (!context.mounted || phone == null) return;
+                        final areaLabel = governorate.isNotEmpty && area != governorate
+                            ? '$governorate - $area'
+                            : (area.isNotEmpty ? area : governorate);
+                        final dealTitle = isAr
+                            ? 'طلب مطلوب: $typeLabel — $areaLabel'
+                            : 'Wanted: $typeLabel — $areaLabel';
+                        final dealPrice = (maxP is num ? maxP : null) ??
+                            (minP is num ? minP : null) ??
+                            0;
+                        await WantedDetailsPage._onInterestedTap(
+                          context,
+                          phone: phone,
+                          wantedId: wantedId,
+                          area: area,
+                          governorate: governorate,
+                          typeLabel: typeLabel,
+                          minP: minP,
+                          maxP: maxP,
+                          isAr: isAr,
+                          loc: loc,
+                          dealTitle: dealTitle,
+                          dealPrice: dealPrice,
+                        );
+                      },
                       icon: const Icon(Icons.thumb_up, color: Colors.white),
                       label: Text(
                         loc.imInterested,
@@ -389,6 +408,7 @@ class WantedDetailsPage extends StatelessWidget {
 
   static Future<void> _onInterestedTap(
     BuildContext context, {
+    required String phone,
     required String wantedId,
     required String area,
     required String governorate,
@@ -397,16 +417,52 @@ class WantedDetailsPage extends StatelessWidget {
     required Object? maxP,
     required bool isAr,
     required AppLocalizations loc,
+    required String dealTitle,
+    required num dealPrice,
   }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     try {
-      await firestore.collection('interested_leads').add({
-        'wantedId': wantedId,
-        'type': 'wanted',
-        'areaAr': area,
-        'areaEn': area,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {}
+      await InterestLeadFlowService.saveUserPhone(uid: user.uid, phone: phone);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isAr
+                  ? 'تعذر حفظ رقم الهاتف. حاول مرة أخرى.'
+                  : 'Could not save your phone number. Please try again.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      await InterestLeadFlowService.ensureInterestDeal(
+        phone: phone,
+        propertyId: '',
+        propertyTitle: dealTitle,
+        propertyPrice: dealPrice,
+        serviceTypeRaw: 'sale',
+        wantedId: wantedId,
+      );
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isAr
+                  ? 'تعذر إتمام الطلب. حاول لاحقاً.'
+                  : 'Could not complete your request. Try again later.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
 
     final message = _buildWantedWhatsAppMessage(
       isAr,

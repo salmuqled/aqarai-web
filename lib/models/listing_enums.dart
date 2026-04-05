@@ -47,6 +47,8 @@ abstract final class DealLeadSource {
   static const String search = 'search';
   static const String featured = 'featured';
   static const String direct = 'direct';
+  /// "I'm interested" button flow (`deals` only — replaces legacy `interested_leads`).
+  static const String interestedButton = 'interested_button';
   static const String unknown = 'unknown';
 
   /// Values allowed on `property_views` and when opening property details.

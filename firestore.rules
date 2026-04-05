@@ -143,11 +143,52 @@ service cloud.firestore {
     }
 
     /* ============================================================
-        Deals (صفقات معتمدة — تقارير)
+        Deals (صفقات معتمدة — تقارير + اهتمام مستخدم بعقار)
     ============================================================ */
 
+    function interestDealCreateValid(dealId) {
+      let r = request.resource.data;
+      let uid = request.auth.uid;
+      let idProp = r.propertyId is string
+        && r.propertyId.size() > 0
+        && dealId == ('int_' + uid + '_' + r.propertyId);
+      let idWant = r.propertyId == ''
+        && r.wantedId is string
+        && r.wantedId.size() > 0
+        && dealId == ('int_' + uid + '_w_' + r.wantedId);
+      return (idProp || idWant)
+        && r.clientId == uid
+        && r.leadSource == 'interested_button'
+        && r.leadCreatedAt is timestamp
+        && r.status == 'new'
+        && r.dealStatus == 'new'
+        && r.clientPhone is string
+        && r.clientPhone.size() >= 3
+        && r.clientPhone.size() <= 40
+        && (!('clientEmail' in r) || r.clientEmail is string)
+        && r.finalPrice == 0
+        && r.commission == 0
+        && r.commissionCalculated == false
+        && r.bookingAmount == 0
+        && r.isBooked == false
+        && r.isSigned == false
+        && r.isCommissionPaid == false
+        && r.serviceType is string
+        && (r.serviceType == 'sale' || r.serviceType == 'rent' || r.serviceType == 'exchange')
+        && r.propertyTitle is string
+        && r.propertyTitle.size() <= 500
+        && (r.propertyPrice is int || r.propertyPrice is float);
+    }
+
     match /deals/{dealId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin()
+        || (isSignedIn()
+            && resource.data.clientId == request.auth.uid);
+
+      allow create: if isAdmin()
+        || (isSignedIn() && interestDealCreateValid(dealId));
+
+      allow update, delete: if isAdmin();
     }
 
     /* ============================================================
@@ -711,16 +752,14 @@ service cloud.firestore {
 
     match /interested_leads/{docId} {
 
-      // ➕ أي شخص يضيف (حتى مجهول) عند الضغط "أنا مهتم"
-      allow create: if true;
+      // Deprecated — leads live on `deals` (`interestSource` + `leadSource: interested_button`).
+      allow create: if false;
 
-      // 👀 الأدمن فقط يقرأ قائمة المهتمين
+      // 👀 الأدمن يقرأ السجلات القديمة فقط
       allow read: if isAdmin();
 
-      // ✏️ لا تعديل
       allow update: if false;
 
-      // ❌ الأدمن فقط يحذف بعد ما يخلص من التفاصيل
       allow delete: if isAdmin();
     }
   }

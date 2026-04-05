@@ -24,6 +24,12 @@ import 'package:aqarai_app/pages/admin_auction_requests_page.dart';
 import 'package:aqarai_app/pages/admin_control_center_page.dart';
 import 'package:aqarai_app/pages/admin_invoices_page.dart';
 import 'package:aqarai_app/widgets/admin_cashflow_ledger_section.dart';
+import 'package:aqarai_app/widgets/admin_commission_section.dart';
+import 'package:aqarai_app/widgets/admin_outstanding_section.dart';
+import 'package:aqarai_app/widgets/admin_priority_section.dart';
+import 'package:aqarai_app/widgets/admin_conversion_section.dart';
+import 'package:aqarai_app/widgets/admin_deal_pipeline_section.dart';
+import 'package:aqarai_app/widgets/admin_leads_split_section.dart';
 import 'package:aqarai_app/widgets/hybrid_marketing_settings_dialog.dart';
 
 /// Admin decision dashboard: `analytics/global` (fast) + bounded `deals` query (detail).
@@ -389,6 +395,27 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
                         },
                       ),
 
+                      const SizedBox(height: 20),
+                      AdminDealPipelineSection(dealDocs: docs),
+                      const SizedBox(height: 20),
+                      AdminLeadsSplitSection(dealDocs: docs),
+                      const SizedBox(height: 20),
+                      AdminConversionSection(dealDocs: docs),
+                      const SizedBox(height: 20),
+                      AdminCommissionSection(
+                        dealDocs: docs,
+                        fmtKwd: widget.fmtKwd,
+                      ),
+                      const SizedBox(height: 20),
+                      AdminOutstandingSection(
+                        dealDocs: docs,
+                        fmtKwd: widget.fmtKwd,
+                      ),
+                      const SizedBox(height: 20),
+                      AdminPrioritySection(
+                        dealDocs: docs,
+                        fmtKwd: widget.fmtKwd,
+                      ),
                       const SizedBox(height: 20),
                       AdminCashflowLedgerSection(
                         fmtKwd: widget.fmtKwd,
@@ -1041,6 +1068,8 @@ class _IntelligenceBlock extends StatelessWidget {
           return 'مميز';
         case DealLeadSource.direct:
           return 'مباشر';
+        case DealLeadSource.interestedButton:
+          return 'زر أنا مهتم';
         default:
           return 'غير معروف';
       }
@@ -1054,6 +1083,8 @@ class _IntelligenceBlock extends StatelessWidget {
         return 'Featured';
       case DealLeadSource.direct:
         return 'Direct';
+      case DealLeadSource.interestedButton:
+        return 'I\'m interested';
       default:
         return 'Unknown';
     }

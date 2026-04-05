@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'package:aqarai_app/constants/deal_constants.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:aqarai_app/models/company_payment.dart';
@@ -48,7 +50,7 @@ abstract final class CompanyPaymentsService {
   }) {
     return db
         .collection('deals')
-        .where('status', isEqualTo: 'sold')
+        .where('dealStatus', whereIn: [DealStatus.signed, DealStatus.closed])
         .orderBy('createdAt', descending: true)
         .limit(limit);
   }

@@ -12,6 +12,7 @@ abstract final class AdminIntelligenceService {
     DealLeadSource.search,
     DealLeadSource.featured,
     DealLeadSource.direct,
+    DealLeadSource.interestedButton,
     DealLeadSource.unknown,
   ];
 
@@ -231,6 +232,7 @@ class DaySampleMetrics {
 String _normalizeLeadSource(dynamic raw) {
   final s = raw?.toString().trim() ?? '';
   if (s.isEmpty) return DealLeadSource.unknown;
+  if (s == DealLeadSource.interestedButton) return DealLeadSource.interestedButton;
   if (DealLeadSource.isAttributionSource(s)) return s;
   return DealLeadSource.unknown;
 }

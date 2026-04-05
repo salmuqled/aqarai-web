@@ -15,6 +15,7 @@ import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 
 import 'package:aqarai_app/pages/my_ads_page.dart';
+import 'package:aqarai_app/pages/terms_conditions_page.dart';
 import 'package:aqarai_app/services/seller_radar_service.dart';
 import 'package:aqarai_app/services/user_ban_service.dart';
 import 'package:aqarai_app/utils/property_form_parsing.dart';
@@ -73,7 +74,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     _termsLinkTap = TapGestureRecognizer()
       ..onTap = () {
         if (!mounted) return;
-        _showTermsDialog(context, AppLocalizations.of(context)!);
+        _openTermsFullPage();
       };
     WidgetsBinding.instance.addPostFrameCallback(
         (_) => _updateInterestedBuyersCount());
@@ -138,26 +139,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  void _showTermsDialog(BuildContext context, AppLocalizations loc) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(loc.addPropertyTermsDialogTitle),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              loc.addPropertyTermsDialogBody,
-              style: Theme.of(ctx).textTheme.bodyMedium,
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(loc.addPropertyTermsDialogClose),
-          ),
-        ],
+  void _openTermsFullPage() {
+    if (!mounted) return;
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const TermsConditionsPage(),
       ),
     );
   }
@@ -717,6 +703,35 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                       ),
                     ),
                   ],
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsetsDirectional.only(
+                  start: 12,
+                  end: 8,
+                  bottom: 8,
+                ),
+                child: Text(
+                  loc.addPropertyTermsCommissionNotice,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey.shade800,
+                    height: 1.45,
+                  ),
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsetsDirectional.only(
+                  start: 8,
+                  bottom: 8,
+                ),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(
+                    onPressed: _loading ? null : _openTermsFullPage,
+                    child: Text(loc.addPropertyViewFullTerms),
+                  ),
                 ),
               ),
 

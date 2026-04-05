@@ -246,13 +246,34 @@ class AppLocalizationsAr extends AppLocalizations {
   String get addPropertyTermsMustAccept => 'يرجى الموافقة على الشروط والأحكام قبل نشر العقار.';
 
   @override
-  String get addPropertyTermsDialogTitle => 'اتفاقية شروط وأحكام إضافة عقار — AqarAi';
+  String get addPropertyTermsDialogTitle => 'الشروط والأحكام – AqarAi';
 
   @override
-  String get addPropertyTermsDialogBody => 'اتفاقية شروط وأحكام إضافة عقار - منصة AqarAi\n\nمقدمة:\nتعتبر هذه الشروط والأحكام اتفاقية قانونية ملزمة بين مستخدم منصة AqarAi (المعلن) وبين إدارة المنصة. بالضغط على \"أوافق\" أو \"نشر العقار\"، يقر المستخدم بقراءة وفهم والالتزام بكافة البنود التالية:\n\n1. صفة المعلن وصحة البيانات:\n• الملكية والوكالة: يتعهد المعلن بأنه المالك الشرعي للعقار المعروض، أو مكتب عقاري مرخص رسمياً ولديه تفويض/عقد تسويق ساري المفعول من المالك.\n• دقة المعلومات: يقر المعلن بأن كافة تفاصيل العقار (المساحة، الموقع، السعر، الحالة القانونية) صحيحة تماماً ومطابقة للواقع.\n• الصور: يجب أن تكون الصور المرفقة هي الصور الحقيقية للعقار نفسه. يمنع منعاً باتاً استخدام صور تعبيرية أو صور لعقارات أخرى، وللمنصة الحق في حذف الإعلان في حال ثبت تضليل الصور.\n\n2. العمولات والرسوم (سياسة السعي):\n• عمولة البيع: يلتزم المعلن/البائع بدفع عمولة قدرها 1% من إجمالي قيمة العقار المباع لصالح منصة AqarAi فور إتمام الصفقة.\n• عمولة الإيجار: في حال إتمام عملية التأجير، يلتزم المعلن/المؤجر بدفع عمولة تعادل نصف شهر إيجار لمرة واحدة لصالح المنصة.\n• التهرب من العمولة: أي محاولة لإتمام الصفقة خارج المنصة للتهرب من دفع العمولة تعرض صاحب الحساب للمساءلة القانونية والمطالبة بالعمولة المقررة بالإضافة إلى حظر الحساب نهائياً.\n\n3. الإعلانات المميزة والخدمات المدفوعة:\n• رسوم \"الإعلان المميز\" هي مقابل خدمة تقنية لرفع ظهور الإعلان في أماكن مخصصة داخل التطبيق، ولا تضمن المنصة إتمام عملية البيع أو الإيجار.\n• المبالغ المدفوعة لتمييز الإعلانات غير قابلة للاسترداد (Non-refundable) بمجرد تفعيل الخدمة وظهور الإعلان.\n\n4. نظام \"البدل\" والتقييم العقاري (AI):\n• عمليات البدل: تنحصر مسؤولية المنصة في الربط بين الأطراف الراغبة في البدل، ولا تتحمل أي مسؤولية قانونية تجاه صحة العقارات المتبادلة أو إجراءات نقلها.\n• تقييم الذكاء الاصطناعي: يقر المستخدم بأن خدمة التقييم (Appraisal) المقدمة عبر الذكاء الاصطناعي هي نتائج استرشادية وتقريبية مبنية على بيانات السوق الحالية، ولا تعتبر تقييماً رسمياً أو معتمداً لدى الجهات الحكومية أو المصرفية.\n\n5. إخلاء مسؤولية المنصة:\n• منصة AqarAi هي وسيط تقني فقط، ولا تتحمل أدنى مسؤولية عن أي نزاعات تنشأ بين المعلن والمشتري/المستأجر، أو عن عدم جودة العقار أو وجود عيوب خفية به.\n• المعاينة الميدانية والتحقق من الصكوك والأوراق الرسمية هي مسؤولية الأطراف المتعاقدة حصراً.\n\n6. التعديل والحذف:\n• تحتفظ إدارة AqarAi بالحق في تعديل هذه الشروط في أي وقت، كما تمتلك الحق في حذف أي إعلان أو حظر أي حساب يخالف هذه السياسات دون سابق إنذار.';
+  String get addPropertyTermsDialogBody => 'الشروط والأحكام – AqarAi\n\n1. الاتفاق\nباستخدامك لتطبيق \"AqarAi\" أو إنشاء حساب، فإنك توافق على هذه الشروط والأحكام وعلى سياسة الخصوصية الخاصة بالتطبيق. إذا لم توافق، يرجى عدم استخدام الخدمة.\n\n2. طبيعة الخدمة\nتعمل منصة \"AqarAi\" كوسيط عقاري رقمي يهدف إلى تسهيل عرض العقارات والتواصل بين الأطراف، وإدارة عمليات البيع والإيجار.\nلا تمثل المنصة المالك بشكل مباشر إلا في حال وجود تفويض منفصل.\n\n3. إعلانات العقارات (محتوى المستخدم)\nيحق للمستخدم نشر إعلانات عقارية داخل التطبيق، ويقر بما يلي:\n- أنه المالك للعقار أو مفوض رسميًا من المالك\n- أن جميع المعلومات المدخلة صحيحة ودقيقة\n- أنه يتحمل كامل المسؤولية القانونية عن المحتوى\n\nويحق للمنصة حذف أو تعديل أي محتوى مخالف أو مضلل أو غير قانوني.\n\n4. بدء التواصل (زر \"أنا مهتم\")\nيُعد الضغط على زر \"أنا مهتم\" بداية تواصل رسمي من خلال المنصة، ويترتب عليه:\n- انتقال إدارة الطلب إلى فريق المنصة\n- اعتبار هذا التفاعل أساسًا لأي صفقة لاحقة\n\n5. العمولة والوساطة\nتعمل المنصة كوسيط عقاري، وتستحق عمولة في حال إتمام أي صفقة بيع أو إيجار نتيجة تواصل بدأ عبر التطبيق، سواء تم ذلك بشكل مباشر أو غير مباشر، أو خلال مدة زمنية لاحقة لنفس الأطراف.\n\nوتكون العمولة على النحو التالي:\n- البيع: 1% من قيمة العقار\n- الإيجار: ما يعادل نصف قيمة إيجار شهر واحد\n\nوتُدفع العمولة في الحالات التالية:\n- عند دفع العربون أو الحجز (إن وجد)\n- أو عند توقيع العقد في حال عدم وجود حجز\n\nوتستحق العمولة في حال إتمام الصفقة بين نفس الأطراف خلال مدة تصل إلى 6 أشهر من تاريخ بدء التواصل عبر المنصة.\n\n6. منع التحايل\nيلتزم المستخدم بعدم:\n- إتمام الصفقة خارج المنصة بهدف تفادي دفع العمولة\n- محاولة التواصل المباشر بين الأطراف دون علم المنصة\n\nويُعد ذلك مخالفة صريحة لهذه الشروط، ويحق للمنصة اتخاذ الإجراءات المناسبة.\n\n7. المدفوعات\nقد تتم عمليات الدفع من خلال التطبيق أو عبر وسائل يتم تحديدها من قبل المنصة.\nويتحمل المستخدم مسؤولية صحة بيانات الدفع، كما تخضع عمليات الدفع لشروط مزودي خدمات الدفع المعتمدين.\n\n8. المساعد الذكي\nيقدم المساعد الذكي معلومات عامة فقط، وقد تكون غير دقيقة أو غير مكتملة، ولا تُعتبر استشارة قانونية أو مالية.\n\n9. إخلاء المسؤولية\nتُقدَّم الخدمة \"كما هي\" دون ضمانات.\nولا تتحمل المنصة أي مسؤولية عن:\n- دقة الإعلانات\n- تصرفات المستخدمين\n- أي خسائر ناتجة عن استخدام التطبيق\n\n10. إنهاء الخدمة\nيحق للمنصة تعليق أو إلغاء حساب أي مستخدم في حال مخالفة الشروط أو إساءة استخدام الخدمة.\n\n11. القانون الواجب التطبيق\nتخضع هذه الشروط وتُفسر وفق قوانين دولة الكويت، وتكون المحاكم الكويتية مختصة بالنزاعات.\n\n12. التواصل\nللاستفسارات:\naqaraiapp@gmail.com';
 
   @override
   String get addPropertyTermsDialogClose => 'حسناً';
+
+  @override
+  String get termsConditionsScreenTitle => 'الشروط والأحكام';
+
+  @override
+  String get addPropertyViewFullTerms => 'عرض الشروط والأحكام';
+
+  @override
+  String get addPropertyTermsCommissionNotice => 'باستخدامك التطبيق، فإنك توافق على نظام العمولة وإدارة الصفقة من خلال المنصة';
+
+  @override
+  String get interestedLeadConfirmationBody => 'أدخل رقمك وسيتم تحويلك مباشرة إلى واتساب لإكمال الطلب.';
+
+  @override
+  String get interestedLeadPhoneLabel => 'رقم الهاتف';
+
+  @override
+  String get interestedLeadPhoneRequired => 'يرجى إدخال رقم الهاتف';
+
+  @override
+  String get interestedLeadConfirmationContinue => 'متابعة إلى واتساب';
 
   @override
   String get noWantedItems => 'لا توجد طلبات';
@@ -1436,7 +1457,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminRealEarningsTotalRevenue => 'إجمالي الإيراد';
 
   @override
-  String get adminRealEarningsLegacyNote => 'تُحتسب فقط الصفقات ذات الحالة «sold». الصفقات المعتمدة حديثاً تُسجّل هذا الحقل؛ قد تحتاج صفوف قديمة إلى تحديث لمرة واحدة.';
+  String get adminRealEarningsLegacyNote => 'تُحتسب العمولة للصفقات ذات dealStatus موقّع أو مغلق (مُنهية في CRM). الحالة القديمة «sold» لا تُستخدم في هذا الإجمالي.';
 
   @override
   String get adminRealEarningsChartEmpty => 'لا توجد أحداث بتاريخ لرسم المنحنى.';
@@ -1828,4 +1849,191 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get adminInvoiceRetryPdfUnavailableHint => 'ملف PDF جاهز بالفعل. استخدم «إعادة إنشاء الفاتورة» لاستبدال الفاتورة وإنشاء PDF جديد.';
+
+  @override
+  String get adminDealsTab => 'الصفقات';
+
+  @override
+  String get adminDealDetailTitle => 'صفقة';
+
+  @override
+  String get adminDealPropertyPrice => 'سعر الإعلان';
+
+  @override
+  String get adminDealFinalPrice => 'سعر الاتفاق النهائي';
+
+  @override
+  String get adminDealCommission => 'العمولة';
+
+  @override
+  String get adminDealSaveFinancials => 'حفظ السعر والعمولة';
+
+  @override
+  String get adminDealCalculateCommission => 'احسب العمولة';
+
+  @override
+  String get adminDealFinalPriceRequired => 'يجب إدخال سعر الاتفاق أولاً';
+
+  @override
+  String get adminDealPipelineStatus => 'حالة الصفقة';
+
+  @override
+  String get adminDealBookingAmount => 'مبلغ الحجز / العربون';
+
+  @override
+  String get adminDealCommissionPaid => 'تم استلام العمولة';
+
+  @override
+  String get adminDealOpenListing => 'فتح الإعلان';
+
+  @override
+  String get adminDealSaved => 'تم الحفظ';
+
+  @override
+  String get adminDealServiceSale => 'بيع';
+
+  @override
+  String get adminDealServiceRent => 'إيجار';
+
+  @override
+  String get adminDealPipelineSectionTitle => 'مراحل الصفقات';
+
+  @override
+  String get adminDealPipelineSectionSubtitle => 'الأعداد من أحدث عيّنة صفقات (نفس استعلام اللوحة)';
+
+  @override
+  String get adminDealPipelineSectionFootnote => 'تمثل هذه الأرقام حالة تقدم العملاء داخل النظام';
+
+  @override
+  String get adminDealPipelineNewLeads => 'عملاء جدد';
+
+  @override
+  String get adminDealPipelineContacted => 'تم التواصل';
+
+  @override
+  String get adminDealPipelineQualified => 'مؤهل';
+
+  @override
+  String get adminDealPipelineBooked => 'محجوز';
+
+  @override
+  String get adminDealPipelineSigned => 'موقّع';
+
+  @override
+  String get adminDealPipelineClosed => 'مغلق';
+
+  @override
+  String adminDealPipelineOtherCount(int count) {
+    return 'بيانات غير مكتملة: $count';
+  }
+
+  @override
+  String get adminConversionSectionTitle => 'تحويل العملاء';
+
+  @override
+  String get adminConversionSectionSubtitle => 'صفقات بحالات صحيحة فقط (نفس عيّنة الصفقات أعلاه)';
+
+  @override
+  String get adminConversionSectionFootnote => 'يوضح هذا القسم نسبة انتقال العملاء بين مراحل الصفقة';
+
+  @override
+  String get adminConversionFunnelNewToContacted => 'جديد → تم التواصل';
+
+  @override
+  String get adminConversionFunnelContactedToQualified => 'تم التواصل → مؤهل';
+
+  @override
+  String get adminConversionFunnelQualifiedToBooked => 'مؤهل → محجوز';
+
+  @override
+  String get adminConversionFunnelBookedToSigned => 'محجوز → موقّع';
+
+  @override
+  String get adminCommissionSectionTitle => 'العمولات';
+
+  @override
+  String get adminCommissionSectionSubtitle => 'صفقات ذات عمولة > 0 في هذه العيّنة (نفس استعلام اللوحة)';
+
+  @override
+  String get adminCommissionTotal => 'إجمالي العمولة';
+
+  @override
+  String get adminCommissionPaid => 'عمولة محصّلة';
+
+  @override
+  String get adminCommissionPending => 'عمولة معلّقة';
+
+  @override
+  String adminCommissionCollectionRate(String rate) {
+    return 'معدل التحصيل: $rate';
+  }
+
+  @override
+  String get adminCommissionNoDealsInSample => 'لا توجد صفقات بعمولة في هذه العيّنة.';
+
+  @override
+  String get adminCommissionSplitSalesLabel => 'المبيعات';
+
+  @override
+  String get adminCommissionSplitRentalLabel => 'الإيجار';
+
+  @override
+  String get adminCommissionSplitOtherLabel => 'غير مصنف';
+
+  @override
+  String get adminOutstandingSectionTitle => 'تحصيل العمولات';
+
+  @override
+  String get adminOutstandingEmpty => 'لا يوجد عمولات غير محصلة';
+
+  @override
+  String get adminOutstandingAmountLabel => 'المستحق';
+
+  @override
+  String adminOutstandingDealsCount(int count) {
+    return 'الصفقات: $count';
+  }
+
+  @override
+  String get adminOutstandingTopTitle => 'أعلى المستحقات';
+
+  @override
+  String get adminPrioritySectionTitle => 'أولوية المتابعة';
+
+  @override
+  String get adminPrioritySectionSubtitle => 'عمولة غير محصّلة — محجوز أو موقّع أو مغلق (نفس عيّنة الصفقات)';
+
+  @override
+  String get adminPriorityEmpty => 'لا توجد صفقات مطابقة لمعايير المتابعة في هذه العيّنة.';
+
+  @override
+  String get adminPriorityLabelHigh => 'مرتفع 🔥';
+
+  @override
+  String get adminPriorityLabelMedium => 'متوسط ⚡';
+
+  @override
+  String get adminPriorityLabelLow => 'منخفض';
+
+  @override
+  String get adminLeadsSplitSectionTitle => 'العملاء';
+
+  @override
+  String get adminLeadsSplitSectionSubtitle => 'حسب serviceType (بيع/إيجار) في العيّنة · النشطة = جديد أو تواصل أو مؤهل';
+
+  @override
+  String get adminLeadsSplitSalesLabel => 'عملاء البيع';
+
+  @override
+  String get adminLeadsSplitRentalLabel => 'عملاء الإيجار';
+
+  @override
+  String adminLeadsSplitActivePipeline(int count) {
+    return 'نشطة في المسار: $count';
+  }
+
+  @override
+  String adminLeadsSplitOtherServiceTypes(int count) {
+    return '$count صفقة بنوع خدمة آخر أو غير محدد (خارج التقسيم)';
+  }
 }
