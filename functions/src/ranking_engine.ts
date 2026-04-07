@@ -1,7 +1,8 @@
 /**
  * In-memory ranking, labels, best-deal detection. findSimilar can run Firestore via injected db.
  */
-import type { Firestore } from "firebase-admin/firestore";
+import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
+import { isNormalListingMarketplaceVisible } from "./propertyVisibility";
 
 function toMillis(v: unknown): number | null {
   if (v == null) return null;
@@ -155,14 +156,29 @@ export async function findSimilarProperties(
   if (areas.length === 0) return [];
 
   const areaList = areas.length > 10 ? areas.slice(0, 10) : areas;
-  const q = db
-    .collection("properties")
-    .where("type", "==", propertyType.trim())
-    .where("status", "==", "active")
-    .where("areaCode", "in", areaList)
-    .limit(20);
-  const snap = await q.get();
-  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown>));
+  const perAreaLimit = Math.max(4, Math.ceil(24 / areaList.length));
+  const merged: QueryDocumentSnapshot[] = [];
+  const seen = new Set<string>();
+  for (const area of areaList) {
+    const snap = await db
+      .collection("properties")
+      .where("approved", "==", true)
+      .where("isActive", "==", true)
+      .where("listingCategory", "==", "normal")
+      .where("hiddenFromPublic", "==", false)
+      .where("type", "==", propertyType.trim())
+      .where("areaCode", "==", area)
+      .limit(perAreaLimit)
+      .get();
+    for (const d of snap.docs) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      merged.push(d);
+    }
+  }
+  const docs = merged
+    .filter((d) => isNormalListingMarketplaceVisible(d.data()))
+    .map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown>));
 
   const budget = userBudget != null && userBudget > 0 ? userBudget : null;
   let filtered = docs;

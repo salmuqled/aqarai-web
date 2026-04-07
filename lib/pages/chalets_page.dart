@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../widgets/search_box_chalet.dart';
 import '../widgets/featured_carousel.dart';
 import '../l10n/app_localizations.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
 
 class ChaletsPage extends StatelessWidget {
   const ChaletsPage({super.key});
@@ -80,7 +81,7 @@ class ChaletsPage extends StatelessWidget {
                     title: locale == 'ar'
                         ? "شاليهات مميزة للبيع"
                         : "Featured Chalets for Sale",
-                    typeFilter: 'chalet',
+                    listingCategory: ListingCategory.chalet,
                   ),
 
                   const SizedBox(height: 32),
@@ -93,7 +94,7 @@ class ChaletsPage extends StatelessWidget {
                     title: locale == 'ar'
                         ? "شاليهات مميزة للإيجار"
                         : "Featured Chalets for Rent",
-                    typeFilter: 'chalet',
+                    listingCategory: ListingCategory.chalet,
                   ),
 
                   const SizedBox(height: 60),

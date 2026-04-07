@@ -2,7 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:aqarai_app/constants/deal_constants.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
+import 'package:aqarai_app/utils/admin_deal_status_label.dart';
+import 'package:aqarai_app/utils/crm_lead_priority.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
@@ -16,7 +19,10 @@ import 'package:aqarai_app/pages/admin_deal_detail_page.dart';
 import 'package:aqarai_app/services/property_closure_service.dart';
 import 'package:aqarai_app/services/admin_action_service.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
+import 'package:aqarai_app/models/deal_pipeline.dart';
 import 'package:aqarai_app/models/support_ticket.dart';
+import 'package:aqarai_app/services/deal_admin_service.dart';
+import 'package:aqarai_app/utils/financial_rules.dart';
 
 const String kFunctionsRegion = 'us-central1';
 
@@ -39,6 +45,7 @@ enum AdminFilter {
   interested,
   closureRequests,
   deals,
+  collection,
   support,
 }
 
@@ -51,6 +58,46 @@ class AdminRequestsPage extends StatefulWidget {
 
 class _AdminRequestsPageState extends State<AdminRequestsPage> {
   AdminFilter _current = AdminFilter.pending;
+
+  /// Deals sub-list: 0 = new, 1 = in progress (non-terminal, not new), 2 = overdue follow-up.
+  int _selectedTab = 0;
+
+  /// Interested tab CRM: `''` = all statuses; [DealStatus] value; or [_interestedFilterNegotiating].
+  static const String _interestedFilterNegotiating = '__negotiating__';
+  String _interestedStatusFilter = '';
+
+  /// 0 = all time, 1 = today, 2 = last 7 days, 3 = last 30 days
+  int _interestedDatePreset = 0;
+
+  /// 0 = newest; 1 = follow-up time; 2 = smart priority (default)
+  int _interestedSortMode = 2;
+
+  final DealAdminService _dealAdminSvc = DealAdminService();
+
+  static bool _dealStatusIsTerminal(String st) {
+    final s = st.trim();
+    return s == DealStatus.closed || s == DealStatus.notInterested;
+  }
+
+  /// Follow-up time is strictly before [now] − 30 minutes; excludes terminal deals.
+  bool _dealMatchesOverdueFilter(Map<String, dynamic> data, DateTime now) {
+    final st = (data['dealStatus'] ?? '').toString().trim();
+    if (_dealStatusIsTerminal(st)) return false;
+    final nf = data['nextFollowUpAt'];
+    if (nf is! Timestamp) return false;
+    final threshold = now.subtract(const Duration(minutes: 30));
+    return nf.toDate().isBefore(threshold);
+  }
+
+  /// Matches [AdminFilter.deals] sub-tabs: جديد / قيد المتابعة / متأخر — terminal deals never appear.
+  int _dealsCrmVisibleCount(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    return docs.where((doc) {
+      final st = (doc.data()['dealStatus'] ?? '').toString().trim();
+      return !_dealStatusIsTerminal(st);
+    }).length;
+  }
 
   @override
   void initState() {
@@ -215,7 +262,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
   Stream<List<void>> _pendingCountStream() {
     final c = StreamController<List<void>>.broadcast();
     var lastPending = 0, lastWanted = 0, lastValuations = 0;
-    void emit() => c.add(List.filled(lastPending + lastWanted + lastValuations, null));
+    void emit() =>
+        c.add(List.filled(lastPending + lastWanted + lastValuations, null));
     StreamSubscription? sub1, sub2, sub3;
     sub1 = _pending().listen((s) {
       lastPending = s.docs.length;
@@ -259,7 +307,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _chalets() => firestore
       .collection('properties')
-      .where('type', isEqualTo: 'chalet')
+      .where('listingCategory', isEqualTo: ListingCategory.chalet)
       .orderBy('createdAt', descending: true)
       .limit(100)
       .snapshots();
@@ -288,7 +336,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       .collection('deals')
       .where('interestSource', whereIn: ['property_detail', 'wanted_detail'])
       .orderBy('createdAt', descending: true)
-      .limit(100)
+      .limit(200)
       .snapshots();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _stream(AdminFilter f) {
@@ -315,6 +363,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         return _closureRequests();
       case AdminFilter.deals:
         return _deals();
+      case AdminFilter.collection:
+        return _collectionDeals();
       case AdminFilter.support:
         return _supportTickets();
     }
@@ -322,6 +372,14 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _deals() => firestore
       .collection('deals')
+      .orderBy('createdAt', descending: true)
+      .limit(100)
+      .snapshots();
+
+  /// Signed deals (commission not yet paid — filtered again in UI for missing flag).
+  Stream<QuerySnapshot<Map<String, dynamic>>> _collectionDeals() => firestore
+      .collection('deals')
+      .where('dealStatus', isEqualTo: DealStatus.signed)
       .orderBy('createdAt', descending: true)
       .limit(100)
       .snapshots();
@@ -585,6 +643,32 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     );
   }
 
+  String _adminChaletModeChipLabel(AppLocalizations loc, String mode) {
+    switch (mode) {
+      case ChaletMode.daily:
+        return loc.adminPropertyChaletModeDaily;
+      case ChaletMode.monthly:
+        return loc.adminPropertyChaletModeMonthly;
+      case ChaletMode.sale:
+        return loc.adminPropertyChaletModeSale;
+      default:
+        return loc.adminPropertyChaletModeDaily;
+    }
+  }
+
+  Color _adminChaletModeChipColor(String mode) {
+    switch (mode) {
+      case ChaletMode.daily:
+        return Colors.green.shade700;
+      case ChaletMode.monthly:
+        return Colors.blue.shade700;
+      case ChaletMode.sale:
+        return Colors.orange.shade800;
+      default:
+        return Colors.green.shade700;
+    }
+  }
+
   // كارد للبيع / للإيجار / الشاليهات — نفس تصميم إعلاناتي
   Widget _buildPropertyTile(
     AppLocalizations loc,
@@ -601,6 +685,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     final featuredUntil = d['featuredUntil'] as Timestamp?;
     final isFeatured =
         featuredUntil != null && featuredUntil.toDate().isAfter(DateTime.now());
+    final String? chaletModeEffective = listingDataIsChalet(d)
+        ? PropertyListingChaletMode.fromListingData(d).effectiveChaletMode
+        : null;
 
     return GestureDetector(
       onTap: () {
@@ -648,6 +735,38 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                       ),
                     ),
 
+                    if (chaletModeEffective != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            '${loc.adminPropertyChaletModeLabel}: ',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Chip(
+                            label: Text(
+                              _adminChaletModeChipLabel(loc, chaletModeEffective),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            backgroundColor:
+                                _adminChaletModeChipColor(chaletModeEffective),
+                            padding: EdgeInsets.zero,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ],
+                      ),
+                    ],
+
                     const SizedBox(height: 6),
 
                     Text(
@@ -693,10 +812,387 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')),
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));
+    }
+  }
+
+  Color _interestedLeadStatusColor(String status) {
+    final s = status.trim();
+    switch (s) {
+      case DealStatus.newLead:
+        return Colors.blue.shade700;
+      case DealStatus.contacted:
+        return Colors.orange.shade800;
+      case DealStatus.qualified:
+      case DealStatus.booked:
+      case DealStatus.signed:
+        return Colors.purple.shade700;
+      case DealStatus.closed:
+        return Colors.green.shade700;
+      case DealStatus.notInterested:
+        return Colors.red.shade700;
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
+  String? _interestedLastNoteText(Map<String, dynamic> m) {
+    final raw = m['notes'];
+    if (raw is! List || raw.isEmpty) return null;
+    Timestamp? bestTs;
+    String? bestText;
+    for (final e in raw) {
+      if (e is! Map) continue;
+      final map = Map<String, dynamic>.from(e);
+      final text = map['text']?.toString().trim() ?? '';
+      if (text.isEmpty) continue;
+      final t = map['createdAt'];
+      if (t is! Timestamp) continue;
+      if (bestTs == null || t.compareTo(bestTs) > 0) {
+        bestTs = t;
+        bestText = text;
+      }
+    }
+    return bestText;
+  }
+
+  DateTime? _interestedLeadDateTime(Map<String, dynamic> d) {
+    final t =
+        (d['leadCreatedAt'] as Timestamp?) ?? (d['createdAt'] as Timestamp?);
+    return t?.toDate();
+  }
+
+  int _interestedCreatedMillis(Map<String, dynamic> d) {
+    final t =
+        (d['leadCreatedAt'] as Timestamp?) ?? (d['createdAt'] as Timestamp?);
+    return t?.millisecondsSinceEpoch ?? 0;
+  }
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>>
+  _filterAndSortInterestedDocs(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    var out = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(docs);
+    if (_interestedStatusFilter.isNotEmpty) {
+      out = out.where((doc) {
+        final st = (doc.data()['dealStatus'] ?? '').toString().trim();
+        if (_interestedStatusFilter == _interestedFilterNegotiating) {
+          return st == DealStatus.qualified ||
+              st == DealStatus.booked ||
+              st == DealStatus.signed;
+        }
+        return st == _interestedStatusFilter;
+      }).toList();
+    }
+    final now = DateTime.now();
+    if (_interestedDatePreset != 0) {
+      out = out.where((doc) {
+        final dt = _interestedLeadDateTime(doc.data());
+        if (dt == null) return false;
+        switch (_interestedDatePreset) {
+          case 1:
+            return dt.year == now.year &&
+                dt.month == now.month &&
+                dt.day == now.day;
+          case 2:
+            return dt.isAfter(now.subtract(const Duration(days: 7)));
+          case 3:
+            return dt.isAfter(now.subtract(const Duration(days: 30)));
+          default:
+            return true;
+        }
+      }).toList();
+    }
+    if (_interestedSortMode == 1) {
+      out.sort((a, b) {
+        final ma = a.data();
+        final mb = b.data();
+        final ta = ma['nextFollowUpAt'];
+        final tb = mb['nextFollowUpAt'];
+        final tsa = ta is Timestamp ? ta : null;
+        final tsb = tb is Timestamp ? tb : null;
+        if (tsa != null && tsb != null) return tsa.compareTo(tsb);
+        if (tsa != null) return -1;
+        if (tsb != null) return 1;
+        final ca = _interestedCreatedMillis(ma);
+        final cb = _interestedCreatedMillis(mb);
+        return cb.compareTo(ca);
+      });
+    } else if (_interestedSortMode == 2) {
+      out.sort((a, b) {
+        final pa = crmComputeLeadPriority(a.data(), now).sortKey;
+        final pb = crmComputeLeadPriority(b.data(), now).sortKey;
+        if (pa != pb) return pa.compareTo(pb);
+        return _interestedCreatedMillis(
+          b.data(),
+        ).compareTo(_interestedCreatedMillis(a.data()));
+      });
+    } else {
+      out.sort(
+        (a, b) => _interestedCreatedMillis(
+          b.data(),
+        ).compareTo(_interestedCreatedMillis(a.data())),
       );
     }
+    return out;
+  }
+
+  Future<void> _setInterestedDealStatus(
+    String dealId,
+    String newStatus,
+    AppLocalizations loc,
+    bool isAr,
+  ) async {
+    try {
+      await _dealAdminSvc.setPipelineStatus(
+        dealId: dealId,
+        newStatus: newStatus,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isAr ? 'تم تحديث الحالة' : 'Status updated')),
+      );
+    } on StateError catch (e) {
+      if (!mounted) return;
+      final msg = e.message == 'final_price_required'
+          ? loc.adminDealFinalPriceRequired
+          : e.message;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));
+    }
+  }
+
+  Future<void> _appendInterestedQuickNote(
+    String dealId,
+    AppLocalizations loc,
+    bool isAr,
+  ) async {
+    final ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isAr ? 'ملاحظة سريعة' : 'Quick note'),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: isAr ? 'اكتب الملاحظة…' : 'Type a note…',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(loc.adminDealSaveNote),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) {
+      ctrl.dispose();
+      return;
+    }
+    final text = ctrl.text.trim();
+    ctrl.dispose();
+    if (text.isEmpty) return;
+    try {
+      await _dealAdminSvc.appendDealNote(dealId: dealId, text: text);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(loc.adminDealNoteSaved)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));
+    }
+  }
+
+  String _crmPriorityLabel(CrmLeadPriority p, bool isAr) {
+    switch (p) {
+      case CrmLeadPriority.urgent:
+        return isAr ? 'عاجل' : 'Urgent';
+      case CrmLeadPriority.high:
+        return isAr ? 'أولوية عالية' : 'High';
+      case CrmLeadPriority.medium:
+        return isAr ? 'متوسطة' : 'Medium';
+      case CrmLeadPriority.low:
+        return isAr ? 'منخفضة' : 'Low';
+    }
+  }
+
+  Color _crmPriorityBadgeColor(CrmLeadPriority p) {
+    switch (p) {
+      case CrmLeadPriority.urgent:
+        return Colors.red.shade800;
+      case CrmLeadPriority.high:
+        return Colors.blue.shade800;
+      case CrmLeadPriority.medium:
+        return Colors.deepOrange.shade800;
+      case CrmLeadPriority.low:
+        return Colors.blueGrey.shade600;
+    }
+  }
+
+  Widget _buildInterestedCrmToolbar(
+    AppLocalizations loc,
+    bool isAr, {
+    required int overdueCount,
+  }) {
+    String statusFilterLabel(String key) {
+      if (key.isEmpty) return isAr ? 'كل الحالات' : 'All statuses';
+      if (key == _interestedFilterNegotiating) {
+        return isAr
+            ? 'تفاوض (مؤهل / محجوز / موقّع)'
+            : 'Negotiating (qualified / booked / signed)';
+      }
+      return getDealStatusLabel(context, key);
+    }
+
+    String dateLabel(int preset) {
+      switch (preset) {
+        case 1:
+          return isAr ? 'اليوم' : 'Today';
+        case 2:
+          return isAr ? 'آخر ٧ أيام' : 'Last 7 days';
+        case 3:
+          return isAr ? 'آخر ٣٠ يوماً' : 'Last 30 days';
+        default:
+          return isAr ? 'كل التواريخ' : 'All dates';
+      }
+    }
+
+    final statusKeys = <String>[
+      '',
+      DealStatus.newLead,
+      DealStatus.contacted,
+      _interestedFilterNegotiating,
+      DealStatus.qualified,
+      DealStatus.booked,
+      DealStatus.signed,
+      DealStatus.closed,
+      DealStatus.notInterested,
+    ];
+
+    return Material(
+      color: Theme.of(
+        context,
+      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              isAr ? 'تصفية وترتيب' : 'Filter & sort',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: statusKeys.contains(_interestedStatusFilter)
+                        ? _interestedStatusFilter
+                        : '',
+                    items: statusKeys
+                        .map(
+                          (k) => DropdownMenuItem<String>(
+                            value: k,
+                            child: Text(
+                              statusFilterLabel(k),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _interestedStatusFilter = v);
+                    },
+                  ),
+                ),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _interestedDatePreset.clamp(0, 3),
+                    items: [0, 1, 2, 3]
+                        .map(
+                          (p) => DropdownMenuItem<int>(
+                            value: p,
+                            child: Text(dateLabel(p)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _interestedDatePreset = v);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (overdueCount > 0)
+                  Chip(
+                    avatar: Icon(
+                      Icons.warning_amber_rounded,
+                      size: 18,
+                      color: Colors.red.shade900,
+                    ),
+                    label: Text(
+                      isAr
+                          ? 'متابعة متأخرة ($overdueCount)'
+                          : 'Overdue follow-up ($overdueCount)',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red.shade900,
+                        fontSize: 12,
+                      ),
+                    ),
+                    backgroundColor: Colors.red.shade100,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ChoiceChip(
+                  label: Text(isAr ? 'الأولوية' : 'Priority'),
+                  selected: _interestedSortMode == 2,
+                  onSelected: (_) => setState(() => _interestedSortMode = 2),
+                ),
+                ChoiceChip(
+                  label: Text(isAr ? 'الأحدث' : 'Newest'),
+                  selected: _interestedSortMode == 0,
+                  onSelected: (_) => setState(() => _interestedSortMode = 0),
+                ),
+                ChoiceChip(
+                  label: Text(isAr ? 'موعد المتابعة' : 'Follow-up time'),
+                  selected: _interestedSortMode == 1,
+                  onSelected: (_) => setState(() => _interestedSortMode = 1),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // كارد المهتم — صف `deals` من زر "أنا مهتم" (interestSource)
@@ -727,149 +1223,390 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     final serviceLabel = isWantedLead
         ? loc.wanted
         : serviceType == 'sale'
-            ? loc.forSale
-            : serviceType == 'rent'
-                ? loc.forRent
-                : loc.forExchange;
+        ? loc.forSale
+        : serviceType == 'rent'
+        ? loc.forRent
+        : loc.forExchange;
+
+    final dealStatusRaw = (d['dealStatus'] ?? d['status'] ?? '')
+        .toString()
+        .trim();
+    final pipelineMenu = List<String>.from(DealPipelineStatus.ordered);
+    if (dealStatusRaw.isNotEmpty && !pipelineMenu.contains(dealStatusRaw)) {
+      pipelineMenu.insert(0, dealStatusRaw);
+    }
+    final dealStatusDropdownValue =
+        pipelineMenu.contains(dealStatusRaw) && dealStatusRaw.isNotEmpty
+        ? dealStatusRaw
+        : DealStatus.newLead;
+    final statusColor = _interestedLeadStatusColor(dealStatusRaw);
+    final nextFu = d['nextFollowUpAt'];
+    final lastNote = _interestedLastNoteText(d);
+    final now = DateTime.now();
+    final overdueFollowUp = crmIsFollowUpOverdue(d, now);
+    final priority = crmComputeLeadPriority(d, now);
+    final priorityColor = _crmPriorityBadgeColor(priority);
+
+    void openListing() {
+      if (isWantedLead && wantedId.isNotEmpty) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                WantedDetailsPage(wantedId: wantedId, isAdminView: true),
+          ),
+        );
+        return;
+      }
+      if (propertyId.isNotEmpty) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                PropertyDetailsPage(propertyId: propertyId, isAdminView: true),
+          ),
+        );
+      }
+    }
 
     return Card(
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (isWantedLead && wantedId.isNotEmpty) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => WantedDetailsPage(
-                          wantedId: wantedId,
-                          isAdminView: true,
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-                  if (propertyId.isNotEmpty) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PropertyDetailsPage(
-                          propertyId: propertyId,
-                          isAdminView: true,
-                        ),
-                      ),
-                    );
-                  }
-                },
+      clipBehavior: Clip.antiAlias,
+      color: overdueFollowUp ? Colors.red.shade50 : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: overdueFollowUp
+            ? BorderSide(color: Colors.red.shade700, width: 2)
+            : BorderSide.none,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (overdueFollowUp)
+            Material(
+              color: Colors.red.shade700,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 72,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        color: const Color(0xFFE8F5E9),
-                      ),
-                      child: const Icon(
-                        Icons.thumb_up,
-                        color: Color(0xFF25D366),
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
+                    const Icon(Icons.schedule, color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            headline,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            serviceLabel,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              color: Colors.green,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (clientPhone.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              '☎ $clientPhone',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                          ],
-                          const SizedBox(height: 6),
-                          Text(
-                            '${loc.addedOn}: ${_fmtDate(createdAt)}',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ],
+                      child: Text(
+                        isAr
+                            ? 'متابعة متأخرة — يتطلب إجراء'
+                            : 'Overdue follow-up — needs attention',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
-                    const Icon(Icons.chevron_left, color: Colors.grey),
                   ],
                 ),
               ),
             ),
-            const SizedBox(width: 4),
-            IconButton(
-              onPressed: () {
-                Navigator.push<void>(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => AdminDealDetailPage(dealId: dealId),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.open_in_new, color: Color(0xFF101046)),
-              tooltip: isAr ? 'تفاصيل الصفقة' : 'Deal details',
-            ),
-            IconButton(
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(isAr ? 'حذف الصفقة' : 'Delete deal'),
-                    content: Text(
-                      isAr
-                          ? 'سيتم حذف سجل الصفقة نهائياً من النظام. متابعة؟'
-                          : 'This removes the deal document permanently. Continue?',
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: openListing,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: const Color(0xFFE8F5E9),
+                                ),
+                                child: const Icon(
+                                  Icons.thumb_up,
+                                  color: Color(0xFF25D366),
+                                  size: 26,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      headline,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      serviceLabel,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (clientPhone.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      SelectableText(
+                                        clientPhone,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 6,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                            border: Border.all(
+                                              color: statusColor.withValues(
+                                                alpha: 0.45,
+                                              ),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            getDealStatusLabel(
+                                              context,
+                                              dealStatusRaw.isNotEmpty
+                                                  ? dealStatusRaw
+                                                  : DealStatus.newLead,
+                                            ),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: statusColor,
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: priorityColor.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                            border: Border.all(
+                                              color: priorityColor.withValues(
+                                                alpha: 0.45,
+                                              ),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            _crmPriorityLabel(priority, isAr),
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: priorityColor,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (nextFu is Timestamp) ...[
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(
+                                            Icons.event_available,
+                                            size: 16,
+                                            color: Colors.indigo.shade700,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              '${loc.adminDealFollowUpDateLabel}: ${_fmtDate(nextFu)}',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.indigo.shade800,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                    if (lastNote != null &&
+                                        lastNote.isNotEmpty) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '${loc.adminFollowupLastNoteLabel}:',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      Text(
+                                        lastNote,
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey.shade800,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '${loc.addedOn}: ${_fmtDate(createdAt)}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_left,
+                                color: Colors.grey.shade500,
+                                size: 22,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: Text(loc.cancel),
+                    IconButton(
+                      onPressed: () {
+                        Navigator.push<void>(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => AdminDealDetailPage(dealId: dealId),
+                          ),
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.open_in_new,
+                        color: Color(0xFF101046),
                       ),
-                      FilledButton(
-                        style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: Text(loc.delete),
+                      tooltip: isAr ? 'تفاصيل الصفقة' : 'Deal details',
+                    ),
+                    IconButton(
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: Text(isAr ? 'حذف الصفقة' : 'Delete deal'),
+                            content: Text(
+                              isAr
+                                  ? 'سيتم حذف سجل الصفقة نهائياً من النظام. متابعة؟'
+                                  : 'This removes the deal document permanently. Continue?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: Text(loc.cancel),
+                              ),
+                              FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                ),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: Text(loc.delete),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) await _deleteInterestDeal(dealId);
+                      },
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      tooltip: isAr ? 'حذف الصفقة' : 'Delete deal',
+                    ),
+                  ],
+                ),
+                const Divider(height: 20),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: isAr ? 'تغيير الحالة' : 'Change status',
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isDense: true,
+                            isExpanded: true,
+                            value: dealStatusDropdownValue,
+                            items: pipelineMenu
+                                .map(
+                                  (s) => DropdownMenuItem<String>(
+                                    value: s,
+                                    child: Text(getDealStatusLabel(context, s)),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) {
+                              if (v == null || v == dealStatusDropdownValue) {
+                                return;
+                              }
+                              _setInterestedDealStatus(dealId, v, loc, isAr);
+                            },
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                );
-                if (confirm == true) await _deleteInterestDeal(dealId);
-              },
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
-              tooltip: isAr ? 'حذف الصفقة' : 'Delete deal',
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      onPressed: () =>
+                          _appendInterestedQuickNote(dealId, loc, isAr),
+                      icon: const Icon(Icons.note_add_outlined),
+                      tooltip: isAr ? 'ملاحظة سريعة' : 'Quick note',
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -877,19 +1614,23 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
   Future<void> _approveWanted(String wantedId) async {
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
     try {
-      await firestore.collection('wanted_requests').doc(wantedId).update({'approved': true});
+      await firestore.collection('wanted_requests').doc(wantedId).update({
+        'approved': true,
+      });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isAr ? 'تم اعتماد طلب المطلوب' : 'Wanted request approved'),
+          content: Text(
+            isAr ? 'تم اعتماد طلب المطلوب' : 'Wanted request approved',
+          ),
           backgroundColor: Colors.green,
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));
     }
   }
 
@@ -901,7 +1642,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       builder: (ctx) => AlertDialog(
         title: Text(isAr ? 'رفض طلب مطلوب' : 'Reject wanted request'),
         content: Text(
-          isAr ? 'هل تريد رفض هذا الطلب؟ سيُحذف من القائمة.' : 'Reject this request? It will be removed from the list.',
+          isAr
+              ? 'هل تريد رفض هذا الطلب؟ سيُحذف من القائمة.'
+              : 'Reject this request? It will be removed from the list.',
         ),
         actions: [
           TextButton(
@@ -928,9 +1671,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));
     }
   }
 
@@ -946,34 +1689,42 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isAr ? 'تم تمييز الطلب ٧ أيام' : 'Wanted request featured for 7 days'),
+          content: Text(
+            isAr
+                ? 'تم تمييز الطلب ٧ أيام'
+                : 'Wanted request featured for 7 days',
+          ),
           backgroundColor: Colors.green,
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));
     }
   }
 
   Future<void> _approveValuation(String valuationId) async {
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
     try {
-      await firestore.collection('valuations').doc(valuationId).update({'approved': true});
+      await firestore.collection('valuations').doc(valuationId).update({
+        'approved': true,
+      });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isAr ? 'تم اعتماد طلب التقييم' : 'Valuation request approved'),
+          content: Text(
+            isAr ? 'تم اعتماد طلب التقييم' : 'Valuation request approved',
+          ),
           backgroundColor: Colors.green,
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));
     }
   }
 
@@ -985,7 +1736,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       builder: (ctx) => AlertDialog(
         title: Text(isAr ? 'رفض طلب التقييم' : 'Reject valuation request'),
         content: Text(
-          isAr ? 'هل تريد رفض هذا الطلب؟ سيُحذف من القائمة.' : 'Reject this request? It will be removed from the list.',
+          isAr
+              ? 'هل تريد رفض هذا الطلب؟ سيُحذف من القائمة.'
+              : 'Reject this request? It will be removed from the list.',
         ),
         actions: [
           TextButton(
@@ -1012,14 +1765,18 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));
     }
   }
 
   // كارد المطلوب — النقر يفتح تفاصيل الطلب
-  Widget _buildWantedTile(AppLocalizations loc, Map<String, dynamic> d, String wantedId) {
+  Widget _buildWantedTile(
+    AppLocalizations loc,
+    Map<String, dynamic> d,
+    String wantedId,
+  ) {
     final createdAt = d['createdAt'] as Timestamp?;
     final typeEn = (d['type'] ?? '').toString();
     final area = (d['area'] ?? d['area_id'] ?? '-').toString();
@@ -1028,8 +1785,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     final maxP = _fmtPrice(d['maxPrice']);
     final approved = d['approved'] == true;
     final featuredUntil = d['featuredUntil'] as Timestamp?;
-    final isFeatured = featuredUntil != null &&
-        featuredUntil.toDate().isAfter(DateTime.now());
+    final isFeatured =
+        featuredUntil != null && featuredUntil.toDate().isAfter(DateTime.now());
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
 
     return InkWell(
@@ -1037,10 +1794,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => WantedDetailsPage(
-              wantedId: wantedId,
-              isAdminView: true,
-            ),
+            builder: (_) =>
+                WantedDetailsPage(wantedId: wantedId, isAdminView: true),
           ),
         );
       },
@@ -1051,115 +1806,141 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 72,
-              height: 52,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.grey[200],
-              ),
-              child: const Icon(Icons.search, color: Colors.black45, size: 32),
-            ),
-
-            const SizedBox(width: 12),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '$area • $typeLabel',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      if (approved)
-                        Text(' ✅', style: TextStyle(color: Colors.green[700], fontSize: 14))
-                      else
-                        Text(' ⏳', style: TextStyle(color: Colors.orange[700], fontSize: 14)),
-                    ],
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  Text(
-                    '${loc.budget}: $minP - $maxP KWD',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  Text(
-                    '${loc.addedOn}: ${_fmtDate(createdAt)}',
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-
-            if (!approved)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _primaryBlue,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  onPressed: () => _approveWanted(wantedId),
-                  child: Text(
-                    isAr ? 'اعتماد' : 'Approve',
-                    style: const TextStyle(fontSize: 13),
-                  ),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 72,
+                height: 52,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.grey[200],
                 ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Row(
+                child: const Icon(
+                  Icons.search,
+                  color: Colors.black45,
+                  size: 32,
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (isFeatured)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: Icon(Icons.star, size: 18, color: Colors.amber[700]),
-                      ),
-                    TextButton.icon(
-                      onPressed: () => _makeWantedFeatured(wantedId),
-                      icon: Icon(
-                        isFeatured ? Icons.star : Icons.star_border,
-                        size: 18,
-                        color: Colors.amber[800],
-                      ),
-                      label: Text(
-                        isAr ? (isFeatured ? 'تمديد التمييز' : 'تمييز') : (isFeatured ? 'Extend' : 'Feature'),
-                        style: const TextStyle(fontSize: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '$area • $typeLabel',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (approved)
+                          Text(
+                            ' ✅',
+                            style: TextStyle(
+                              color: Colors.green[700],
+                              fontSize: 14,
+                            ),
+                          )
+                        else
+                          Text(
+                            ' ⏳',
+                            style: TextStyle(
+                              color: Colors.orange[700],
+                              fontSize: 14,
+                            ),
+                          ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      '${loc.budget}: $minP - $maxP KWD',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const Icon(Icons.chevron_left, color: Colors.grey),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      '${loc.addedOn}: ${_fmtDate(createdAt)}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
                   ],
                 ),
               ),
-          ],
+
+              if (!approved)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _primaryBlue,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    onPressed: () => _approveWanted(wantedId),
+                    child: Text(
+                      isAr ? 'اعتماد' : 'Approve',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isFeatured)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Icon(
+                            Icons.star,
+                            size: 18,
+                            color: Colors.amber[700],
+                          ),
+                        ),
+                      TextButton.icon(
+                        onPressed: () => _makeWantedFeatured(wantedId),
+                        icon: Icon(
+                          isFeatured ? Icons.star : Icons.star_border,
+                          size: 18,
+                          color: Colors.amber[800],
+                        ),
+                        label: Text(
+                          isAr
+                              ? (isFeatured ? 'تمديد التمييز' : 'تمييز')
+                              : (isFeatured ? 'Extend' : 'Feature'),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      const Icon(Icons.chevron_left, color: Colors.grey),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
 
   // كارد التقييمات — النقر يفتح تفاصيل الطلب
-  Widget _buildValuationTile(AppLocalizations loc, Map<String, dynamic> d, String valuationId) {
+  Widget _buildValuationTile(
+    AppLocalizations loc,
+    Map<String, dynamic> d,
+    String valuationId,
+  ) {
     final createdAt = d['createdAt'] as Timestamp?;
     final owner = d['ownerName']?.toString() ?? '';
     final phone = d['phone']?.toString() ?? '';
@@ -1243,7 +2024,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.sms, color: Colors.blue),
-                    onPressed: phone.isEmpty ? null : () => _openWhatsApp(phone),
+                    onPressed: phone.isEmpty
+                        ? null
+                        : () => _openWhatsApp(phone),
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
@@ -1543,7 +2326,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(isAr ? 'تم اعتماد الإغلاق' : 'Closure approved')),
+          SnackBar(
+            content: Text(isAr ? 'تم اعتماد الإغلاق' : 'Closure approved'),
+          ),
         );
         await Navigator.push<void>(
           context,
@@ -1553,7 +2338,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         );
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('$e')));
         }
       }
     }
@@ -1571,8 +2358,14 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
             onChanged: (v) => note = v,
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(isAr ? 'إلغاء' : 'Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(isAr ? 'رفض' : 'Reject')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(isAr ? 'إلغاء' : 'Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(isAr ? 'رفض' : 'Reject'),
+            ),
           ],
         ),
       );
@@ -1586,12 +2379,18 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(isAr ? 'تم الرفض وإرجاع الإعلان' : 'Rejected; listing restored')),
+            SnackBar(
+              content: Text(
+                isAr ? 'تم الرفض وإرجاع الإعلان' : 'Rejected; listing restored',
+              ),
+            ),
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('$e')));
         }
       }
     }
@@ -1605,16 +2404,24 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
             if (title.isNotEmpty)
               Text(
                 '${isAr ? "العنوان" : "Title"}: $title',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
               ),
             Text(
               '$area • ${_translateType(context, type)}',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             if (areaEn.isNotEmpty || govEn.isNotEmpty)
-              Text('EN: $govEn · $areaEn', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+              Text(
+                'EN: $govEn · $areaEn',
+                style: const TextStyle(fontSize: 12, color: Colors.black54),
+              ),
             Text('${isAr ? "المحافظة" : "Gov"}: $gov'),
-            Text('${isAr ? "الخدمة" : "Service"}: $svc → ${isAr ? "طلب إغلاق" : "close"}: $req'),
+            Text(
+              '${isAr ? "الخدمة" : "Service"}: $svc → ${isAr ? "طلب إغلاق" : "close"}: $req',
+            ),
             Text(
               '${isAr ? "حالة الطلب" : "Request status"}: ${isAr ? "معلّق" : "Pending"}',
             ),
@@ -1641,7 +2448,10 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => PropertyDetailsPage(propertyId: pid, isAdminView: true),
+                        builder: (_) => PropertyDetailsPage(
+                          propertyId: pid,
+                          isAdminView: true,
+                        ),
                       ),
                     );
                   },
@@ -1683,7 +2493,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       case AdminFilter.closureRequests:
         return _buildClosureRequestTile(loc, d, doc.id, isAr);
       case AdminFilter.deals:
-        return _buildDealTile(loc, d, doc.id, isAr);
+      case AdminFilter.collection:
+        return _buildDealTile(loc, d, doc.id);
       case AdminFilter.support:
         return _buildSupportTicketTile(loc, d, doc.id, isAr);
     }
@@ -1693,7 +2504,6 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     AppLocalizations loc,
     Map<String, dynamic> d,
     String dealId,
-    bool isAr,
   ) {
     final title = (d['propertyTitle'] ?? d['title'] ?? '').toString();
     final st = (d['dealStatus'] ?? '').toString();
@@ -1717,11 +2527,14 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
             children: [
               Text(
                 title.isEmpty ? dealId : title,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
-                '${isAr ? "حالة الصفقة" : "Status"}: ${st.isEmpty ? (isAr ? "—" : "—") : st}',
+                '${loc.adminDealPipelineStatus}: ${st.trim().isEmpty ? '—' : getDealStatusLabel(context, st)}',
               ),
               Text('${loc.adminDealPropertyPrice}: $lp KWD'),
               Text('${loc.adminDealFinalPrice}: $fp KWD'),
@@ -1786,8 +2599,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     final userPhone = (d['userPhone'] ?? '').toString();
     final userId = (d['userId'] ?? '').toString();
     final category = (d['category'] ?? '').toString();
-    final status =
-        (d['status'] ?? SupportTicketStatus.open).toString();
+    final status = (d['status'] ?? SupportTicketStatus.open).toString();
     final createdAt = d['createdAt'] as Timestamp?;
 
     Future<void> setStatus(String newStatus) async {
@@ -1797,9 +2609,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
           status: newStatus,
         );
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(loc.supportTicketUpdated)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(loc.supportTicketUpdated)));
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1834,9 +2646,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       try {
         await AdminActionService.deleteSupportTicket(ticketId);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(loc.supportTicketDeleted)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(loc.supportTicketDeleted)));
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1870,8 +2682,10 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _supportStatusColor(status),
                     borderRadius: BorderRadius.circular(8),
@@ -2037,6 +2851,16 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                     loc.adminDealsTab,
                     AdminFilter.deals,
                     _deals(),
+                    docCount: _dealsCrmVisibleCount,
+                  ),
+                  _badge(
+                    loc.adminDealsCollectionTab,
+                    loc.adminDealsCollectionTab,
+                    AdminFilter.collection,
+                    _collectionDeals(),
+                    docCount: (docs) => docs
+                        .where((doc) => !isPaid(doc.data()))
+                        .length,
                   ),
                   _badge(
                     loc.supportTabEn,
@@ -2051,13 +2875,38 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
 
           const Divider(height: 1),
 
+          if (_current == AdminFilter.deals) ...[
+            _buildDealsSubTabs(loc),
+            const Divider(height: 1),
+          ],
+
+          if (_current == AdminFilter.interested) ...[
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _interested(),
+              builder: (context, snap) {
+                final docs = snap.data?.docs ?? [];
+                final now = DateTime.now();
+                final overdue = docs
+                    .where((doc) => crmIsFollowUpOverdue(doc.data(), now))
+                    .length;
+                return _buildInterestedCrmToolbar(
+                  loc,
+                  isAr,
+                  overdueCount: overdue,
+                );
+              },
+            ),
+            const Divider(height: 1),
+          ],
+
           // List
           Expanded(
             child: _current == AdminFilter.pending
                 ? _buildPendingMergedList(loc, isAr)
                 : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                     stream: _stream(_current),
-                    builder: (context, snap) => _buildStreamBody(context, loc, isAr, snap),
+                    builder: (context, snap) =>
+                        _buildStreamBody(context, loc, isAr, snap),
                   ),
           ),
         ],
@@ -2065,8 +2914,125 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     );
   }
 
+  Widget _buildDealsSubTabs(AppLocalizations loc) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: _deals(),
+        builder: (context, snap) {
+          final allDocs = snap.data?.docs ?? [];
+          final now = DateTime.now();
+          final overdueCount = allDocs
+              .where((doc) => _dealMatchesOverdueFilter(doc.data(), now))
+              .length;
+
+          Widget chip({
+            required int tabIndex,
+            required String label,
+            required Color selectedColor,
+            Color? unselectedLabelColor,
+            Widget? labelChild,
+            BorderSide? side,
+          }) {
+            final selected = _selectedTab == tabIndex;
+            return Expanded(
+              child: ChoiceChip(
+                showCheckmark: false,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                label: labelChild ?? Center(child: Text(label)),
+                selected: selected,
+                onSelected: (_) => setState(() => _selectedTab = tabIndex),
+                selectedColor: selectedColor,
+                side: side,
+                labelStyle: TextStyle(
+                  color: selected
+                      ? Colors.white
+                      : (unselectedLabelColor ?? Colors.black87),
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              chip(
+                tabIndex: 0,
+                label: loc.adminDealsSubtabNew,
+                selectedColor: _primaryBlue,
+              ),
+              const SizedBox(width: 8),
+              chip(
+                tabIndex: 1,
+                label: loc.adminDealsSubtabInProgress,
+                selectedColor: _primaryBlue,
+              ),
+              const SizedBox(width: 8),
+              chip(
+                tabIndex: 2,
+                label: loc.adminDealsSubtabOverdue,
+                selectedColor: Colors.red.shade700,
+                unselectedLabelColor: overdueCount > 0
+                    ? Colors.red.shade900
+                    : Colors.black87,
+                side: BorderSide(
+                  color: overdueCount > 0 && _selectedTab != 2
+                      ? Colors.red.shade300
+                      : Colors.transparent,
+                ),
+                labelChild: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(loc.adminDealsSubtabOverdue),
+                        if (overdueCount > 0) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _selectedTab == 2
+                                  ? Colors.white.withValues(alpha: 0.28)
+                                  : Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$overdueCount',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: _selectedTab == 2
+                                    ? Colors.white
+                                    : Colors.red.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   /// كارد موحد في قيد المراجعة — نفس الشكل للإعلان والمطلوب، والمطلوب لا يُفتح بالضغط
-  Widget _buildPendingMergedTile(AppLocalizations loc, _PendingMergedItem item) {
+  Widget _buildPendingMergedTile(
+    AppLocalizations loc,
+    _PendingMergedItem item,
+  ) {
     final d = item.doc.data() as Map<String, dynamic>? ?? {};
     final createdAt = d['createdAt'] as Timestamp?;
     final typeEn = (d['type'] ?? '').toString();
@@ -2087,23 +3053,36 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       final expiresAt = d['expiresAt'] as Timestamp?;
       titleLine = '$area • $typeLabel';
       priceLine = '${loc.price}: $price KWD';
-      dateLine = '${loc.addedOn}: ${_fmtDate(createdAt)}\n${loc.expiresOn}: ${_fmtDate(expiresAt)}';
+      dateLine =
+          '${loc.addedOn}: ${_fmtDate(createdAt)}\n${loc.expiresOn}: ${_fmtDate(expiresAt)}';
       leftWidget = _Thumb(url: cover);
       final approveKey = 'approve:${item.doc.id}';
       final rejectKey = 'reject:${item.doc.id}';
       actionButtons.addAll([
         TextButton.icon(
-          onPressed: _isLoading(approveKey) ? null : () => _approveListing(item.doc.id),
+          onPressed: _isLoading(approveKey)
+              ? null
+              : () => _approveListing(item.doc.id),
           icon: _isLoading(approveKey)
-              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Icon(Icons.verified),
           label: Text(loc.approve),
           style: TextButton.styleFrom(foregroundColor: _primaryBlue),
         ),
         TextButton.icon(
-          onPressed: _isLoading(rejectKey) ? null : () => _rejectListing(item.doc.id),
+          onPressed: _isLoading(rejectKey)
+              ? null
+              : () => _rejectListing(item.doc.id),
           icon: _isLoading(rejectKey)
-              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Icon(Icons.block),
           label: Text(loc.reject),
           style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -2115,7 +3094,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
       final pType = (d['propertyType'] ?? '-').toString();
       final pArea = (d['propertyArea'] ?? '-').toString();
       titleLine = '$owner • $gov - $area';
-      priceLine = '${loc.valuation_propertyType}: $pType | ${loc.valuation_propertyArea}: $pArea';
+      priceLine =
+          '${loc.valuation_propertyType}: $pType | ${loc.valuation_propertyArea}: $pArea';
       dateLine = '${loc.addedOn}: ${_fmtDate(createdAt)}';
       leftWidget = Container(
         width: 72,
@@ -2188,7 +3168,10 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                 children: [
                   Text(
                     titleLine,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -2217,7 +3200,10 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => PropertyDetailsPage(propertyId: item.doc.id, isAdminView: true),
+              builder: (_) => PropertyDetailsPage(
+                propertyId: item.doc.id,
+                isAdminView: true,
+              ),
             ),
           );
         },
@@ -2242,7 +3228,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => WantedDetailsPage(wantedId: item.doc.id, isAdminView: true),
+            builder: (_) =>
+                WantedDetailsPage(wantedId: item.doc.id, isAdminView: true),
           ),
         );
       },
@@ -2279,7 +3266,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
               padding: const EdgeInsets.all(24),
               child: Text(
                 textAlign: TextAlign.center,
-                isAr ? 'لا توجد إعلانات ولا طلبات مطلوب ولا طلبات تقييم قيد المراجعة' : 'No pending listings, wanted requests, or valuation requests',
+                isAr
+                    ? 'لا توجد إعلانات ولا طلبات مطلوب ولا طلبات تقييم قيد المراجعة'
+                    : 'No pending listings, wanted requests, or valuation requests',
               ),
             ),
           );
@@ -2305,7 +3294,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     }
     if (snap.hasError) {
       final err = snap.error.toString();
-      final isNetwork = err.contains('unavailable') ||
+      final isNetwork =
+          err.contains('unavailable') ||
           err.contains('network') ||
           err.contains('Failed to get');
       return Center(
@@ -2318,14 +3308,23 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
               const SizedBox(height: 12),
               Text(
                 isAr ? 'خطأ في التحميل' : 'Load error',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
-              Text(err, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+              Text(
+                err,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
               if (isNetwork) ...[
                 const SizedBox(height: 12),
                 Text(
-                  isAr ? 'تحقق من الاتصال بالإنترنت وأعد فتح الصفحة' : 'Check internet connection and reopen',
+                  isAr
+                      ? 'تحقق من الاتصال بالإنترنت وأعد فتح الصفحة'
+                      : 'Check internet connection and reopen',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: Colors.orange[800]),
                 ),
@@ -2335,15 +3334,54 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         ),
       );
     }
-    final docs = snap.data?.docs ?? [];
+    var docs = snap.data?.docs ?? [];
+    var interestedCountBeforeFilter = 0;
+    if (_current == AdminFilter.collection) {
+      docs = docs.where((doc) => !isPaid(doc.data())).toList();
+    }
+    if (_current == AdminFilter.deals) {
+      final now = DateTime.now();
+      docs = docs.where((doc) {
+        final data = doc.data();
+        final st = (data['dealStatus'] ?? '').toString().trim();
+        if (_selectedTab == 0) {
+          return st == DealStatus.newLead;
+        }
+        if (_selectedTab == 1) {
+          return st != DealStatus.newLead &&
+              st != DealStatus.closed &&
+              st != DealStatus.notInterested;
+        }
+        if (_selectedTab == 2) {
+          return _dealMatchesOverdueFilter(data, now);
+        }
+        return false;
+      }).toList();
+    }
+    if (_current == AdminFilter.interested) {
+      interestedCountBeforeFilter = docs.length;
+      docs = _filterAndSortInterestedDocs(docs);
+    }
     if (docs.isEmpty) {
       String emptyMsg;
       if (_current == AdminFilter.interested) {
-        emptyMsg = isAr ? 'لا يوجد مهتمون' : 'No interested leads';
+        emptyMsg = interestedCountBeforeFilter > 0
+            ? (isAr
+                  ? 'لا توجد نتائج للتصفية الحالية'
+                  : 'No leads match current filters')
+            : (isAr ? 'لا يوجد مهتمون' : 'No interested leads');
       } else if (_current == AdminFilter.closureRequests) {
-        emptyMsg = isAr ? 'لا توجد طلبات إغلاق معلّقة' : 'No pending closure requests';
+        emptyMsg = isAr
+            ? 'لا توجد طلبات إغلاق معلّقة'
+            : 'No pending closure requests';
       } else if (_current == AdminFilter.deals) {
-        emptyMsg = isAr ? 'لا توجد صفقات' : 'No deals yet';
+        emptyMsg = switch (_selectedTab) {
+          0 => (isAr ? 'لا توجد صفقات جديدة' : 'No new deals'),
+          1 => (isAr ? 'لا توجد صفقات قيد المتابعة' : 'No deals in progress'),
+          _ => (isAr ? 'لا توجد صفقات متأخرة' : 'No overdue follow-ups'),
+        };
+      } else if (_current == AdminFilter.collection) {
+        emptyMsg = loc.adminDealsCollectionEmpty;
       } else if (_current == AdminFilter.wanted) {
         emptyMsg = isAr
             ? 'لا توجد طلبات مطلوب.\nإذا أضفت طلباً ولم يظهر، تحقق من الاتصال بالإنترنت وأعد المحاولة.'
@@ -2414,8 +3452,10 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     String en,
     String ar,
     AdminFilter f,
-    Stream<QuerySnapshot<Map<String, dynamic>>> stream,
-  ) {
+    Stream<QuerySnapshot<Map<String, dynamic>>> stream, {
+    int Function(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs)?
+    docCount,
+  }) {
     final isSelected = _current == f;
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
     final label = isAr ? ar : en;
@@ -2423,7 +3463,8 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: stream,
       builder: (ctx, snap) {
-        final count = snap.data?.docs.length ?? 0;
+        final docs = snap.data?.docs ?? [];
+        final count = docCount != null ? docCount(docs) : docs.length;
 
         return ChoiceChip(
           selected: isSelected,

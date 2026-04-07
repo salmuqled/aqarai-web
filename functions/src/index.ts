@@ -44,6 +44,8 @@ export const approveListing = onCall(
       approved: true,
       imagesApproved: true,
       status: "active",
+      isActive: true,
+      hiddenFromPublic: false,
       approvedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -78,6 +80,8 @@ export const rejectListing = onCall(
       approved: false,
       imagesApproved: false,
       status: "rejected",
+      isActive: false,
+      hiddenFromPublic: false,
       rejected: true,
       rejectedBy: adminUid,
       rejectedReason: reason,
@@ -123,6 +127,10 @@ export const setAdminClaim = onCall(
 // ⛔️ هذا مكان استيراد أي فانكشن ثانية — خارج كل الفانكشنز
 export { approveListingV2 } from "./listing_approval";
 export { onPropertyUpdated, onWantedUpdated } from "./match_listings";
+export {
+  onPropertyAreaSanitizeCreate,
+  onPropertyAreaSanitizeUpdate,
+} from "./propertyAreaSanitize";
 export { aqaraiAssistant } from "./assistant";
 export { aqaraiAgentAnalyze, aqaraiAgentCompose, aqaraiAgentRankResults, aqaraiAgentFindSimilar } from "./agent_brain";
 export { onPropertyCreatedBuyerRadar } from "./buyer_radar";
@@ -145,6 +153,10 @@ export { generateCarousel } from "./generateCarousel";
 export { updateCaptionLearning } from "./updateCaptionLearning";
 export { evaluateDecisionOutcome } from "./evaluateDecisionOutcome";
 export { evaluateSystemAlerts } from "./evaluateSystemAlerts";
+export {
+  dispatchDealFollowUpReminders,
+  resetDealFollowUpNotifiedOnNextAtChange,
+} from "./dealFollowUpReminders";
 export { placeAuctionBid } from "./placeAuctionBid";
 export { finalizeLot } from "./finalizeLot";
 export { extendAuctionTime } from "./extendAuctionTime";
@@ -164,6 +176,22 @@ export {
   onCompanyPaymentUpdatedLogStatus,
 } from "./companyPaymentLogs";
 export { onCompanyPaymentConfirmedInvoice } from "./onCompanyPaymentConfirmedInvoice";
+export { onCompanyPaymentDealFinancialSync } from "./financial/onPaymentConfirmedDealSync";
+export {
+  addCompanyPaymentAdmin,
+  reconcileDealCommissionPaymentTotals,
+  getDealCommissionPaymentDiagnostics,
+} from "./financial/financialCallables";
 export { resendInvoiceEmail, retryInvoicePdf } from "./invoice/invoiceCallables";
 export { recreateInvoiceForPayment } from "./invoice/recreateInvoiceForPayment";
 export { backfillLedgerForOldInvoices } from "./invoice/invoiceLedgerBackfill";
+export {
+  createBooking,
+  checkBookingAvailability,
+  confirmBooking,
+  rejectBooking,
+} from "./chalet_booking";
+export {
+  markChaletBookingTransactionPaid,
+  processChaletBookingRefund,
+} from "./chalet_booking_finance";

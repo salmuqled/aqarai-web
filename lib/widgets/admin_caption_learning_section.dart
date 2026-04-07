@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
 /// Shows learned factor weights from [caption_learning].
-class AdminCaptionLearningSection extends StatelessWidget {
+///
+/// Uses one [Future] per [State] so dashboard stream rebuilds do not restart
+/// the query every frame.
+class AdminCaptionLearningSection extends StatefulWidget {
   const AdminCaptionLearningSection({
     super.key,
     required this.isAr,
@@ -12,7 +15,17 @@ class AdminCaptionLearningSection extends StatelessWidget {
 
   final bool isAr;
 
+  @override
+  State<AdminCaptionLearningSection> createState() =>
+      _AdminCaptionLearningSectionState();
+}
+
+class _AdminCaptionLearningSectionState
+    extends State<AdminCaptionLearningSection> {
   static const _order = ['emoji', 'area', 'urgency', 'short_text'];
+
+  late final Future<QuerySnapshot<Map<String, dynamic>>> _learningFuture =
+      FirebaseFirestore.instance.collection('caption_learning').get();
 
   String _factorLabel(AppLocalizations loc, String docId) {
     switch (docId) {
@@ -44,18 +57,33 @@ class AdminCaptionLearningSection extends StatelessWidget {
     }
   }
 
+  static double _defaultWeight(String id) {
+    switch (id) {
+      case 'emoji':
+        return 0.1;
+      case 'area':
+        return 0.2;
+      case 'urgency':
+        return 0.2;
+      case 'short_text':
+        return 0.1;
+      default:
+        return 0.1;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
 
     return FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      future: FirebaseFirestore.instance.collection('caption_learning').get(),
+      future: _learningFuture,
       builder: (context, snap) {
         if (snap.hasError) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
-              isAr
+              widget.isAr
                   ? 'تعذّر تحميل بيانات التعلّم.'
                   : 'Could not load learning weights.',
               style: TextStyle(color: Colors.red.shade800, fontSize: 13),
@@ -112,20 +140,5 @@ class AdminCaptionLearningSection extends StatelessWidget {
         );
       },
     );
-  }
-
-  static double _defaultWeight(String id) {
-    switch (id) {
-      case 'emoji':
-        return 0.1;
-      case 'area':
-        return 0.2;
-      case 'urgency':
-        return 0.2;
-      case 'short_text':
-        return 0.1;
-      default:
-        return 0.1;
-    }
   }
 }

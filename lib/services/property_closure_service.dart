@@ -80,10 +80,11 @@ class PropertyClosureService {
       if (d['closeRequestSubmitted'] == true) {
         throw StateError('already_submitted');
       }
-
-      final st = (d['status'] ?? ListingStatus.active).toString().trim();
-      if (st != ListingStatus.active && st != ListingStatus.approvedLegacy) {
-        throw StateError('invalid_status');
+      if (d['hiddenFromPublic'] != false) {
+        throw StateError('already_hidden');
+      }
+      if (d['isActive'] != true) {
+        throw StateError('listing_not_active');
       }
 
       final pendingStatus = pendingStatusForRequestType(requestType);
@@ -114,6 +115,7 @@ class PropertyClosureService {
 
       tx.update(propRef, {
         'hiddenFromPublic': true,
+        'isActive': false,
         'status': pendingStatus,
         'closeRequestSubmitted': true,
         'closeRequestType': requestType,
@@ -192,6 +194,7 @@ class PropertyClosureService {
     batch.update(propRef, {
       'status': finalStatus,
       'hiddenFromPublic': true,
+      'isActive': false,
       'closeApprovedAt': FieldValue.serverTimestamp(),
       'closeApprovedBy': adminUid,
       'closeRequestSubmitted': true,
@@ -284,6 +287,7 @@ class PropertyClosureService {
     batch.update(propRef, {
       'hiddenFromPublic': false,
       'status': ListingStatus.active,
+      'isActive': true,
       'closeRequestSubmitted': false,
       'closeRequestType': FieldValue.delete(),
       'closeRequestedAt': FieldValue.delete(),

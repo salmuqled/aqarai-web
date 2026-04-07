@@ -4,6 +4,7 @@ import 'package:aqarai_app/constants/deal_constants.dart';
 import 'package:aqarai_app/models/deal_pipeline.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/analytics_service.dart';
+import 'package:aqarai_app/services/deal_follow_up_local_notifications.dart';
 import 'package:aqarai_app/utils/financial_rules.dart';
 
 double _money(dynamic v) {
@@ -87,19 +88,46 @@ class DealAdminService {
     });
   }
 
+  /// Commission "paid" is derived from confirmed `company_payments` (Cloud Function mirrors).
+  @Deprecated('Use company_payments ledger; server updates isCommissionPaid.')
   Future<void> setCommissionPaid({
     required String dealId,
     required bool paid,
   }) async {
+    throw UnsupportedError(
+      'setCommissionPaid is disabled: confirm a commission row in company_payments.',
+    );
+  }
+
+  /// Close the deal after commission is reflected in the ledger (or no commission due).
+  Future<void> markCommissionReceivedAndClose({required String dealId}) async {
     final ref = dealRef(dealId);
-    final snap = await ref.get();
-    if (!snap.exists) throw StateError('deal_missing');
-    if (!isFinalizedDeal(snap.data()!)) {
-      throw StateError('commission_paid_requires_finalized_deal');
-    }
-    await ref.update({
-      'isCommissionPaid': paid,
-      'updatedAt': FieldValue.serverTimestamp(),
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (!snap.exists) throw StateError('deal_missing');
+      final m = snap.data()!;
+      final st = (m['dealStatus'] ?? '').toString().trim();
+      if (st != DealStatus.signed && st != DealStatus.closed) {
+        throw StateError('commission_collect_invalid_status');
+      }
+      final due = getCommission(m);
+      if (due > 0 && !isPaid(m)) {
+        throw StateError('commission_not_confirmed_in_ledger');
+      }
+      final prevSt = st;
+      final patch = <String, dynamic>{
+        'dealStatus': DealStatus.closed,
+        'isBooked': true,
+        'isSigned': true,
+        'lastContactAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (prevSt != DealStatus.closed) {
+        patch['closedAt'] = FieldValue.serverTimestamp();
+      } else if (m['closedAt'] == null) {
+        patch['closedAt'] = FieldValue.serverTimestamp();
+      }
+      tx.update(ref, patch);
     });
   }
 
@@ -142,12 +170,19 @@ class DealAdminService {
       final isSigned = newStatus == DealStatus.signed ||
           newStatus == DealStatus.closed;
 
-      tx.update(ref, {
+      final prevStatus = (m['dealStatus'] ?? '').toString().trim();
+      final patch = <String, dynamic>{
         'dealStatus': newStatus,
         'isBooked': isBooked,
         'isSigned': isSigned,
+        'lastContactAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+      if (newStatus == DealStatus.closed && prevStatus != DealStatus.closed) {
+        patch['closedAt'] = FieldValue.serverTimestamp();
+      }
+
+      tx.update(ref, patch);
 
       // One-time catch-up: pre-finalized saves do not touch analytics/global.
       if (!wasFinalized && nowFinalized) {
@@ -166,6 +201,61 @@ class DealAdminService {
           );
         }
       }
+    });
+  }
+
+  static const int _maxNoteLength = 4000;
+
+  /// Appends one note `{ text, createdAt }` to [notes] (Firestore arrayUnion).
+  Future<void> appendDealNote({
+    required String dealId,
+    required String text,
+  }) async {
+    final t = text.trim();
+    if (t.isEmpty) throw ArgumentError('note text empty');
+    if (t.length > _maxNoteLength) {
+      throw ArgumentError('note too long');
+    }
+    await dealRef(dealId).update({
+      'notes': FieldValue.arrayUnion([
+        {
+          'text': t,
+          'createdAt': Timestamp.fromDate(DateTime.now().toUtc()),
+        },
+      ]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Sets [nextFollowUpAt] for CRM reminders (server stores UTC instant).
+  Future<void> setNextFollowUpAt({
+    required String dealId,
+    required DateTime at,
+  }) async {
+    await dealRef(dealId).update({
+      'nextFollowUpAt': Timestamp.fromDate(at.toUtc()),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await DealFollowUpLocalNotifications.rescheduleAfterFollowUpSave(
+      dealId: dealId,
+      at: at,
+    );
+  }
+
+  /// Clears scheduled follow-up (e.g. after closing the loop).
+  Future<void> clearNextFollowUpAt({required String dealId}) async {
+    await dealRef(dealId).update({
+      'nextFollowUpAt': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await DealFollowUpLocalNotifications.cancelForDeal(dealId);
+  }
+
+  /// Marks that contact happened now (pipeline may stay unchanged).
+  Future<void> markLastContactNow({required String dealId}) async {
+    await dealRef(dealId).update({
+      'lastContactAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 

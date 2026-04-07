@@ -20,6 +20,7 @@ import 'package:aqarai_app/services/seller_radar_service.dart';
 import 'package:aqarai_app/services/user_ban_service.dart';
 import 'package:aqarai_app/utils/property_form_parsing.dart';
 import 'package:aqarai_app/widgets/property_area_search_sheet.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
 
 class AddPropertyPage extends StatefulWidget {
   const AddPropertyPage({super.key});
@@ -35,6 +36,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   String? selectedArea;
   String? selectedPropertyType;
   String selectedServiceType = 'sale';
+  String selectedChaletMode = ChaletMode.daily;
 
   int? _interestedBuyersCount;
 
@@ -77,7 +79,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         _openTermsFullPage();
       };
     WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _updateInterestedBuyersCount());
+      (_) => _updateInterestedBuyersCount(),
+    );
   }
 
   @override
@@ -142,9 +145,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   void _openTermsFullPage() {
     if (!mounted) return;
     Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => const TermsConditionsPage(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const TermsConditionsPage()),
     );
   }
 
@@ -254,9 +255,12 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       final areaEn = areaArToEn[areaAr] ?? "";
 
       // ✅ codes ثابتة للبحث (الأساس الجديد)
-      final governorateCode =
-          propertyLocationCode(govEn.isNotEmpty ? govEn : govAr);
-      final areaCode = propertyLocationCode(areaEn.isNotEmpty ? areaEn : areaAr);
+      final governorateCode = propertyLocationCode(
+        govEn.isNotEmpty ? govEn : govAr,
+      );
+      final areaCode = propertyLocationCode(
+        areaEn.isNotEmpty ? areaEn : areaAr,
+      );
 
       final data = {
         "ownerId": user.uid,
@@ -298,10 +302,13 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "imagesApproved": false,
         "approved": false,
         "status": "active",
+        "isActive": true,
 
         // Phase 1: تمييز الشاليه عن العادي (بدون حجوزات في التطبيق بعد)
-        "listingCategory":
-            selectedPropertyType == 'chalet' ? 'chalet' : 'normal',
+        "listingCategory": selectedPropertyType == 'chalet'
+            ? 'chalet'
+            : 'normal',
+        if (selectedPropertyType == 'chalet') "chaletMode": selectedChaletMode,
         "hiddenFromPublic": false,
         "closeRequestSubmitted": false,
 
@@ -310,6 +317,19 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       };
 
       final docRef = await firestore.collection("properties").add(data);
+
+      final userProfile = <String, dynamic>{
+        'name': fullNameController.text.trim(),
+        'role': 'owner',
+      };
+      final phoneTrim = ownerPhoneController.text.trim();
+      if (phoneTrim.isNotEmpty) {
+        userProfile['phone'] = phoneTrim;
+      }
+      await firestore.collection('users').doc(user.uid).set(
+            userProfile,
+            SetOptions(merge: true),
+          );
 
       if (pickedImage != null) {
         final url = await _uploadImage(docRef.id);
@@ -349,8 +369,9 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
           selectedGovernorate = governorate;
           selectedArea = area;
         });
-        WidgetsBinding.instance
-            .addPostFrameCallback((_) => _updateInterestedBuyersCount());
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _updateInterestedBuyersCount(),
+        );
       },
     );
   }
@@ -397,7 +418,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                       onChanged: (v) {
                         setState(() => selectedServiceType = v!);
                         WidgetsBinding.instance.addPostFrameCallback(
-                            (_) => _updateInterestedBuyersCount());
+                          (_) => _updateInterestedBuyersCount(),
+                        );
                       },
                     ),
                   ),
@@ -412,7 +434,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                       onChanged: (v) {
                         setState(() => selectedServiceType = v!);
                         WidgetsBinding.instance.addPostFrameCallback(
-                            (_) => _updateInterestedBuyersCount());
+                          (_) => _updateInterestedBuyersCount(),
+                        );
                       },
                     ),
                   ),
@@ -427,7 +450,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                       onChanged: (v) {
                         setState(() => selectedServiceType = v!);
                         WidgetsBinding.instance.addPostFrameCallback(
-                            (_) => _updateInterestedBuyersCount());
+                          (_) => _updateInterestedBuyersCount(),
+                        );
                       },
                     ),
                   ),
@@ -474,11 +498,67 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                   ),
                 ],
                 onChanged: (v) {
-                  setState(() => selectedPropertyType = v);
+                  setState(() {
+                    selectedPropertyType = v;
+                    if (v == 'chalet') {
+                      selectedChaletMode = ChaletMode.daily;
+                    }
+                  });
                   WidgetsBinding.instance.addPostFrameCallback(
-                      (_) => _updateInterestedBuyersCount());
+                    (_) => _updateInterestedBuyersCount(),
+                  );
                 },
               ),
+
+              if (selectedPropertyType == 'chalet') ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    Localizations.localeOf(context).languageCode == 'ar'
+                        ? 'طريقة عرض الشاليه'
+                        : 'How this chalet is offered',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                RadioListTile<String>(
+                  dense: true,
+                  title: Text(
+                    Localizations.localeOf(context).languageCode == 'ar'
+                        ? 'حجز يومي'
+                        : 'Daily booking',
+                  ),
+                  value: ChaletMode.daily,
+                  groupValue: selectedChaletMode,
+                  onChanged: (v) => setState(() => selectedChaletMode = v!),
+                ),
+                RadioListTile<String>(
+                  dense: true,
+                  title: Text(
+                    Localizations.localeOf(context).languageCode == 'ar'
+                        ? 'إيجار شهري'
+                        : 'Monthly rental',
+                  ),
+                  value: ChaletMode.monthly,
+                  groupValue: selectedChaletMode,
+                  onChanged: (v) => setState(() => selectedChaletMode = v!),
+                ),
+                RadioListTile<String>(
+                  dense: true,
+                  title: Text(
+                    Localizations.localeOf(context).languageCode == 'ar'
+                        ? 'للبيع'
+                        : 'For sale',
+                  ),
+                  value: ChaletMode.sale,
+                  groupValue: selectedChaletMode,
+                  onChanged: (v) => setState(() => selectedChaletMode = v!),
+                ),
+              ],
 
               const SizedBox(height: 12),
 
@@ -654,8 +734,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
 
               const SizedBox(height: 22),
 
-              if (_interestedBuyersCount != null &&
-                  _interestedBuyersCount! > 0)
+              if (_interestedBuyersCount != null && _interestedBuyersCount! > 0)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(
@@ -722,10 +801,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
               ),
 
               Padding(
-                padding: const EdgeInsetsDirectional.only(
-                  start: 8,
-                  bottom: 8,
-                ),
+                padding: const EdgeInsetsDirectional.only(start: 8, bottom: 8),
                 child: Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: TextButton(

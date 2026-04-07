@@ -2882,7 +2882,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminRealEarningsLegacyNote.
   ///
   /// In en, this message translates to:
-  /// **'Commission includes deals with dealStatus signed or closed (CRM finalized). Legacy status \"sold\" is not used for this total.'**
+  /// **'Commission includes deals with dealStatus contract signed or closed (CRM finalized; stored as signed / closed). Legacy status \"sold\" is not used for this total.'**
   String get adminRealEarningsLegacyNote;
 
   /// No description provided for @adminRealEarningsChartEmpty.
@@ -3665,6 +3665,66 @@ abstract class AppLocalizations {
   /// **'Deals'**
   String get adminDealsTab;
 
+  /// Deals list sub-tab: pipeline stage new
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get adminDealsSubtabNew;
+
+  /// Deals list sub-tab: not new
+  ///
+  /// In en, this message translates to:
+  /// **'In Progress'**
+  String get adminDealsSubtabInProgress;
+
+  /// Deals list sub-tab: follow-up past due threshold
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get adminDealsSubtabOverdue;
+
+  /// Admin requests: deals awaiting commission payment
+  ///
+  /// In en, this message translates to:
+  /// **'Collection'**
+  String get adminDealsCollectionTab;
+
+  /// Empty state for collection tab
+  ///
+  /// In en, this message translates to:
+  /// **'No deals awaiting commission collection.'**
+  String get adminDealsCollectionEmpty;
+
+  /// Share IBAN and amount for manual transfer
+  ///
+  /// In en, this message translates to:
+  /// **'Send Payment Details'**
+  String get adminDealSendPaymentDetails;
+
+  /// Confirm commission received and close deal
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as paid'**
+  String get adminDealMarkCommissionReceived;
+
+  /// Shared text for manual commission payment
+  ///
+  /// In en, this message translates to:
+  /// **'Please transfer the commission to the following account:\nIBAN: {iban}\nAmount: {amount} KWD'**
+  String adminDealPaymentShareBody(String iban, String amount);
+
+  /// No description provided for @adminDealCommissionCollectInvalidStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Commission can only be collected for signed or closed deals.'**
+  String get adminDealCommissionCollectInvalidStatus;
+
+  /// No description provided for @adminDealCommissionAlreadyPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Commission is already marked as paid for this deal.'**
+  String get adminDealCommissionAlreadyPaid;
+
   /// No description provided for @adminDealDetailTitle.
   ///
   /// In en, this message translates to:
@@ -3707,6 +3767,18 @@ abstract class AppLocalizations {
   /// **'You must enter final price first'**
   String get adminDealFinalPriceRequired;
 
+  /// Bottom sheet when setting deal status to signed
+  ///
+  /// In en, this message translates to:
+  /// **'Enter Final Price'**
+  String get adminDealSignedPriceSheetTitle;
+
+  /// Hint for final price field in signed sheet
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 350'**
+  String get adminDealSignedPriceHint;
+
   /// No description provided for @adminDealPipelineStatus.
   ///
   /// In en, this message translates to:
@@ -3725,11 +3797,137 @@ abstract class AppLocalizations {
   /// **'Commission received'**
   String get adminDealCommissionPaid;
 
+  /// Shown when commission-paid toggle is disabled until finalized
+  ///
+  /// In en, this message translates to:
+  /// **'Available when deal status is contract signed or closed.'**
+  String get adminDealCommissionPaidLockedHint;
+
+  /// Explains that commission paid state is server-derived
+  ///
+  /// In en, this message translates to:
+  /// **'Updated automatically when a commission payment is confirmed in the cash ledger (Admin → payments).'**
+  String get adminDealCommissionPaidFromLedgerHint;
+
+  /// Blocked close until ledger confirms commission
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the commission in the cash ledger first (company_payments), then close the deal.'**
+  String get adminDealCommissionNotInLedger;
+
   /// No description provided for @adminDealOpenListing.
   ///
   /// In en, this message translates to:
   /// **'Open listing'**
   String get adminDealOpenListing;
+
+  /// Sets lastContactAt without changing pipeline
+  ///
+  /// In en, this message translates to:
+  /// **'Log contact'**
+  String get adminDealMarkContacted;
+
+  /// No description provided for @adminDealContactMarked.
+  ///
+  /// In en, this message translates to:
+  /// **'Last contact time updated'**
+  String get adminDealContactMarked;
+
+  /// No description provided for @adminDealAddNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a note'**
+  String get adminDealAddNoteHint;
+
+  /// No description provided for @adminDealSaveNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get adminDealSaveNote;
+
+  /// No description provided for @adminDealNoteSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Note saved'**
+  String get adminDealNoteSaved;
+
+  /// No description provided for @adminDealFollowUpDateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow-up appointment'**
+  String get adminDealFollowUpDateLabel;
+
+  /// No description provided for @adminDealFollowUpNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not scheduled'**
+  String get adminDealFollowUpNotSet;
+
+  /// Quick-schedule follow-up reminder
+  ///
+  /// In en, this message translates to:
+  /// **'In 5 minutes'**
+  String get adminDealFollowUpIn5Minutes;
+
+  /// Quick-schedule follow-up reminder
+  ///
+  /// In en, this message translates to:
+  /// **'In 30 minutes'**
+  String get adminDealFollowUpIn30Minutes;
+
+  /// No description provided for @adminDealPickFollowUpDateTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose date & time'**
+  String get adminDealPickFollowUpDateTime;
+
+  /// No description provided for @adminDealFollowUpSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow-up saved'**
+  String get adminDealFollowUpSaved;
+
+  /// No description provided for @adminDealFollowUpCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow-up cleared'**
+  String get adminDealFollowUpCleared;
+
+  /// No description provided for @adminDealClearFollowUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get adminDealClearFollowUp;
+
+  /// No description provided for @adminDealNotesSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get adminDealNotesSectionTitle;
+
+  /// Dashboard: CRM follow-ups past due
+  ///
+  /// In en, this message translates to:
+  /// **'Due follow-ups'**
+  String get adminFollowupSectionTitle;
+
+  /// Explains follow-up list scope
+  ///
+  /// In en, this message translates to:
+  /// **'Same deals sample as this dashboard; follow-up time reached'**
+  String get adminFollowupSectionSubtitle;
+
+  /// No description provided for @adminFollowupEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No deals need follow-up right now.'**
+  String get adminFollowupEmpty;
+
+  /// Label above truncated last CRM note
+  ///
+  /// In en, this message translates to:
+  /// **'Last note'**
+  String get adminFollowupLastNoteLabel;
 
   /// No description provided for @adminDealSaved.
   ///
@@ -3794,7 +3992,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminDealPipelineSigned.
   ///
   /// In en, this message translates to:
-  /// **'Signed'**
+  /// **'Contract Signed'**
   String get adminDealPipelineSigned;
 
   /// No description provided for @adminDealPipelineClosed.
@@ -3802,6 +4000,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Closed'**
   String get adminDealPipelineClosed;
+
+  /// Deal pipeline: dropped lead
+  ///
+  /// In en, this message translates to:
+  /// **'Not interested'**
+  String get adminDealPipelineNotInterested;
 
   /// Shown when some deals have non-standard dealStatus
   ///
@@ -3848,7 +4052,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminConversionFunnelBookedToSigned.
   ///
   /// In en, this message translates to:
-  /// **'Booked → Signed'**
+  /// **'Booked → Contract Signed'**
   String get adminConversionFunnelBookedToSigned;
 
   /// Dashboard commission block title
@@ -3950,7 +4154,7 @@ abstract class AppLocalizations {
   /// Scope of priority list
   ///
   /// In en, this message translates to:
-  /// **'Unpaid commission — booked, signed, or closed (same deals sample)'**
+  /// **'Unpaid commission — booked, contract signed, or closed (same deals sample)'**
   String get adminPrioritySectionSubtitle;
 
   /// No description provided for @adminPriorityEmpty.
@@ -4012,6 +4216,576 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} deals with other or missing service type (excluded from split)'**
   String adminLeadsSplitOtherServiceTypes(int count);
+
+  /// Admin listing card: chaletMode heading
+  ///
+  /// In en, this message translates to:
+  /// **'Chalet type'**
+  String get adminPropertyChaletModeLabel;
+
+  /// chaletMode daily
+  ///
+  /// In en, this message translates to:
+  /// **'Daily booking'**
+  String get adminPropertyChaletModeDaily;
+
+  /// chaletMode monthly
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly rent'**
+  String get adminPropertyChaletModeMonthly;
+
+  /// chaletMode sale
+  ///
+  /// In en, this message translates to:
+  /// **'For sale'**
+  String get adminPropertyChaletModeSale;
+
+  /// No description provided for @adminChaletPayoutsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chalet booking payouts'**
+  String get adminChaletPayoutsTitle;
+
+  /// No description provided for @adminChaletPayoutTransferToOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay owner (bank)'**
+  String get adminChaletPayoutTransferToOwner;
+
+  /// No description provided for @adminChaletPayoutMarkPaidConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm transfer'**
+  String get adminChaletPayoutMarkPaidConfirmTitle;
+
+  /// No description provided for @adminChaletPayoutMarkPaidConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you transferred this amount to the owner?'**
+  String get adminChaletPayoutMarkPaidConfirmBody;
+
+  /// No description provided for @adminChaletPayoutMarkPaidConfirmYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, transfer completed'**
+  String get adminChaletPayoutMarkPaidConfirmYes;
+
+  /// No description provided for @adminChaletPayoutNeedsReviewHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This transaction needs review before payout.'**
+  String get adminChaletPayoutNeedsReviewHint;
+
+  /// No description provided for @adminChaletPayoutSnackOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Payout marked as paid.'**
+  String get adminChaletPayoutSnackOk;
+
+  /// No description provided for @adminChaletPayoutSnackErr.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update payout.'**
+  String get adminChaletPayoutSnackErr;
+
+  /// No description provided for @ownerChaletFinanceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chalet booking earnings'**
+  String get ownerChaletFinanceTitle;
+
+  /// No description provided for @ownerChaletFinanceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'From confirmed bookings (read-only)'**
+  String get ownerChaletFinanceSubtitle;
+
+  /// No description provided for @ownerChaletFinanceBookingsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookings with payout rows'**
+  String get ownerChaletFinanceBookingsCount;
+
+  /// No description provided for @ownerChaletFinanceNetTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total net (your share)'**
+  String get ownerChaletFinanceNetTotal;
+
+  /// No description provided for @ownerChaletFinanceCommissionTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total platform commission'**
+  String get ownerChaletFinanceCommissionTotal;
+
+  /// No description provided for @ownerChaletFinanceEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No chalet booking payouts yet.'**
+  String get ownerChaletFinanceEmpty;
+
+  /// No description provided for @chaletTransactionPayoutPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Payout pending'**
+  String get chaletTransactionPayoutPending;
+
+  /// No description provided for @chaletTransactionPayoutPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid out'**
+  String get chaletTransactionPayoutPaid;
+
+  /// No description provided for @chaletTransactionNetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Net (KWD)'**
+  String get chaletTransactionNetLabel;
+
+  /// No description provided for @chaletTransactionCommissionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Commission (KWD)'**
+  String get chaletTransactionCommissionLabel;
+
+  /// No description provided for @adminChaletPayoutsFilterPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending payouts'**
+  String get adminChaletPayoutsFilterPending;
+
+  /// No description provided for @adminChaletPayoutsFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All records'**
+  String get adminChaletPayoutsFilterAll;
+
+  /// No description provided for @adminChaletPayoutsTotalPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Total pending transfers to owners (net KWD)'**
+  String get adminChaletPayoutsTotalPending;
+
+  /// No description provided for @adminChaletRefundExecute.
+  ///
+  /// In en, this message translates to:
+  /// **'Record guest refund'**
+  String get adminChaletRefundExecute;
+
+  /// No description provided for @adminChaletRefundConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record refund on ledger?'**
+  String get adminChaletRefundConfirmTitle;
+
+  /// No description provided for @adminChaletRefundConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This updates the financial record only (no booking change). Refund amount follows server cancellation policy.'**
+  String get adminChaletRefundConfirmBody;
+
+  /// No description provided for @adminChaletRefundSnackOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund recorded on ledger.'**
+  String get adminChaletRefundSnackOk;
+
+  /// No description provided for @adminChaletRefundSnackErr.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not record refund.'**
+  String get adminChaletRefundSnackErr;
+
+  /// No description provided for @chaletTransactionPayoutStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payout status'**
+  String get chaletTransactionPayoutStatusLabel;
+
+  /// No description provided for @chaletTransactionOwnerPayoutLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner payout (KWD)'**
+  String get chaletTransactionOwnerPayoutLabel;
+
+  /// No description provided for @chaletTransactionPlatformRevenueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform revenue (KWD)'**
+  String get chaletTransactionPlatformRevenueLabel;
+
+  /// No description provided for @chaletTransactionRefundStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund status'**
+  String get chaletTransactionRefundStatusLabel;
+
+  /// No description provided for @chaletTransactionRefundAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund to guest (KWD)'**
+  String get chaletTransactionRefundAmountLabel;
+
+  /// No description provided for @chaletTransactionRefundReferenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund reference'**
+  String get chaletTransactionRefundReferenceLabel;
+
+  /// No description provided for @chaletTransactionPaymentVerifiedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment verified'**
+  String get chaletTransactionPaymentVerifiedLabel;
+
+  /// No description provided for @adminChaletPayoutBlockedHasIssueHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Payout is disabled until the ledger issue is resolved.'**
+  String get adminChaletPayoutBlockedHasIssueHint;
+
+  /// No description provided for @adminChaletLedgerOwnerUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown owner'**
+  String get adminChaletLedgerOwnerUnknown;
+
+  /// No description provided for @adminChaletLedgerHasIssueBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction has an issue'**
+  String get adminChaletLedgerHasIssueBadge;
+
+  /// No description provided for @adminChaletLedgerFinalizedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Processed'**
+  String get adminChaletLedgerFinalizedBadge;
+
+  /// No description provided for @ownerDashboardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chalet dashboard'**
+  String get ownerDashboardTitle;
+
+  /// No description provided for @ownerDashboardSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revenue, occupancy, and booking insights'**
+  String get ownerDashboardSubtitle;
+
+  /// No description provided for @ownerDashboardMetricPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid to you'**
+  String get ownerDashboardMetricPaid;
+
+  /// No description provided for @ownerDashboardMetricPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending payout'**
+  String get ownerDashboardMetricPending;
+
+  /// No description provided for @ownerDashboardMetricBookings.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookings'**
+  String get ownerDashboardMetricBookings;
+
+  /// No description provided for @ownerDashboardMetricCommission.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform fees'**
+  String get ownerDashboardMetricCommission;
+
+  /// No description provided for @ownerDashboardOccupancyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupancy (30 days)'**
+  String get ownerDashboardOccupancyTitle;
+
+  /// No description provided for @ownerDashboardOccupancyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Share of days with a stay in the last 30 days'**
+  String get ownerDashboardOccupancyHint;
+
+  /// No description provided for @ownerDashboardChartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Realized earnings'**
+  String get ownerDashboardChartTitle;
+
+  /// No description provided for @ownerDashboardChartSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'By payout date in the selected period'**
+  String get ownerDashboardChartSubtitle;
+
+  /// No description provided for @ownerDashboardChartPaidOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily revenue (paid payouts only)'**
+  String get ownerDashboardChartPaidOnly;
+
+  /// No description provided for @ownerDashboardChartNoActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'No paid payouts in this period.'**
+  String get ownerDashboardChartNoActivity;
+
+  /// No description provided for @ownerDashboardDataLimitLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Based on latest {count} transactions'**
+  String ownerDashboardDataLimitLabel(int count);
+
+  /// No description provided for @ownerDashboardDataLimitHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Older history may not be included.'**
+  String get ownerDashboardDataLimitHint;
+
+  /// No description provided for @ownerDashboardMetricPeriodSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'In the selected period'**
+  String get ownerDashboardMetricPeriodSubtitle;
+
+  /// No description provided for @ownerDashboardInsightsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'📈 Insights'**
+  String get ownerDashboardInsightsTitle;
+
+  /// No description provided for @ownerDashboardInsightEarningsUp.
+  ///
+  /// In en, this message translates to:
+  /// **'📈 Your paid earnings rose — keep your current pricing'**
+  String get ownerDashboardInsightEarningsUp;
+
+  /// No description provided for @ownerDashboardInsightNoRecentBookings.
+  ///
+  /// In en, this message translates to:
+  /// **'⚠️ No recent bookings — consider lowering your price'**
+  String get ownerDashboardInsightNoRecentBookings;
+
+  /// No description provided for @ownerDashboardInsightHighOccupancy.
+  ///
+  /// In en, this message translates to:
+  /// **'🔥 Your chalet is in demand — consider raising your price'**
+  String get ownerDashboardInsightHighOccupancy;
+
+  /// No description provided for @ownerDashboardEmptyFiltered.
+  ///
+  /// In en, this message translates to:
+  /// **'No bookings in this period (from loaded data).'**
+  String get ownerDashboardEmptyFiltered;
+
+  /// No description provided for @ownerDashboardRankingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chalet ranking (paid in period)'**
+  String get ownerDashboardRankingTitle;
+
+  /// No description provided for @ownerDashboardRangeToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get ownerDashboardRangeToday;
+
+  /// No description provided for @ownerDashboardRange7.
+  ///
+  /// In en, this message translates to:
+  /// **'7 days'**
+  String get ownerDashboardRange7;
+
+  /// No description provided for @ownerDashboardRange30.
+  ///
+  /// In en, this message translates to:
+  /// **'30 days'**
+  String get ownerDashboardRange30;
+
+  /// No description provided for @ownerDashboardRangeMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get ownerDashboardRangeMonth;
+
+  /// No description provided for @ownerDashboardLastPayoutLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Last payout: {when}'**
+  String ownerDashboardLastPayoutLine(String when);
+
+  /// No description provided for @ownerDashboardLastPayoutNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No paid payouts in loaded history yet.'**
+  String get ownerDashboardLastPayoutNone;
+
+  /// No description provided for @ownerDashboardRelativeJustNow.
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get ownerDashboardRelativeJustNow;
+
+  /// No description provided for @ownerDashboardRelativeMinutesAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 minute ago} other{{count} minutes ago}}'**
+  String ownerDashboardRelativeMinutesAgo(int count);
+
+  /// No description provided for @ownerDashboardRelativeHoursAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 hour ago} other{{count} hours ago}}'**
+  String ownerDashboardRelativeHoursAgo(int count);
+
+  /// No description provided for @ownerDashboardRelativeDaysAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 day ago} other{{count} days ago}}'**
+  String ownerDashboardRelativeDaysAgo(int count);
+
+  /// No description provided for @ownerDashboardRecentBookings.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent bookings'**
+  String get ownerDashboardRecentBookings;
+
+  /// No description provided for @ownerDashboardStatusPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get ownerDashboardStatusPaid;
+
+  /// No description provided for @ownerDashboardStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get ownerDashboardStatusPending;
+
+  /// No description provided for @ownerDashboardStatusRefunded.
+  ///
+  /// In en, this message translates to:
+  /// **'Refunded'**
+  String get ownerDashboardStatusRefunded;
+
+  /// No description provided for @ownerDashboardBestChalet.
+  ///
+  /// In en, this message translates to:
+  /// **'Top earning chalet'**
+  String get ownerDashboardBestChalet;
+
+  /// No description provided for @ownerDashboardDataNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Based on your latest recorded bookings'**
+  String get ownerDashboardDataNote;
+
+  /// No description provided for @ownerDashboardEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No data available yet.'**
+  String get ownerDashboardEmpty;
+
+  /// No description provided for @ownerDashboardListLimitNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing the most recent {count}'**
+  String ownerDashboardListLimitNote(int count);
+
+  /// No description provided for @notificationsInboxTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationsInboxTitle;
+
+  /// No description provided for @notificationsInboxEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No notifications right now 🚀'**
+  String get notificationsInboxEmpty;
+
+  /// No description provided for @notificationsMarkAllRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all as read'**
+  String get notificationsMarkAllRead;
+
+  /// No description provided for @notificationsQuickMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationsQuickMenu;
+
+  /// No description provided for @notificationsGroupToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get notificationsGroupToday;
+
+  /// No description provided for @notificationsGroupYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get notificationsGroupYesterday;
+
+  /// No description provided for @notificationsGroupOlder.
+  ///
+  /// In en, this message translates to:
+  /// **'Older'**
+  String get notificationsGroupOlder;
+
+  /// No description provided for @notificationsSwipeMarkRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark read'**
+  String get notificationsSwipeMarkRead;
+
+  /// No description provided for @notificationsSwipeDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide'**
+  String get notificationsSwipeDismiss;
+
+  /// No description provided for @notificationsHiddenSnackbar.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification hidden'**
+  String get notificationsHiddenSnackbar;
+
+  /// No description provided for @notificationsUndoHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get notificationsUndoHide;
+
+  /// No description provided for @notificationsHideAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide all'**
+  String get notificationsHideAll;
+
+  /// No description provided for @notificationsSectionUnread.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get notificationsSectionUnread;
+
+  /// No description provided for @notificationsSectionUnreadCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread ({count})'**
+  String notificationsSectionUnreadCount(int count);
+
+  /// No description provided for @notificationsSectionRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get notificationsSectionRead;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

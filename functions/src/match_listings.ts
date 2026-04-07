@@ -6,6 +6,7 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions/v1";
 import { FieldValue } from "firebase-admin/firestore";
+import { isNormalListingMarketplaceVisible } from "./propertyVisibility";
 
 const db = admin.firestore();
 
@@ -82,7 +83,14 @@ export const onPropertyUpdated = functions
     const after = change.after.data();
     if (!after) return;
 
-    if (after.approved !== true || after.status !== "active") return;
+    if (
+      after.approved !== true ||
+      after.isActive !== true ||
+      after.listingCategory !== "normal" ||
+      after.hiddenFromPublic !== false
+    ) {
+      return;
+    }
 
     const propertyId = context.params.propertyId as string;
     const wantedsSnap = await db
@@ -118,13 +126,16 @@ export const onWantedUpdated = functions
     const propsSnap = await db
       .collection("properties")
       .where("approved", "==", true)
-      .where("status", "==", "active")
+      .where("isActive", "==", true)
+      .where("listingCategory", "==", "normal")
+      .where("hiddenFromPublic", "==", false)
       .limit(300)
       .get();
 
     let count = 0;
     for (const doc of propsSnap.docs) {
       const propData = doc.data();
+      if (!isNormalListingMarketplaceVisible(propData)) continue;
       if (matches(propData, after)) {
         await upsertMatchLog(doc.id, wantedId, propData);
         count++;

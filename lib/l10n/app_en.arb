@@ -1128,7 +1128,7 @@
   "adminEarningsFilterLast30Days": "30 days",
   "adminRealEarningsHint": "Live Firestore totals (no analytics). Date ranges and daily buckets use Kuwait time (UTC+3) from stored UTC timestamps, so everyone sees the same figures.",
   "adminRealEarningsTotalRevenue": "Total revenue",
-  "adminRealEarningsLegacyNote": "Commission includes deals with dealStatus signed or closed (CRM finalized). Legacy status \"sold\" is not used for this total.",
+  "adminRealEarningsLegacyNote": "Commission includes deals with dealStatus contract signed or closed (CRM finalized; stored as signed / closed). Legacy status \"sold\" is not used for this total.",
   "adminRealEarningsChartEmpty": "No dated fee or commission events to plot.",
   "adminAuctionEarningsTotalFees": "Listing fees (paid)",
   "adminAuctionEarningsPaidListings": "Paid auctions",
@@ -1278,6 +1278,30 @@
 
   "adminDealsTab": "Deals",
   "@adminDealsTab": { "description": "Admin requests filter: brokerage deals" },
+  "adminDealsSubtabNew": "New",
+  "@adminDealsSubtabNew": { "description": "Deals list sub-tab: pipeline stage new" },
+  "adminDealsSubtabInProgress": "In Progress",
+  "@adminDealsSubtabInProgress": { "description": "Deals list sub-tab: not new" },
+  "adminDealsSubtabOverdue": "Overdue",
+  "@adminDealsSubtabOverdue": { "description": "Deals list sub-tab: follow-up past due threshold" },
+  "adminDealsCollectionTab": "Collection",
+  "@adminDealsCollectionTab": { "description": "Admin requests: deals awaiting commission payment" },
+  "adminDealsCollectionEmpty": "No deals awaiting commission collection.",
+  "@adminDealsCollectionEmpty": { "description": "Empty state for collection tab" },
+  "adminDealSendPaymentDetails": "Send Payment Details",
+  "@adminDealSendPaymentDetails": { "description": "Share IBAN and amount for manual transfer" },
+  "adminDealMarkCommissionReceived": "Mark as paid",
+  "@adminDealMarkCommissionReceived": { "description": "Confirm commission received and close deal" },
+  "adminDealPaymentShareBody": "Please transfer the commission to the following account:\nIBAN: {iban}\nAmount: {amount} KWD",
+  "@adminDealPaymentShareBody": {
+    "description": "Shared text for manual commission payment",
+    "placeholders": {
+      "iban": { "type": "String" },
+      "amount": { "type": "String" }
+    }
+  },
+  "adminDealCommissionCollectInvalidStatus": "Commission can only be collected for signed or closed deals.",
+  "adminDealCommissionAlreadyPaid": "Commission is already marked as paid for this deal.",
   "adminDealDetailTitle": "Deal",
   "adminDealPropertyPrice": "Listing price",
   "adminDealFinalPrice": "Final deal price",
@@ -1285,10 +1309,44 @@
   "adminDealSaveFinancials": "Save price & commission",
   "adminDealCalculateCommission": "Calculate commission",
   "adminDealFinalPriceRequired": "You must enter final price first",
+  "adminDealSignedPriceSheetTitle": "Enter Final Price",
+  "@adminDealSignedPriceSheetTitle": { "description": "Bottom sheet when setting deal status to signed" },
+  "adminDealSignedPriceHint": "e.g. 350",
+  "@adminDealSignedPriceHint": { "description": "Hint for final price field in signed sheet" },
   "adminDealPipelineStatus": "Deal status",
   "adminDealBookingAmount": "Booking / deposit amount",
   "adminDealCommissionPaid": "Commission received",
+  "adminDealCommissionPaidLockedHint": "Available when deal status is contract signed or closed.",
+  "@adminDealCommissionPaidLockedHint": { "description": "Shown when commission-paid toggle is disabled until finalized" },
+  "adminDealCommissionPaidFromLedgerHint": "Updated automatically when a commission payment is confirmed in the cash ledger (Admin → payments).",
+  "@adminDealCommissionPaidFromLedgerHint": { "description": "Explains that commission paid state is server-derived" },
+  "adminDealCommissionNotInLedger": "Confirm the commission in the cash ledger first (company_payments), then close the deal.",
+  "@adminDealCommissionNotInLedger": { "description": "Blocked close until ledger confirms commission" },
   "adminDealOpenListing": "Open listing",
+  "adminDealMarkContacted": "Log contact",
+  "@adminDealMarkContacted": { "description": "Sets lastContactAt without changing pipeline" },
+  "adminDealContactMarked": "Last contact time updated",
+  "adminDealAddNoteHint": "Add a note",
+  "adminDealSaveNote": "Save",
+  "adminDealNoteSaved": "Note saved",
+  "adminDealFollowUpDateLabel": "Follow-up appointment",
+  "adminDealFollowUpNotSet": "Not scheduled",
+  "adminDealFollowUpIn5Minutes": "In 5 minutes",
+  "@adminDealFollowUpIn5Minutes": { "description": "Quick-schedule follow-up reminder" },
+  "adminDealFollowUpIn30Minutes": "In 30 minutes",
+  "@adminDealFollowUpIn30Minutes": { "description": "Quick-schedule follow-up reminder" },
+  "adminDealPickFollowUpDateTime": "Choose date & time",
+  "adminDealFollowUpSaved": "Follow-up saved",
+  "adminDealFollowUpCleared": "Follow-up cleared",
+  "adminDealClearFollowUp": "Clear",
+  "adminDealNotesSectionTitle": "Notes",
+  "adminFollowupSectionTitle": "Due follow-ups",
+  "@adminFollowupSectionTitle": { "description": "Dashboard: CRM follow-ups past due" },
+  "adminFollowupSectionSubtitle": "Same deals sample as this dashboard; follow-up time reached",
+  "@adminFollowupSectionSubtitle": { "description": "Explains follow-up list scope" },
+  "adminFollowupEmpty": "No deals need follow-up right now.",
+  "adminFollowupLastNoteLabel": "Last note",
+  "@adminFollowupLastNoteLabel": { "description": "Label above truncated last CRM note" },
   "adminDealSaved": "Saved",
   "adminDealServiceSale": "Sale",
   "adminDealServiceRent": "Rent",
@@ -1303,8 +1361,10 @@
   "adminDealPipelineContacted": "Contacted",
   "adminDealPipelineQualified": "Qualified",
   "adminDealPipelineBooked": "Booked",
-  "adminDealPipelineSigned": "Signed",
+  "adminDealPipelineSigned": "Contract Signed",
   "adminDealPipelineClosed": "Closed",
+  "adminDealPipelineNotInterested": "Not interested",
+  "@adminDealPipelineNotInterested": { "description": "Deal pipeline: dropped lead" },
   "adminDealPipelineOtherCount": "Incomplete data: {count}",
   "@adminDealPipelineOtherCount": {
     "description": "Shown when some deals have non-standard dealStatus",
@@ -1322,7 +1382,7 @@
   "adminConversionFunnelNewToContacted": "New → Contacted",
   "adminConversionFunnelContactedToQualified": "Contacted → Qualified",
   "adminConversionFunnelQualifiedToBooked": "Qualified → Booked",
-  "adminConversionFunnelBookedToSigned": "Booked → Signed",
+  "adminConversionFunnelBookedToSigned": "Booked → Contract Signed",
 
   "adminCommissionSectionTitle": "Commission Overview",
   "@adminCommissionSectionTitle": { "description": "Dashboard commission block title" },
@@ -1360,7 +1420,7 @@
 
   "adminPrioritySectionTitle": "Follow-up Priority",
   "@adminPrioritySectionTitle": { "description": "Dashboard: ranked follow-ups for unpaid commission" },
-  "adminPrioritySectionSubtitle": "Unpaid commission — booked, signed, or closed (same deals sample)",
+  "adminPrioritySectionSubtitle": "Unpaid commission — booked, contract signed, or closed (same deals sample)",
   "@adminPrioritySectionSubtitle": { "description": "Scope of priority list" },
   "adminPriorityEmpty": "No deals match follow-up criteria in this sample.",
   "adminPriorityLabelHigh": "High 🔥",
@@ -1384,6 +1444,141 @@
     "placeholders": {
       "count": { "type": "int" }
     }
-  }
+  },
 
+  "adminPropertyChaletModeLabel": "Chalet type",
+  "@adminPropertyChaletModeLabel": { "description": "Admin listing card: chaletMode heading" },
+  "adminPropertyChaletModeDaily": "Daily booking",
+  "@adminPropertyChaletModeDaily": { "description": "chaletMode daily" },
+  "adminPropertyChaletModeMonthly": "Monthly rent",
+  "@adminPropertyChaletModeMonthly": { "description": "chaletMode monthly" },
+  "adminPropertyChaletModeSale": "For sale",
+  "@adminPropertyChaletModeSale": { "description": "chaletMode sale" },
+
+  "adminChaletPayoutsTitle": "Chalet booking payouts",
+  "adminChaletPayoutTransferToOwner": "Pay owner (bank)",
+  "adminChaletPayoutMarkPaidConfirmTitle": "Confirm transfer",
+  "adminChaletPayoutMarkPaidConfirmBody": "Are you sure you transferred this amount to the owner?",
+  "adminChaletPayoutMarkPaidConfirmYes": "Yes, transfer completed",
+  "adminChaletPayoutNeedsReviewHint": "This transaction needs review before payout.",
+  "adminChaletPayoutSnackOk": "Payout marked as paid.",
+  "adminChaletPayoutSnackErr": "Could not update payout.",
+  "ownerChaletFinanceTitle": "Chalet booking earnings",
+  "ownerChaletFinanceSubtitle": "From confirmed bookings (read-only)",
+  "ownerChaletFinanceBookingsCount": "Bookings with payout rows",
+  "ownerChaletFinanceNetTotal": "Total net (your share)",
+  "ownerChaletFinanceCommissionTotal": "Total platform commission",
+  "ownerChaletFinanceEmpty": "No chalet booking payouts yet.",
+  "chaletTransactionPayoutPending": "Payout pending",
+  "chaletTransactionPayoutPaid": "Paid out",
+  "chaletTransactionNetLabel": "Net (KWD)",
+  "chaletTransactionCommissionLabel": "Commission (KWD)",
+  "adminChaletPayoutsFilterPending": "Pending payouts",
+  "adminChaletPayoutsFilterAll": "All records",
+  "adminChaletPayoutsTotalPending": "Total pending transfers to owners (net KWD)",
+  "adminChaletRefundExecute": "Record guest refund",
+  "adminChaletRefundConfirmTitle": "Record refund on ledger?",
+  "adminChaletRefundConfirmBody": "This updates the financial record only (no booking change). Refund amount follows server cancellation policy.",
+  "adminChaletRefundSnackOk": "Refund recorded on ledger.",
+  "adminChaletRefundSnackErr": "Could not record refund.",
+  "chaletTransactionPayoutStatusLabel": "Payout status",
+  "chaletTransactionOwnerPayoutLabel": "Owner payout (KWD)",
+  "chaletTransactionPlatformRevenueLabel": "Platform revenue (KWD)",
+  "chaletTransactionRefundStatusLabel": "Refund status",
+  "chaletTransactionRefundAmountLabel": "Refund to guest (KWD)",
+  "chaletTransactionRefundReferenceLabel": "Refund reference",
+  "chaletTransactionPaymentVerifiedLabel": "Payment verified",
+  "adminChaletPayoutBlockedHasIssueHint": "Payout is disabled until the ledger issue is resolved.",
+  "adminChaletLedgerOwnerUnknown": "Unknown owner",
+  "adminChaletLedgerHasIssueBadge": "Transaction has an issue",
+  "adminChaletLedgerFinalizedBadge": "Processed",
+  "ownerDashboardTitle": "Chalet dashboard",
+  "ownerDashboardSubtitle": "Revenue, occupancy, and booking insights",
+  "ownerDashboardMetricPaid": "Paid to you",
+  "ownerDashboardMetricPending": "Pending payout",
+  "ownerDashboardMetricBookings": "Bookings",
+  "ownerDashboardMetricCommission": "Platform fees",
+  "ownerDashboardOccupancyTitle": "Occupancy (30 days)",
+  "ownerDashboardOccupancyHint": "Share of days with a stay in the last 30 days",
+  "ownerDashboardChartTitle": "Realized earnings",
+  "ownerDashboardChartSubtitle": "By payout date in the selected period",
+  "ownerDashboardChartPaidOnly": "Daily revenue (paid payouts only)",
+  "ownerDashboardChartNoActivity": "No paid payouts in this period.",
+  "ownerDashboardDataLimitLabel": "Based on latest {count} transactions",
+  "@ownerDashboardDataLimitLabel": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ownerDashboardDataLimitHint": "Older history may not be included.",
+  "ownerDashboardMetricPeriodSubtitle": "In the selected period",
+  "ownerDashboardInsightsTitle": "📈 Insights",
+  "ownerDashboardInsightEarningsUp": "📈 Your paid earnings rose — keep your current pricing",
+  "ownerDashboardInsightNoRecentBookings": "⚠️ No recent bookings — consider lowering your price",
+  "ownerDashboardInsightHighOccupancy": "🔥 Your chalet is in demand — consider raising your price",
+  "ownerDashboardEmptyFiltered": "No bookings in this period (from loaded data).",
+  "ownerDashboardRankingTitle": "Chalet ranking (paid in period)",
+  "ownerDashboardRangeToday": "Today",
+  "ownerDashboardRange7": "7 days",
+  "ownerDashboardRange30": "30 days",
+  "ownerDashboardRangeMonth": "This month",
+  "ownerDashboardLastPayoutLine": "Last payout: {when}",
+  "@ownerDashboardLastPayoutLine": {
+    "placeholders": {
+      "when": { "type": "String" }
+    }
+  },
+  "ownerDashboardLastPayoutNone": "No paid payouts in loaded history yet.",
+  "ownerDashboardRelativeJustNow": "just now",
+  "ownerDashboardRelativeMinutesAgo": "{count, plural, one{1 minute ago} other{{count} minutes ago}}",
+  "@ownerDashboardRelativeMinutesAgo": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ownerDashboardRelativeHoursAgo": "{count, plural, one{1 hour ago} other{{count} hours ago}}",
+  "@ownerDashboardRelativeHoursAgo": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ownerDashboardRelativeDaysAgo": "{count, plural, one{1 day ago} other{{count} days ago}}",
+  "@ownerDashboardRelativeDaysAgo": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ownerDashboardRecentBookings": "Recent bookings",
+  "ownerDashboardStatusPaid": "Paid",
+  "ownerDashboardStatusPending": "Pending",
+  "ownerDashboardStatusRefunded": "Refunded",
+  "ownerDashboardBestChalet": "Top earning chalet",
+  "ownerDashboardDataNote": "Based on your latest recorded bookings",
+  "ownerDashboardEmpty": "No data available yet.",
+  "ownerDashboardListLimitNote": "Showing the most recent {count}",
+  "@ownerDashboardListLimitNote": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "notificationsInboxTitle": "Notifications",
+  "notificationsInboxEmpty": "No notifications right now 🚀",
+  "notificationsMarkAllRead": "Mark all as read",
+  "notificationsQuickMenu": "Notifications",
+  "notificationsGroupToday": "Today",
+  "notificationsGroupYesterday": "Yesterday",
+  "notificationsGroupOlder": "Older",
+  "notificationsSwipeMarkRead": "Mark read",
+  "notificationsSwipeDismiss": "Hide",
+  "notificationsHiddenSnackbar": "Notification hidden",
+  "notificationsUndoHide": "Undo",
+  "notificationsHideAll": "Hide all",
+  "notificationsSectionUnread": "Unread",
+  "notificationsSectionUnreadCount": "Unread ({count})",
+  "@notificationsSectionUnreadCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "notificationsSectionRead": "Read"
 }

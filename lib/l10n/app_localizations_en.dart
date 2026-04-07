@@ -1457,7 +1457,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminRealEarningsTotalRevenue => 'Total revenue';
 
   @override
-  String get adminRealEarningsLegacyNote => 'Commission includes deals with dealStatus signed or closed (CRM finalized). Legacy status \"sold\" is not used for this total.';
+  String get adminRealEarningsLegacyNote => 'Commission includes deals with dealStatus contract signed or closed (CRM finalized; stored as signed / closed). Legacy status \"sold\" is not used for this total.';
 
   @override
   String get adminRealEarningsChartEmpty => 'No dated fee or commission events to plot.';
@@ -1854,6 +1854,38 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDealsTab => 'Deals';
 
   @override
+  String get adminDealsSubtabNew => 'New';
+
+  @override
+  String get adminDealsSubtabInProgress => 'In Progress';
+
+  @override
+  String get adminDealsSubtabOverdue => 'Overdue';
+
+  @override
+  String get adminDealsCollectionTab => 'Collection';
+
+  @override
+  String get adminDealsCollectionEmpty => 'No deals awaiting commission collection.';
+
+  @override
+  String get adminDealSendPaymentDetails => 'Send Payment Details';
+
+  @override
+  String get adminDealMarkCommissionReceived => 'Mark as paid';
+
+  @override
+  String adminDealPaymentShareBody(String iban, String amount) {
+    return 'Please transfer the commission to the following account:\nIBAN: $iban\nAmount: $amount KWD';
+  }
+
+  @override
+  String get adminDealCommissionCollectInvalidStatus => 'Commission can only be collected for signed or closed deals.';
+
+  @override
+  String get adminDealCommissionAlreadyPaid => 'Commission is already marked as paid for this deal.';
+
+  @override
   String get adminDealDetailTitle => 'Deal';
 
   @override
@@ -1875,6 +1907,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDealFinalPriceRequired => 'You must enter final price first';
 
   @override
+  String get adminDealSignedPriceSheetTitle => 'Enter Final Price';
+
+  @override
+  String get adminDealSignedPriceHint => 'e.g. 350';
+
+  @override
   String get adminDealPipelineStatus => 'Deal status';
 
   @override
@@ -1884,7 +1922,70 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDealCommissionPaid => 'Commission received';
 
   @override
+  String get adminDealCommissionPaidLockedHint => 'Available when deal status is contract signed or closed.';
+
+  @override
+  String get adminDealCommissionPaidFromLedgerHint => 'Updated automatically when a commission payment is confirmed in the cash ledger (Admin → payments).';
+
+  @override
+  String get adminDealCommissionNotInLedger => 'Confirm the commission in the cash ledger first (company_payments), then close the deal.';
+
+  @override
   String get adminDealOpenListing => 'Open listing';
+
+  @override
+  String get adminDealMarkContacted => 'Log contact';
+
+  @override
+  String get adminDealContactMarked => 'Last contact time updated';
+
+  @override
+  String get adminDealAddNoteHint => 'Add a note';
+
+  @override
+  String get adminDealSaveNote => 'Save';
+
+  @override
+  String get adminDealNoteSaved => 'Note saved';
+
+  @override
+  String get adminDealFollowUpDateLabel => 'Follow-up appointment';
+
+  @override
+  String get adminDealFollowUpNotSet => 'Not scheduled';
+
+  @override
+  String get adminDealFollowUpIn5Minutes => 'In 5 minutes';
+
+  @override
+  String get adminDealFollowUpIn30Minutes => 'In 30 minutes';
+
+  @override
+  String get adminDealPickFollowUpDateTime => 'Choose date & time';
+
+  @override
+  String get adminDealFollowUpSaved => 'Follow-up saved';
+
+  @override
+  String get adminDealFollowUpCleared => 'Follow-up cleared';
+
+  @override
+  String get adminDealClearFollowUp => 'Clear';
+
+  @override
+  String get adminDealNotesSectionTitle => 'Notes';
+
+  @override
+  String get adminFollowupSectionTitle => 'Due follow-ups';
+
+  @override
+  String get adminFollowupSectionSubtitle => 'Same deals sample as this dashboard; follow-up time reached';
+
+  @override
+  String get adminFollowupEmpty => 'No deals need follow-up right now.';
+
+  @override
+  String get adminFollowupLastNoteLabel => 'Last note';
 
   @override
   String get adminDealSaved => 'Saved';
@@ -1917,10 +2018,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminDealPipelineBooked => 'Booked';
 
   @override
-  String get adminDealPipelineSigned => 'Signed';
+  String get adminDealPipelineSigned => 'Contract Signed';
 
   @override
   String get adminDealPipelineClosed => 'Closed';
+
+  @override
+  String get adminDealPipelineNotInterested => 'Not interested';
 
   @override
   String adminDealPipelineOtherCount(int count) {
@@ -1946,7 +2050,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConversionFunnelQualifiedToBooked => 'Qualified → Booked';
 
   @override
-  String get adminConversionFunnelBookedToSigned => 'Booked → Signed';
+  String get adminConversionFunnelBookedToSigned => 'Booked → Contract Signed';
 
   @override
   String get adminCommissionSectionTitle => 'Commission Overview';
@@ -2001,7 +2105,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminPrioritySectionTitle => 'Follow-up Priority';
 
   @override
-  String get adminPrioritySectionSubtitle => 'Unpaid commission — booked, signed, or closed (same deals sample)';
+  String get adminPrioritySectionSubtitle => 'Unpaid commission — booked, contract signed, or closed (same deals sample)';
 
   @override
   String get adminPriorityEmpty => 'No deals match follow-up criteria in this sample.';
@@ -2036,4 +2140,321 @@ class AppLocalizationsEn extends AppLocalizations {
   String adminLeadsSplitOtherServiceTypes(int count) {
     return '$count deals with other or missing service type (excluded from split)';
   }
+
+  @override
+  String get adminPropertyChaletModeLabel => 'Chalet type';
+
+  @override
+  String get adminPropertyChaletModeDaily => 'Daily booking';
+
+  @override
+  String get adminPropertyChaletModeMonthly => 'Monthly rent';
+
+  @override
+  String get adminPropertyChaletModeSale => 'For sale';
+
+  @override
+  String get adminChaletPayoutsTitle => 'Chalet booking payouts';
+
+  @override
+  String get adminChaletPayoutTransferToOwner => 'Pay owner (bank)';
+
+  @override
+  String get adminChaletPayoutMarkPaidConfirmTitle => 'Confirm transfer';
+
+  @override
+  String get adminChaletPayoutMarkPaidConfirmBody => 'Are you sure you transferred this amount to the owner?';
+
+  @override
+  String get adminChaletPayoutMarkPaidConfirmYes => 'Yes, transfer completed';
+
+  @override
+  String get adminChaletPayoutNeedsReviewHint => 'This transaction needs review before payout.';
+
+  @override
+  String get adminChaletPayoutSnackOk => 'Payout marked as paid.';
+
+  @override
+  String get adminChaletPayoutSnackErr => 'Could not update payout.';
+
+  @override
+  String get ownerChaletFinanceTitle => 'Chalet booking earnings';
+
+  @override
+  String get ownerChaletFinanceSubtitle => 'From confirmed bookings (read-only)';
+
+  @override
+  String get ownerChaletFinanceBookingsCount => 'Bookings with payout rows';
+
+  @override
+  String get ownerChaletFinanceNetTotal => 'Total net (your share)';
+
+  @override
+  String get ownerChaletFinanceCommissionTotal => 'Total platform commission';
+
+  @override
+  String get ownerChaletFinanceEmpty => 'No chalet booking payouts yet.';
+
+  @override
+  String get chaletTransactionPayoutPending => 'Payout pending';
+
+  @override
+  String get chaletTransactionPayoutPaid => 'Paid out';
+
+  @override
+  String get chaletTransactionNetLabel => 'Net (KWD)';
+
+  @override
+  String get chaletTransactionCommissionLabel => 'Commission (KWD)';
+
+  @override
+  String get adminChaletPayoutsFilterPending => 'Pending payouts';
+
+  @override
+  String get adminChaletPayoutsFilterAll => 'All records';
+
+  @override
+  String get adminChaletPayoutsTotalPending => 'Total pending transfers to owners (net KWD)';
+
+  @override
+  String get adminChaletRefundExecute => 'Record guest refund';
+
+  @override
+  String get adminChaletRefundConfirmTitle => 'Record refund on ledger?';
+
+  @override
+  String get adminChaletRefundConfirmBody => 'This updates the financial record only (no booking change). Refund amount follows server cancellation policy.';
+
+  @override
+  String get adminChaletRefundSnackOk => 'Refund recorded on ledger.';
+
+  @override
+  String get adminChaletRefundSnackErr => 'Could not record refund.';
+
+  @override
+  String get chaletTransactionPayoutStatusLabel => 'Payout status';
+
+  @override
+  String get chaletTransactionOwnerPayoutLabel => 'Owner payout (KWD)';
+
+  @override
+  String get chaletTransactionPlatformRevenueLabel => 'Platform revenue (KWD)';
+
+  @override
+  String get chaletTransactionRefundStatusLabel => 'Refund status';
+
+  @override
+  String get chaletTransactionRefundAmountLabel => 'Refund to guest (KWD)';
+
+  @override
+  String get chaletTransactionRefundReferenceLabel => 'Refund reference';
+
+  @override
+  String get chaletTransactionPaymentVerifiedLabel => 'Payment verified';
+
+  @override
+  String get adminChaletPayoutBlockedHasIssueHint => 'Payout is disabled until the ledger issue is resolved.';
+
+  @override
+  String get adminChaletLedgerOwnerUnknown => 'Unknown owner';
+
+  @override
+  String get adminChaletLedgerHasIssueBadge => 'Transaction has an issue';
+
+  @override
+  String get adminChaletLedgerFinalizedBadge => 'Processed';
+
+  @override
+  String get ownerDashboardTitle => 'Chalet dashboard';
+
+  @override
+  String get ownerDashboardSubtitle => 'Revenue, occupancy, and booking insights';
+
+  @override
+  String get ownerDashboardMetricPaid => 'Paid to you';
+
+  @override
+  String get ownerDashboardMetricPending => 'Pending payout';
+
+  @override
+  String get ownerDashboardMetricBookings => 'Bookings';
+
+  @override
+  String get ownerDashboardMetricCommission => 'Platform fees';
+
+  @override
+  String get ownerDashboardOccupancyTitle => 'Occupancy (30 days)';
+
+  @override
+  String get ownerDashboardOccupancyHint => 'Share of days with a stay in the last 30 days';
+
+  @override
+  String get ownerDashboardChartTitle => 'Realized earnings';
+
+  @override
+  String get ownerDashboardChartSubtitle => 'By payout date in the selected period';
+
+  @override
+  String get ownerDashboardChartPaidOnly => 'Daily revenue (paid payouts only)';
+
+  @override
+  String get ownerDashboardChartNoActivity => 'No paid payouts in this period.';
+
+  @override
+  String ownerDashboardDataLimitLabel(int count) {
+    return 'Based on latest $count transactions';
+  }
+
+  @override
+  String get ownerDashboardDataLimitHint => 'Older history may not be included.';
+
+  @override
+  String get ownerDashboardMetricPeriodSubtitle => 'In the selected period';
+
+  @override
+  String get ownerDashboardInsightsTitle => '📈 Insights';
+
+  @override
+  String get ownerDashboardInsightEarningsUp => '📈 Your paid earnings rose — keep your current pricing';
+
+  @override
+  String get ownerDashboardInsightNoRecentBookings => '⚠️ No recent bookings — consider lowering your price';
+
+  @override
+  String get ownerDashboardInsightHighOccupancy => '🔥 Your chalet is in demand — consider raising your price';
+
+  @override
+  String get ownerDashboardEmptyFiltered => 'No bookings in this period (from loaded data).';
+
+  @override
+  String get ownerDashboardRankingTitle => 'Chalet ranking (paid in period)';
+
+  @override
+  String get ownerDashboardRangeToday => 'Today';
+
+  @override
+  String get ownerDashboardRange7 => '7 days';
+
+  @override
+  String get ownerDashboardRange30 => '30 days';
+
+  @override
+  String get ownerDashboardRangeMonth => 'This month';
+
+  @override
+  String ownerDashboardLastPayoutLine(String when) {
+    return 'Last payout: $when';
+  }
+
+  @override
+  String get ownerDashboardLastPayoutNone => 'No paid payouts in loaded history yet.';
+
+  @override
+  String get ownerDashboardRelativeJustNow => 'just now';
+
+  @override
+  String ownerDashboardRelativeMinutesAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count minutes ago',
+      one: '1 minute ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ownerDashboardRelativeHoursAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count hours ago',
+      one: '1 hour ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ownerDashboardRelativeDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days ago',
+      one: '1 day ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ownerDashboardRecentBookings => 'Recent bookings';
+
+  @override
+  String get ownerDashboardStatusPaid => 'Paid';
+
+  @override
+  String get ownerDashboardStatusPending => 'Pending';
+
+  @override
+  String get ownerDashboardStatusRefunded => 'Refunded';
+
+  @override
+  String get ownerDashboardBestChalet => 'Top earning chalet';
+
+  @override
+  String get ownerDashboardDataNote => 'Based on your latest recorded bookings';
+
+  @override
+  String get ownerDashboardEmpty => 'No data available yet.';
+
+  @override
+  String ownerDashboardListLimitNote(int count) {
+    return 'Showing the most recent $count';
+  }
+
+  @override
+  String get notificationsInboxTitle => 'Notifications';
+
+  @override
+  String get notificationsInboxEmpty => 'No notifications right now 🚀';
+
+  @override
+  String get notificationsMarkAllRead => 'Mark all as read';
+
+  @override
+  String get notificationsQuickMenu => 'Notifications';
+
+  @override
+  String get notificationsGroupToday => 'Today';
+
+  @override
+  String get notificationsGroupYesterday => 'Yesterday';
+
+  @override
+  String get notificationsGroupOlder => 'Older';
+
+  @override
+  String get notificationsSwipeMarkRead => 'Mark read';
+
+  @override
+  String get notificationsSwipeDismiss => 'Hide';
+
+  @override
+  String get notificationsHiddenSnackbar => 'Notification hidden';
+
+  @override
+  String get notificationsUndoHide => 'Undo';
+
+  @override
+  String get notificationsHideAll => 'Hide all';
+
+  @override
+  String get notificationsSectionUnread => 'Unread';
+
+  @override
+  String notificationsSectionUnreadCount(int count) {
+    return 'Unread ($count)';
+  }
+
+  @override
+  String get notificationsSectionRead => 'Read';
 }

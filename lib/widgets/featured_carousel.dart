@@ -9,15 +9,14 @@ import 'package:aqarai_app/models/listing_enums.dart';
 class FeaturedCarousel extends StatelessWidget {
   final String serviceType;
   final String title;
-  final String? typeFilter;
-  final String? excludeType;
+  /// [ListingCategory.normal] or [ListingCategory.chalet] — drives visibility query (no status).
+  final String listingCategory;
 
   const FeaturedCarousel({
     super.key,
     required this.serviceType,
     required this.title,
-    this.typeFilter,
-    this.excludeType,
+    required this.listingCategory,
   });
 
   String _normalizeType(dynamic raw) {
@@ -81,14 +80,17 @@ class FeaturedCarousel extends StatelessWidget {
 
     Query<Map<String, dynamic>> query = firestore
         .collection('properties')
-        .where('approved', isEqualTo: true)
-        .where('status', isEqualTo: 'active')
+        .where('approved', isEqualTo: true);
+
+    if (listingCategory == ListingCategory.normal) {
+      query = query.where('isActive', isEqualTo: true);
+    }
+
+    query = query
+        .where('listingCategory', isEqualTo: listingCategory)
+        .where('hiddenFromPublic', isEqualTo: false)
         .where('serviceType', isEqualTo: serviceType)
         .where('featuredUntil', isGreaterThan: now);
-
-    if (typeFilter != null && typeFilter!.isNotEmpty) {
-      query = query.where('type', isEqualTo: typeFilter);
-    }
 
     return query
         .orderBy('featuredUntil')

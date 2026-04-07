@@ -9,6 +9,7 @@ abstract final class DealPipelineStatus {
   static const String booked = DealStatus.booked;
   static const String signed = DealStatus.signed;
   static const String closed = DealStatus.closed;
+  static const String notInterested = DealStatus.notInterested;
 
   static const List<String> ordered = [
     DealStatus.newLead,
@@ -16,6 +17,7 @@ abstract final class DealPipelineStatus {
     DealStatus.qualified,
     DealStatus.booked,
     DealStatus.signed,
+    DealStatus.notInterested,
     DealStatus.closed,
   ];
 

@@ -7,7 +7,7 @@
 // Context policy (sent to OpenAI via Cloud Function):
 //   - Last 8 chat messages (role + content only).
 //   - Compact currentFilters: areaCode, type, serviceType, budget, bedrooms.
-//   - Top 3 last results as short objects: id, areaAr, areaEn, type, price, size.
+//   - Top 3 last results: propertyId, price, area, propertyType, rank (1–3) for reference_listing (الأرخص، الثاني، …).
 //
 // OPENAI_API_KEY: Stored in Firebase (backend only). See "Adding OPENAI_API_KEY"
 // section at the bottom of this file.
@@ -28,6 +28,7 @@ class AgentAnalyzeResult {
   final bool resetFilters;
   final bool isComplete;
   final List<String> clarifyingQuestions;
+  final String? referencedPropertyId;
 
   AgentAnalyzeResult({
     required this.intent,
@@ -35,17 +36,20 @@ class AgentAnalyzeResult {
     required this.resetFilters,
     required this.isComplete,
     required this.clarifyingQuestions,
+    this.referencedPropertyId,
   });
 
   static AgentAnalyzeResult fromJson(Map<String, dynamic> json) {
     final patch = json['params_patch'];
     final list = json['clarifying_questions'];
+    final refRaw = json['referenced_property_id']?.toString().trim();
     return AgentAnalyzeResult(
       intent: (json['intent'] ?? 'general_question').toString(),
       paramsPatch: patch is Map ? Map<String, dynamic>.from(patch) : {},
       resetFilters: json['reset_filters'] == true,
       isComplete: json['is_complete'] == true,
       clarifyingQuestions: list is List ? list.map((e) => e.toString()).toList() : [],
+      referencedPropertyId: (refRaw != null && refRaw.isNotEmpty) ? refRaw : null,
     );
   }
 }
@@ -67,6 +71,8 @@ class AiBrainService {
     required String message,
     required List<Map<String, String>> chatHistory,
     Map<String, dynamic>? currentFilters,
+    List<Map<String, dynamic>> top3LastResults = const [],
+    String locale = 'ar',
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -81,8 +87,9 @@ class AiBrainService {
       message: message,
       last8Messages: last8,
       currentFilters: currentFilters ?? {},
-      top3LastResults: [],
+      top3LastResults: top3LastResults,
       idToken: idToken,
+      locale: locale,
     );
     return <String, dynamic>{
       'intent': result.intent,
@@ -90,6 +97,8 @@ class AiBrainService {
       'reset_filters': result.resetFilters,
       'is_complete': result.isComplete,
       'clarifying_questions': result.clarifyingQuestions,
+      if (result.referencedPropertyId != null && result.referencedPropertyId!.isNotEmpty)
+        'referenced_property_id': result.referencedPropertyId,
     };
   }
 
@@ -100,6 +109,7 @@ class AiBrainService {
     required Map<String, dynamic> currentFilters,
     required List<Map<String, dynamic>> top3LastResults,
     required String idToken,
+    String locale = 'ar',
   }) async {
     final body = jsonEncode({
       'data': {
@@ -107,6 +117,7 @@ class AiBrainService {
         'last8Messages': last8Messages,
         'currentFilters': currentFilters,
         'top3LastResults': top3LastResults,
+        'locale': locale,
       },
     });
     final response = await http

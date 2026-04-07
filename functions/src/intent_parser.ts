@@ -3,6 +3,7 @@
  * Exposes parseUserMessage and supporting helpers.
  */
 import { KUWAIT_AREAS } from "./kuwait_areas";
+import { resolveAreaCodeFromMessage } from "./resolve_area_code_text";
 
 // ---------------------------------------------------------------------------
 // Arabic normalization
@@ -134,6 +135,19 @@ export function extractAreaFromText(text: string): string | null {
 export function detectSearchModifier(text: string): { type: string } | null {
   if (!text || typeof text !== "string") return null;
   const t = normalizeArabic(text.trim());
+  // Listing picks (الأرخص / الثاني …) handled by resolveTop3ResultReference — not budget refinement
+  if (
+    t.includes("الارخص") ||
+    t.includes("الاغلى") ||
+    t.includes("الاول") ||
+    t.includes("الثاني") ||
+    t.includes("الثالث") ||
+    t.includes("الي قبل") ||
+    t.includes("اللي قبل") ||
+    t.includes("السابق")
+  ) {
+    return null;
+  }
   if (t.includes("ارخص") || t.includes("اقل") || t.includes("اوفر")) return { type: "budget_down" };
   if (t.includes("اغلى") || t.includes("افخم")) return { type: "budget_up" };
   if (t.includes("اكبر") || t.includes("مساحه اكبر")) return { type: "size_up" };
@@ -237,6 +251,140 @@ export function isNewSearchTrigger(text: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Last-shown results memory (assistant top 3) — ordinal / price picks
+// ---------------------------------------------------------------------------
+
+export interface Top3ResultMemoryRow {
+  propertyId: string;
+  price: number | null;
+  rank: number;
+  propertyType?: string;
+  area?: string;
+}
+
+function rowPrice(n: unknown): number | null {
+  if (n == null || n === "") return null;
+  if (typeof n === "number" && !Number.isNaN(n)) return n;
+  const x = Number(n);
+  return Number.isNaN(x) ? null : x;
+}
+
+/** Map user shorthand to one of the last shown listings (by rank or price). */
+export function resolveTop3ResultReference(
+  rawMessage: string,
+  rows: Top3ResultMemoryRow[],
+  locale: string
+): string | null {
+  if (!rows.length) return null;
+  const msg = (rawMessage || "").trim();
+  if (!msg) return null;
+  const t = normalizeArabic(msg.toLowerCase());
+  const tl = msg.toLowerCase();
+
+  const byRank = (r: number): Top3ResultMemoryRow | null => {
+    const found = rows.find((x) => x.rank === r);
+    if (found) return found;
+    return r >= 1 && r <= rows.length ? rows[r - 1]! : null;
+  };
+
+  const withPrice = rows.filter((r) => r.price != null && !Number.isNaN(r.price!));
+  if (withPrice.length > 0) {
+    if (
+      t.includes("الارخص") ||
+      t.includes("اقل سعر") ||
+      t.includes("اوفر") ||
+      tl.includes("cheapest") ||
+      tl.includes("lowest price")
+    ) {
+      const min = withPrice.reduce((a, b) => (a.price! <= b.price! ? a : b));
+      return min.propertyId;
+    }
+    if (
+      t.includes("الاغلى") ||
+      t.includes("اعلى سعر") ||
+      tl.includes("most expensive") ||
+      tl.includes("priciest") ||
+      tl.includes("highest price")
+    ) {
+      const max = withPrice.reduce((a, b) => (a.price! >= b.price! ? a : b));
+      return max.propertyId;
+    }
+  }
+
+  if (
+    t.includes("الاول") ||
+    t.includes("اول واحد") ||
+    tl.includes("the first") ||
+    tl === "first" ||
+    tl.startsWith("first ")
+  ) {
+    return byRank(1)?.propertyId ?? rows[0]?.propertyId ?? null;
+  }
+  if (
+    t.includes("الثاني") ||
+    t.includes("ثاني واحد") ||
+    tl.includes("the second") ||
+    tl === "second" ||
+    tl.startsWith("second ")
+  ) {
+    return byRank(2)?.propertyId ?? rows[1]?.propertyId ?? null;
+  }
+  if (t.includes("الثالث") || tl.includes("the third") || tl === "third") {
+    return byRank(3)?.propertyId ?? rows[2]?.propertyId ?? null;
+  }
+
+  // Last card in the assistant list (bottom of the top 3)
+  if (
+    t.includes("الي قبل") ||
+    t.includes("اللي قبل") ||
+    t.includes("السابق") ||
+    t.includes("ذاك") ||
+    t.includes("الاخير") ||
+    t.includes("اخر واحد") ||
+    tl.includes("the previous") ||
+    tl.includes("previous one") ||
+    tl.includes("the last") ||
+    tl.includes("last one")
+  ) {
+    const last = rows.reduce((a, b) => (a.rank >= b.rank ? a : b));
+    return last.propertyId;
+  }
+
+  // English ordinals without "the"
+  if (locale === "en") {
+    if (/^1st\b|^#1\b/i.test(tl.trim())) return byRank(1)?.propertyId ?? rows[0]?.propertyId ?? null;
+    if (/^2nd\b|^#2\b/i.test(tl.trim())) return byRank(2)?.propertyId ?? rows[1]?.propertyId ?? null;
+    if (/^3rd\b|^#3\b/i.test(tl.trim())) return byRank(3)?.propertyId ?? rows[2]?.propertyId ?? null;
+  }
+
+  return null;
+}
+
+export function normalizeTop3MemoryRows(raw: unknown[]): Top3ResultMemoryRow[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Top3ResultMemoryRow[] = [];
+  for (let i = 0; i < raw.length && out.length < 3; i++) {
+    const row = raw[i] as Record<string, unknown>;
+    const idRaw = row.propertyId ?? row.id;
+    const propertyId = idRaw != null ? String(idRaw).trim() : "";
+    if (!propertyId) continue;
+    const rankRaw = row.rank;
+    const rank =
+      typeof rankRaw === "number" && rankRaw >= 1 && rankRaw <= 3
+        ? rankRaw
+        : out.length + 1;
+    out.push({
+      propertyId,
+      price: rowPrice(row.price),
+      rank,
+      propertyType: row.propertyType != null ? String(row.propertyType) : undefined,
+      area: row.area != null ? String(row.area) : undefined,
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Main entry: parse user message (no Firestore, no OpenAI)
 // ---------------------------------------------------------------------------
 
@@ -270,7 +418,9 @@ export function parseUserMessage(rawMessage: string, _locale: string): ParsedInt
   }
 
   const kuwaiti = normalizeKuwaitiIntent(msg);
-  const detectedAreaCode = extractAreaFromText(msg);
+  // Full message first, then word n-grams; fall back to legacy Arabic substring map.
+  const detectedAreaCode =
+    resolveAreaCodeFromMessage(msg) ?? extractAreaFromText(msg);
   const modifier = detectSearchModifier(msg);
   const buyerIntent = detectBuyerIntent(msg);
   const isNewSearch = isNewSearchTrigger(msg);

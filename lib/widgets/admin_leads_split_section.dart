@@ -16,9 +16,10 @@ class AdminLeadsSplitSection extends StatelessWidget {
 
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> dealDocs;
 
-  /// Pre-deal stages only (excludes booked / signed / closed / invalid).
+  /// Pre-deal stages only (excludes booked / signed / closed / not_interested / invalid).
   static bool _isLeadStage(String statusRaw) {
     if (!isValidDealStatus(statusRaw)) return false;
+    if (statusRaw == DealStatus.notInterested) return false;
     return statusRaw == DealStatus.newLead ||
         statusRaw == DealStatus.contacted ||
         statusRaw == DealStatus.qualified;

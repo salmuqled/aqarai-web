@@ -5,10 +5,24 @@ import 'package:aqarai_app/models/decision_accuracy_snapshot.dart';
 import 'package:aqarai_app/services/decision_tracking_service.dart';
 
 /// Dashboard: trust in auto marketing decisions (accepted vs modified).
-class AdminDecisionAccuracySection extends StatelessWidget {
+///
+/// Subscribes to a single [Stream] for the lifetime of this [State] so parent
+/// rebuilds do not replace the stream each frame (which can destabilize
+/// [StreamBuilder]).
+class AdminDecisionAccuracySection extends StatefulWidget {
   const AdminDecisionAccuracySection({super.key, required this.isAr});
 
   final bool isAr;
+
+  @override
+  State<AdminDecisionAccuracySection> createState() =>
+      _AdminDecisionAccuracySectionState();
+}
+
+class _AdminDecisionAccuracySectionState
+    extends State<AdminDecisionAccuracySection> {
+  late final Stream<DecisionAccuracySnapshot> _accuracyStream =
+      DecisionTrackingService.watchDecisionAccuracy();
 
   String _fmtPct(double x) => (x * 100).clamp(0, 100).toStringAsFixed(0);
 
@@ -38,13 +52,13 @@ class AdminDecisionAccuracySection extends StatelessWidget {
     final loc = AppLocalizations.of(context)!;
 
     return StreamBuilder<DecisionAccuracySnapshot>(
-      stream: DecisionTrackingService.watchDecisionAccuracy(),
+      stream: _accuracyStream,
       builder: (context, snap) {
         if (snap.hasError) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
-              isAr
+              widget.isAr
                   ? 'تعذّر تحميل دقة القرارات.'
                   : 'Could not load decision accuracy.',
               style: TextStyle(color: Colors.red.shade800, fontSize: 13),

@@ -26,11 +26,13 @@ service cloud.firestore {
 
     function propertyPublicDiscovery(data) {
       return data.approved == true
-        && (!('hiddenFromPublic' in data) || data.hiddenFromPublic == false)
-        && (!('status' in data)
-            || data.status == ''
-            || data.status == 'active'
-            || data.status == 'approved');
+        && 'hiddenFromPublic' in data
+        && data.hiddenFromPublic == false
+        && 'listingCategory' in data
+        && (
+          (data.listingCategory == 'chalet')
+          || (data.listingCategory == 'normal' && data.isActive == true)
+        );
     }
 
     /* ============================================================
@@ -40,7 +42,7 @@ service cloud.firestore {
     match /properties/{propertyId} {
 
       // 👀 القراءة:
-      // - العامة: معتمد + غير مخفي + حالة نشطة (أو approved قديمة)
+      // - العامة: approved + listingCategory + (normal: isActive) + hiddenFromPublic == false
       // - المالك والأدمن: دائماً
       allow read: if
         propertyPublicDiscovery(resource.data)
@@ -55,7 +57,9 @@ service cloud.firestore {
       // - ممنوع تمرير imagesApproved=true
       allow create: if isSignedIn()
         && isFalseOrMissing('approved')
-        && isFalseOrMissing('imagesApproved');
+        && isFalseOrMissing('imagesApproved')
+        && request.resource.data.listingCategory in ['normal', 'chalet']
+        && request.resource.data.hiddenFromPublic == false;
 
       // ✏️ التعديل:
       // - الأدمن
@@ -78,6 +82,36 @@ service cloud.firestore {
           isSignedIn()
           && resource.data.ownerId == request.auth.uid
         );
+    }
+
+    /* ============================================================
+        Chalet bookings (writes only via Cloud Functions / Admin SDK)
+    ============================================================ */
+
+    match /bookings/{bookingId} {
+      allow read: if isSignedIn()
+        && (
+          resource.data.clientId == request.auth.uid
+          || resource.data.ownerId == request.auth.uid
+          || isAdmin()
+        );
+
+      allow create, update, delete: if false;
+    }
+
+    /* ============================================================
+        Chalet booking ledger (Cloud Functions create; admin payout via callable)
+    ============================================================ */
+
+    match /transactions/{txId} {
+      allow read: if isSignedIn()
+        && (
+          resource.data.ownerId == request.auth.uid
+          || resource.data.clientId == request.auth.uid
+          || isAdmin()
+        );
+
+      allow create, update, delete: if false;
     }
 
     /* ============================================================
@@ -146,6 +180,32 @@ service cloud.firestore {
         Deals (صفقات معتمدة — تقارير + اهتمام مستخدم بعقار)
     ============================================================ */
 
+    /// Deal must exist and be finalized before a commission row can be [confirmed]
+    /// (matches server-side ledger sync in Cloud Functions).
+    function dealExistsAndCommissionFinalized(dealId) {
+      return dealId is string
+        && dealId.size() > 0
+        && exists(/databases/$(database)/documents/deals/$(dealId))
+        && get(/databases/$(database)/documents/deals/$(dealId)).data.dealStatus in ['signed', 'closed'];
+    }
+
+    /// Admin cannot edit server-owned commission mirror fields (Functions only).
+    function dealServerFinancialMirrorKeys() {
+      return [
+        'commissionPaidTotalKwd',
+        'commissionPaymentStatus',
+        'commissionLastPaymentAt',
+        'commissionOverpaidKwd',
+        'isCommissionPaid',
+        'commissionPaidAt'
+      ];
+    }
+
+    function dealAdminUpdateDoesNotTouchServerFinancialMirrors() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(dealServerFinancialMirrorKeys());
+    }
+
     function interestDealCreateValid(dealId) {
       let r = request.resource.data;
       let uid = request.auth.uid;
@@ -188,7 +248,9 @@ service cloud.firestore {
       allow create: if isAdmin()
         || (isSignedIn() && interestDealCreateValid(dealId));
 
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() && dealAdminUpdateDoesNotTouchServerFinancialMirrors();
+
+      allow delete: if isAdmin();
     }
 
     /* ============================================================
@@ -219,6 +281,11 @@ service cloud.firestore {
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['read', 'readAt']);
+    }
+
+    /* Server-only dedupe log for deal follow-up FCM (Cloud Functions Admin SDK). */
+    match /followup_notifications/{id} {
+      allow read, write: if false;
     }
 
     match /admin_caption_selections/{docId} {
@@ -446,6 +513,36 @@ service cloud.firestore {
     }
 
     /* ============================================================
+        FCM inbox (Cloud Functions write; user marks read only)
+    ============================================================ */
+
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+
+      allow create, delete: if false;
+
+      /* User may only toggle read/hide; all inbox content & priority remain server-owned. */
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.notificationType == resource.data.notificationType
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.body == resource.data.body
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.version == resource.data.version
+        && request.resource.data.data == resource.data.data
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['isRead', 'isHidden'])
+        && (!('priority' in resource.data) ||
+          request.resource.data.priority == resource.data.priority)
+        && (!('isRead' in resource.data) || resource.data.isRead == false
+          || request.resource.data.isRead == true)
+        && (!('isHidden' in request.resource.data)
+          || request.resource.data.isHidden is bool);
+    }
+
+    /* ============================================================
         Support tickets (شكاوى وتواصل — إنشاء من المستخدم، إدارة من الأدمن)
     ============================================================ */
 
@@ -666,7 +763,9 @@ service cloud.firestore {
             && d.relatedId.size() > 0)
           || (d.type == 'other'
             && d.relatedType == 'manual')
-        );
+        )
+        && (!(d.type == 'commission' && d.relatedType == 'deal' && d.status == 'confirmed')
+            || dealExistsAndCommissionFinalized(d.relatedId));
     }
 
     function companyPaymentRelatedIdUnchanged() {
@@ -679,6 +778,17 @@ service cloud.firestore {
       return (!('referenceNumber' in resource.data) && !('referenceNumber' in request.resource.data))
         || ('referenceNumber' in resource.data && 'referenceNumber' in request.resource.data
             && resource.data.referenceNumber == request.resource.data.referenceNumber);
+    }
+
+    /// When confirming a commission linked to a deal, deal must exist and be finalized.
+    function companyPaymentCommissionConfirmDealFinal() {
+      let r = resource.data;
+      let n = request.resource.data;
+      return !(r.type == 'commission' && r.relatedType == 'deal'
+          && r.status != 'confirmed' && n.status == 'confirmed')
+        || ('relatedId' in r
+            && r.relatedId is string
+            && dealExistsAndCommissionFinalized(r.relatedId));
     }
 
     /// Updates may only change status, notes, and updatedBy; all financial / linkage fields stay fixed.
@@ -698,7 +808,8 @@ service cloud.firestore {
         && n.status in ['pending', 'confirmed', 'rejected']
         && n.notes is string
         && n.updatedBy is string
-        && n.updatedBy == request.auth.uid;
+        && n.updatedBy == request.auth.uid
+        && companyPaymentCommissionConfirmDealFinal();
     }
 
     match /company_payments/{paymentId} {
@@ -707,6 +818,11 @@ service cloud.firestore {
       allow update: if isAdmin() && companyPaymentUpdateValid();
       // No deletes — financial audit trail. Void entries via status = "rejected".
       allow delete: if false;
+    }
+
+    /* Idempotency keys for addCompanyPaymentAdmin (Admin SDK / Cloud Functions only). */
+    match /company_payment_idempotency/{keyId} {
+      allow read, write: if false;
     }
 
     /* ============================================================

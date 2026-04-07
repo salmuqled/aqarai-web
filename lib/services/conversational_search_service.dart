@@ -4,6 +4,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 import 'package:aqarai_app/data/governorates_data_ar.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
 
 /// نتيجة تحليل رسالة البحث المحادثي
 class ConversationalSearchResult {
@@ -208,19 +209,109 @@ class ConversationalSearchService {
     );
   }
 
-  /// يبني استعلام Firestore بسيطاً: approved + areaCode + ترتيب بالتاريخ.
-  /// باقي الفلاتر (نوع الخدمة، نوع العقار، المحافظة، الغرف) تُطبَّق في الذاكرة
-  /// لتجنّب فهارس مركبة كثيرة وأخطاء failed-precondition.
-  Query<Map<String, dynamic>> buildQuery(ParsedFilters filters) {
+  /// Fixed base + optional order: serviceType → type → governorateCode → areaCode → orderBy createdAt.
+  Query<Map<String, dynamic>> _normalMarketplaceQuery(ParsedFilters f) {
     Query<Map<String, dynamic>> q = FirebaseFirestore.instance
         .collection('properties')
-        .where('approved', isEqualTo: true);
-
-    if (filters.areaCode != null && filters.areaCode!.isNotEmpty) {
-      q = q.where('areaCode', isEqualTo: filters.areaCode);
+        .where('approved', isEqualTo: true)
+        .where('isActive', isEqualTo: true)
+        .where('listingCategory', isEqualTo: ListingCategory.normal)
+        .where('hiddenFromPublic', isEqualTo: false);
+    if (f.serviceType != null && f.serviceType!.trim().isNotEmpty) {
+      q = q.where('serviceType', isEqualTo: f.serviceType!.trim());
     }
-
+    if (f.propertyType != null && f.propertyType!.trim().isNotEmpty) {
+      q = q.where('type', isEqualTo: f.propertyType!.trim());
+    }
+    if (f.governorateCode != null &&
+        f.governorateCode!.trim().isNotEmpty &&
+        f.governorateCode!.trim() != 'chalet') {
+      q = q.where('governorateCode', isEqualTo: f.governorateCode!.trim());
+    }
+    if (f.areaCode != null && f.areaCode!.trim().isNotEmpty) {
+      q = q.where('areaCode', isEqualTo: f.areaCode!.trim());
+    }
     return q.orderBy('createdAt', descending: true);
+  }
+
+  Query<Map<String, dynamic>> _chaletMarketplaceQuery(ParsedFilters f) {
+    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
+        .collection('properties')
+        .where('approved', isEqualTo: true)
+        .where('listingCategory', isEqualTo: ListingCategory.chalet)
+        .where('hiddenFromPublic', isEqualTo: false);
+    if (f.serviceType != null && f.serviceType!.trim().isNotEmpty) {
+      q = q.where('serviceType', isEqualTo: f.serviceType!.trim());
+    }
+    if (f.propertyType != null && f.propertyType!.trim().isNotEmpty) {
+      q = q.where('type', isEqualTo: f.propertyType!.trim());
+    }
+    if (f.governorateCode != null &&
+        f.governorateCode!.trim().isNotEmpty &&
+        f.governorateCode!.trim() != 'chalet') {
+      q = q.where('governorateCode', isEqualTo: f.governorateCode!.trim());
+    }
+    if (f.areaCode != null && f.areaCode!.trim().isNotEmpty) {
+      q = q.where('areaCode', isEqualTo: f.areaCode!.trim());
+    }
+    return q.orderBy('createdAt', descending: true);
+  }
+
+  /// No `whereIn` on listingCategory: two branches merged in memory.
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchMarketplaceMerged(
+    ParsedFilters filters, {
+    int limitPerCategory = 60,
+  }) async {
+    final n = await _normalMarketplaceQuery(filters).limit(limitPerCategory).get();
+    final c = await _chaletMarketplaceQuery(filters).limit(limitPerCategory).get();
+    final byId = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final d in n.docs) {
+      byId[d.id] = d;
+    }
+    for (final d in c.docs) {
+      byId[d.id] = d;
+    }
+    final list = byId.values.toList();
+    int ms(Timestamp? t) => t?.millisecondsSinceEpoch ?? 0;
+    list.sort((a, b) => ms(b.data()['createdAt'] as Timestamp?).compareTo(
+          ms(a.data()['createdAt'] as Timestamp?),
+        ));
+    return list;
+  }
+
+  /// Nearby: sequential area scans (no `whereIn` on areaCode).
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchNearbyMarketplaceMerged(
+    ParsedFilters baseFilters,
+    List<String> nearbyAreaCodes, {
+    int maxAreas = 10,
+    int limitPerAreaBranch = 24,
+  }) async {
+    if (nearbyAreaCodes.isEmpty) return [];
+    final codes = nearbyAreaCodes.length > maxAreas
+        ? nearbyAreaCodes.sublist(0, maxAreas)
+        : nearbyAreaCodes;
+    final byId = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final code in codes) {
+      final pf = ParsedFilters(
+        areaCode: code,
+        governorateCode: baseFilters.governorateCode,
+        serviceType: baseFilters.serviceType,
+        propertyType: baseFilters.propertyType,
+        maxPrice: baseFilters.maxPrice,
+        bedrooms: baseFilters.bedrooms,
+      );
+      final part = await fetchMarketplaceMerged(pf, limitPerCategory: limitPerAreaBranch);
+      for (final d in part) {
+        byId[d.id] = d;
+      }
+      if (byId.length >= 80) break;
+    }
+    final list = byId.values.toList();
+    int ms(Timestamp? t) => t?.millisecondsSinceEpoch ?? 0;
+    list.sort((a, b) => ms(b.data()['createdAt'] as Timestamp?).compareTo(
+          ms(a.data()['createdAt'] as Timestamp?),
+        ));
+    return list;
   }
 
   /// تطابق الوثيقة مع فلاتر المحادثة (بعد الجلب من Firestore).
@@ -251,48 +342,48 @@ class ConversationalSearchService {
       final n = rc is int ? rc : int.tryParse(rc?.toString() ?? '') ?? -1;
       if (n != br) return false;
     }
+    if (!listingDataIsPubliclyDiscoverable(data)) return false;
     return true;
   }
 
-  /// يبني استعلام من خريطة فلاتر (من الـ Agent): areaCode, type, serviceType, budget, bedrooms
-  Query<Map<String, dynamic>> buildQueryFromMap(Map<String, dynamic> filters) {
+  /// Parses Agent / UI filter map into [ParsedFilters].
+  ParsedFilters parseFiltersFromMap(Map<String, dynamic> filters) {
     final areaCode = filters['areaCode']?.toString().trim();
     final type = filters['type']?.toString().trim();
     final serviceType = filters['serviceType']?.toString().trim();
-    final budget = filters['budget'] is num ? (filters['budget'] as num).toDouble() : (filters['budget'] != null ? double.tryParse(filters['budget'].toString()) : null);
-    final bedrooms = filters['bedrooms'] is int ? filters['bedrooms'] as int : (filters['bedrooms'] != null ? int.tryParse(filters['bedrooms'].toString()) : null);
+    final budget = filters['budget'] is num
+        ? (filters['budget'] as num).toDouble()
+        : (filters['budget'] != null
+              ? double.tryParse(filters['budget'].toString())
+              : null);
+    final bedrooms = filters['bedrooms'] is int
+        ? filters['bedrooms'] as int
+        : (filters['bedrooms'] != null
+              ? int.tryParse(filters['bedrooms'].toString())
+              : null);
     final governorateCode = filters['governorateCode']?.toString().trim();
-    return buildQuery(ParsedFilters(
+    return ParsedFilters(
       areaCode: areaCode?.isNotEmpty == true ? areaCode : null,
       governorateCode: governorateCode?.isNotEmpty == true ? governorateCode : null,
       serviceType: serviceType?.isNotEmpty == true ? serviceType : null,
       propertyType: type?.isNotEmpty == true ? type : null,
       maxPrice: budget != null && budget > 0 ? budget : null,
       bedrooms: bedrooms != null && bedrooms > 0 ? bedrooms : null,
-    ));
+    );
   }
 
-  /// استعلام في مناطق قريبة فقط (للـ fallback عند عدم وجود نتائج في المنطقة المطلوبة).
-  /// [nearbyAreaCodes] قائمة areaCode للمناطق القريبة (مثلاً ['rawda', 'kaifan', 'khaldiya']).
-  /// يرجع استعلام بحد أقصى 3 نتائج، الأحدث أولاً.
-  Query<Map<String, dynamic>> buildQueryNearbyFromMap(
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchMarketplaceMergedFromMap(
+    Map<String, dynamic> filters, {
+    int limitPerCategory = 60,
+  }) =>
+      fetchMarketplaceMerged(
+        parseFiltersFromMap(filters),
+        limitPerCategory: limitPerCategory,
+      );
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchNearbyMarketplaceMergedFromMap(
     Map<String, dynamic> filters,
     List<String> nearbyAreaCodes,
-  ) {
-    if (nearbyAreaCodes.isEmpty) {
-      return buildQueryFromMap(filters).limit(0);
-    }
-
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-        .collection('properties')
-        .where('approved', isEqualTo: true)
-        .where(
-          'areaCode',
-          whereIn: nearbyAreaCodes.length > 10
-              ? nearbyAreaCodes.sublist(0, 10)
-              : nearbyAreaCodes,
-        );
-
-    return q.orderBy('createdAt', descending: true).limit(80);
-  }
+  ) =>
+      fetchNearbyMarketplaceMerged(parseFiltersFromMap(filters), nearbyAreaCodes);
 }

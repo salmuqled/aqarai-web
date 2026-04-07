@@ -22,6 +22,7 @@ class AdminDealPipelineSection extends StatelessWidget {
     DealStatus.qualified,
     DealStatus.booked,
     DealStatus.signed,
+    DealStatus.notInterested,
     DealStatus.closed,
   ];
 
@@ -68,6 +69,8 @@ class AdminDealPipelineSection extends StatelessWidget {
         return Colors.green.shade600;
       case DealStatus.closed:
         return Colors.green.shade900;
+      case DealStatus.notInterested:
+        return Colors.red.shade800;
       default:
         return Colors.grey;
     }
@@ -87,6 +90,8 @@ class AdminDealPipelineSection extends StatelessWidget {
         return loc.adminDealPipelineSigned;
       case DealStatus.closed:
         return loc.adminDealPipelineClosed;
+      case DealStatus.notInterested:
+        return loc.adminDealPipelineNotInterested;
       default:
         return status;
     }

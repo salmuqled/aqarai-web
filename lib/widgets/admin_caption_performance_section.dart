@@ -7,7 +7,10 @@ import 'package:aqarai_app/models/caption_performance.dart';
 import 'package:aqarai_app/services/caption_performance_service.dart';
 
 /// Admin dashboard: caption A/B/C clicks + CTR (from Firestore samples).
-class AdminCaptionPerformanceSection extends StatelessWidget {
+///
+/// Uses a single [Future] for the lifetime of this [State] so parent rebuilds
+/// (e.g. dashboard Firestore streams) do not recreate the future each frame.
+class AdminCaptionPerformanceSection extends StatefulWidget {
   const AdminCaptionPerformanceSection({
     super.key,
     required this.isAr,
@@ -16,18 +19,40 @@ class AdminCaptionPerformanceSection extends StatelessWidget {
   final bool isAr;
 
   @override
+  State<AdminCaptionPerformanceSection> createState() =>
+      _AdminCaptionPerformanceSectionState();
+}
+
+class _AdminCaptionPerformanceSectionState
+    extends State<AdminCaptionPerformanceSection> {
+  late final Future<List<CaptionPerformance>> _performanceFuture =
+      CaptionPerformanceService().getPerformance();
+
+  static String _emojiFor(String id) {
+    switch (id) {
+      case 'A':
+        return '🔥';
+      case 'B':
+        return '📈';
+      case 'C':
+        return '📉';
+      default:
+        return '📊';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
-    final svc = CaptionPerformanceService();
 
     return FutureBuilder<List<CaptionPerformance>>(
-      future: svc.getPerformance(),
+      future: _performanceFuture,
       builder: (context, snap) {
         if (snap.hasError) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
-              isAr
+              widget.isAr
                   ? 'تعذّر تحميل أداء الكابشن.'
                   : 'Could not load caption performance.',
               style: TextStyle(color: Colors.red.shade800, fontSize: 13),
@@ -120,18 +145,5 @@ class AdminCaptionPerformanceSection extends StatelessWidget {
         );
       },
     );
-  }
-
-  static String _emojiFor(String id) {
-    switch (id) {
-      case 'A':
-        return '🔥';
-      case 'B':
-        return '📈';
-      case 'C':
-        return '📉';
-      default:
-        return '📊';
-    }
   }
 }

@@ -6,27 +6,28 @@ import '../l10n/app_localizations.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 
 class SearchResultsChaletPage extends StatelessWidget {
-  final String? area;
+  final String? areaCode;
   final String? serviceType; // sale / rent / exchange
 
-  const SearchResultsChaletPage({super.key, this.area, this.serviceType});
+  const SearchResultsChaletPage({super.key, this.areaCode, this.serviceType});
 
   // -----------------------------
   // Firestore Query
   // -----------------------------
   Query<Map<String, dynamic>> _buildQuery() {
+    // Chalet marketplace slice: same base as client rules + optional serviceType → areaCode.
     Query<Map<String, dynamic>> q = FirebaseFirestore.instance
         .collection('properties')
         .where('approved', isEqualTo: true)
-        .where('status', isEqualTo: 'active')
-        .where('type', isEqualTo: 'chalet'); // 🔥 فقط الشاليهات
-
-    if (area != null && area!.isNotEmpty) {
-      q = q.where('area', isEqualTo: area);
-    }
+        .where('listingCategory', isEqualTo: ListingCategory.chalet)
+        .where('hiddenFromPublic', isEqualTo: false);
 
     if (serviceType != null && serviceType!.isNotEmpty) {
       q = q.where('serviceType', isEqualTo: serviceType);
+    }
+
+    if (areaCode != null && areaCode!.isNotEmpty) {
+      q = q.where('areaCode', isEqualTo: areaCode);
     }
 
     return q.orderBy('createdAt', descending: true).limit(100);

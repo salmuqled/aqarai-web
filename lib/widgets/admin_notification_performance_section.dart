@@ -45,7 +45,10 @@ int _convInt(dynamic v) {
 }
 
 /// قسم لوحة الأدمن: أداء الإشعارات (إرسال / نقر / معدل + آخر 5 حملات).
-class AdminNotificationPerformanceSection extends StatelessWidget {
+///
+/// Caches Firestore streams on the [State] so parent rebuilds (e.g. dashboard
+/// deal/global streams) do not create new stream instances every frame.
+class AdminNotificationPerformanceSection extends StatefulWidget {
   const AdminNotificationPerformanceSection({
     super.key,
     required this.analytics,
@@ -54,6 +57,10 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
 
   final AdminAnalyticsService analytics;
   final bool isAr;
+
+  @override
+  State<AdminNotificationPerformanceSection> createState() =>
+      _AdminNotificationPerformanceSectionState();
 
   static String _firestoreErrorMessage(Object? error, bool isAr) {
     final s = error?.toString() ?? '';
@@ -70,9 +77,30 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
     if (v is int) return v;
     return int.tryParse('$v') ?? 0;
   }
+}
+
+class _AdminNotificationPerformanceSectionState
+    extends State<AdminNotificationPerformanceSection> {
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _totalsStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _learningStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _convLogsStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _abLogsStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _recentLogsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    final a = widget.analytics;
+    _totalsStream = a.watchNotificationTotals();
+    _learningStream = a.watchNotificationLearning();
+    _convLogsStream = a.watchNotificationLogsForConversions();
+    _abLogsStream = a.watchNotificationLogsForAb();
+    _recentLogsStream = a.watchRecentNotificationLogs();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final isAr = widget.isAr;
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -100,17 +128,22 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: analytics.watchNotificationTotals(),
+              stream: _totalsStream,
               builder: (context, totSnap) {
                 if (totSnap.hasError) {
                   return Text(
-                    _firestoreErrorMessage(totSnap.error, isAr),
+                    AdminNotificationPerformanceSection._firestoreErrorMessage(
+                        totSnap.error, isAr),
                     style: TextStyle(color: Colors.red.shade800, fontSize: 13),
                   );
                 }
                 final d = totSnap.data?.data();
-                final totalSent = d != null ? _asInt(d['totalSent']) : 0;
-                final totalClicks = d != null ? _asInt(d['totalClicks']) : 0;
+                final totalSent = d != null
+                    ? AdminNotificationPerformanceSection._asInt(d['totalSent'])
+                    : 0;
+                final totalClicks = d != null
+                    ? AdminNotificationPerformanceSection._asInt(d['totalClicks'])
+                    : 0;
                 final rate =
                     totalSent > 0 ? (totalClicks / totalSent * 100) : 0.0;
                 final rateStr = totalSent > 0
@@ -158,11 +191,13 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: analytics.watchNotificationLearning(),
+                      stream: _learningStream,
                       builder: (context, learnSnap) {
                         if (learnSnap.hasError) {
                           return Text(
-                            _firestoreErrorMessage(learnSnap.error, isAr),
+                            AdminNotificationPerformanceSection
+                                ._firestoreErrorMessage(
+                                    learnSnap.error, isAr),
                             style: TextStyle(
                               color: Colors.red.shade800,
                               fontSize: 12,
@@ -220,7 +255,9 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                             final w = m['weight'];
                             final weight = w is num ? w.toDouble() : 0.0;
                             final pct = (weight * 100).clamp(0, 50);
-                            final samples = _asInt(m['samples']);
+                            final samples =
+                                AdminNotificationPerformanceSection._asInt(
+                                    m['samples']);
                             final label = _learningFactorLabel(doc.id, isAr);
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 6),
@@ -285,11 +322,13 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: analytics.watchNotificationLogsForConversions(),
+                      stream: _convLogsStream,
                       builder: (context, convSnap) {
                         if (convSnap.hasError) {
                           return Text(
-                            _firestoreErrorMessage(convSnap.error, isAr),
+                            AdminNotificationPerformanceSection
+                                ._firestoreErrorMessage(
+                                    convSnap.error, isAr),
                             style: TextStyle(
                               color: Colors.red.shade800,
                               fontSize: 12,
@@ -428,11 +467,12 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: analytics.watchNotificationLogsForAb(),
+                      stream: _abLogsStream,
                       builder: (context, abSnap) {
                         if (abSnap.hasError) {
                           return Text(
-                            _firestoreErrorMessage(abSnap.error, isAr),
+                            AdminNotificationPerformanceSection
+                                ._firestoreErrorMessage(abSnap.error, isAr),
                             style: TextStyle(
                               color: Colors.red.shade800,
                               fontSize: 12,
@@ -527,11 +567,12 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: analytics.watchRecentNotificationLogs(),
+                      stream: _recentLogsStream,
                       builder: (context, logSnap) {
                         if (logSnap.hasError) {
                           return Text(
-                            _firestoreErrorMessage(logSnap.error, isAr),
+                            AdminNotificationPerformanceSection
+                                ._firestoreErrorMessage(logSnap.error, isAr),
                             style: TextStyle(
                               color: Colors.red.shade800,
                               fontSize: 12,
@@ -573,8 +614,11 @@ class AdminNotificationPerformanceSection extends StatelessWidget {
                             final title =
                                 (m['title'] ?? '—').toString().trim();
                             final type = (m['type'] ?? '').toString();
-                            final sent = _asInt(m['sentCount']);
-                            final clicks = _asInt(m['clickCount']);
+                            final sent = AdminNotificationPerformanceSection._asInt(
+                                m['sentCount']);
+                            final clicks =
+                                AdminNotificationPerformanceSection._asInt(
+                                    m['clickCount']);
                             final variantId =
                                 (m['variantId'] ?? '').toString().trim();
                             final ts = m['createdAt'];

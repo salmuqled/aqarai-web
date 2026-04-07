@@ -19,12 +19,15 @@ import 'package:aqarai_app/pages/assistant_page.dart';
 import 'package:aqarai_app/pages/auctions_page.dart';
 import 'package:aqarai_app/pages/legal_pages.dart';
 import 'package:aqarai_app/pages/contact_us_page.dart';
+import 'package:aqarai_app/pages/notifications_page.dart';
 
 import 'package:aqarai_app/app/locale_notifier.dart' show setAppLocale;
+import 'package:aqarai_app/widgets/notifications_inbox_bell_button.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
 import 'package:aqarai_app/widgets/smart_assistant_cta.dart';
 import 'package:aqarai_app/widgets/featured_carousel.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/widgets/featured_wanted_carousel.dart';
 
 import 'package:flag/flag.dart';
@@ -160,6 +163,17 @@ class _HomePageState extends State<HomePage> {
                         fontWeight: FontWeight.w600,
                       ),
                 ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.notifications_outlined),
+                title: Text(loc.notificationsQuickMenu),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NotificationsPage()),
+                  );
+                },
               ),
               ListTile(
                 leading: const Icon(Icons.favorite_border),
@@ -336,7 +350,7 @@ class _HomePageState extends State<HomePage> {
                         title: locale == 'ar'
                             ? "عقارات مميزة للبيع"
                             : "Featured for Sale",
-                        excludeType: 'chalet',
+                        listingCategory: ListingCategory.normal,
                       ),
 
                       const SizedBox(height: 20),
@@ -347,7 +361,7 @@ class _HomePageState extends State<HomePage> {
                         title: locale == 'ar'
                             ? "عقارات مميزة للإيجار"
                             : "Featured for Rent",
-                        excludeType: 'chalet',
+                        listingCategory: ListingCategory.normal,
                       ),
 
                       const SizedBox(height: 20),
@@ -404,68 +418,75 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          if (_isAdmin == true)
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 14, left: 14),
-                  child: StreamBuilder<int>(
-                    stream: _pendingStream,
-                    builder: (context, snap) {
-                      final count = snap.data ?? 0;
-                      return GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const AdminRequestsPage(),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 14, left: 14),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_isAdmin == true)
+                      StreamBuilder<int>(
+                        stream: _pendingStream,
+                        builder: (context, snap) {
+                          final count = snap.data ?? 0;
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AdminRequestsPage(),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.35),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.35),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                alignment: Alignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.admin_panel_settings,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                  if (count > 0)
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: Container(
+                                        width: 12,
+                                        height: 12,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           );
                         },
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.35),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.35),
-                              width: 1,
-                            ),
-                          ),
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            alignment: Alignment.center,
-                            children: [
-                              const Icon(
-                                Icons.admin_panel_settings,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                              if (count > 0)
-                                Positioned(
-                                  top: 4,
-                                  right: 4,
-                                  child: Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                      ),
+                    if (_isAdmin == true) const SizedBox(width: 8),
+                    const NotificationsInboxBellButton(isOnDarkBackground: true),
+                  ],
                 ),
               ),
             ),
+          ),
         ],
       ),
     );

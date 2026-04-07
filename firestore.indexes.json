@@ -48,6 +48,17 @@
       "fields": [
         {"fieldPath": "approved", "order": "ASCENDING"},
         {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "governorateCode", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
         {"fieldPath": "serviceType", "order": "ASCENDING"},
         {"fieldPath": "status", "order": "ASCENDING"},
         {"fieldPath": "createdAt", "order": "DESCENDING"}
@@ -401,6 +412,105 @@
       ]
     },
     {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "governorateCode", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "featuredUntil", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "featuredUntil", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "buyer_interests",
       "queryScope": "COLLECTION",
       "fields": [
@@ -584,6 +694,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "endTime", "order": "ASCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "lots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
         {"fieldPath": "approvalDeadlineAt", "order": "ASCENDING"}
       ]
     },
@@ -594,6 +713,24 @@
         {"fieldPath": "auctionId", "order": "ASCENDING"},
         {"fieldPath": "createdAt", "order": "DESCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "bids",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "lotId", "order": "ASCENDING"},
+        {"fieldPath": "timestamp", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "bids",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "auctionId", "order": "ASCENDING"},
+        {"fieldPath": "timestamp", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "auction_participants",
@@ -633,6 +770,269 @@
       "fields": [
         {"fieldPath": "source", "order": "ASCENDING"},
         {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "followup_notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "dealId", "order": "ASCENDING"},
+        {"fieldPath": "sentAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "governorateCode", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "governorateCode", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "governorateCode", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "governorateCode", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "featuredUntil", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "featuredUntil", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "propertyId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "ownerId", "order": "ASCENDING"},
+        {"fieldPath": "source", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "source", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "payoutStatus", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "transactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "source", "order": "ASCENDING"},
+        {"fieldPath": "payoutStatus", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "userId", "order": "ASCENDING"},
+        {"fieldPath": "notificationType", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "userId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "userId", "order": "ASCENDING"},
+        {"fieldPath": "isHidden", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "listingCategory", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "featuredUntil", "order": "ASCENDING"},
         {"fieldPath": "createdAt", "order": "DESCENDING"}
       ]
     }

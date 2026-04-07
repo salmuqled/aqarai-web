@@ -11,7 +11,12 @@ import {
   contextToQueryFilters,
   type SearchContext,
 } from "./search_context";
-import { parseUserMessage, normalizeKuwaitiIntent } from "./intent_parser";
+import {
+  parseUserMessage,
+  normalizeKuwaitiIntent,
+  resolveTop3ResultReference,
+  normalizeTop3MemoryRows,
+} from "./intent_parser";
 import { mergeContextForTurn } from "./context_updater";
 import {
   rankPropertyResults,
@@ -89,12 +94,16 @@ SEARCH FIRST — ASK LATER:
 2. Set is_complete=true whenever you have an area (areaCode). Run search with whatever you have; missing type/budget/rooms is OK. The client will search immediately.
 3. Only set is_complete=false when area is missing. Then add exactly ONE short Arabic question in clarifying_questions (e.g. "في أي منطقة تبحث؟"). NEVER ask a sequence (area? then type? then budget?). One question only.
 4. If user says "ابي بيت بالقادسية حدود 700 ألف": set areaCode=qadisiya, type=house, budget=700000, serviceType=sale (default), is_complete=true. No clarifying_questions.
-5. Follow-ups: "أرخص" -> params_patch.budget = current*0.9; "أكبر" -> size note; "غير المنطقة للنزهة" -> reset_filters=true, params_patch.areaCode=nuzha.
+5. Follow-ups: "أرخص" (without ال) / "أرخص شوي" -> params_patch.budget = current*0.9; "أكبر" -> size note; "غير المنطقة للنزهة" -> reset_filters=true, params_patch.areaCode=nuzha.
 6. For house: do not ask about bedrooms. For apartment: you may ask bedrooms. When asking, always ONE question only.
+7. LAST 3 RESULTS CONTEXT: You receive top3LastResults with propertyId, price, area, propertyType, rank (1=first shown, 2=second, 3=third). If the user refers to those listings ONLY (not a new area search), set intent=reference_listing, referenced_property_id to exactly one propertyId from that list, is_complete=true, clarifying_questions=[].
+   - Arabic: "الأرخص" / "أقل سعر" -> pick lowest price row; "الأغلى" -> highest price; "الثاني" -> rank 2; "الأول" -> rank 1; "الثالث" -> rank 3; "اللي قبل" / "السابق" / "الأخير" -> last shown (highest rank).
+   - English: "cheapest", "second", "the previous", "last" -> same logic.
+   - If the message mixes a new area or new search ("ابي بالنزهة"), do NOT use reference_listing; use normal search intent instead.
 
 Output ONLY valid JSON (no markdown, no \`\`\`):
 {
-  "intent": "search_property | greeting | follow_up | general_question",
+  "intent": "search_property | greeting | follow_up | general_question | reference_listing",
   "params_patch": {
     "areaCode": "string|null",
     "type": "house|apartment|villa|chalet|land|office|shop|null",
@@ -105,28 +114,38 @@ Output ONLY valid JSON (no markdown, no \`\`\`):
   },
   "reset_filters": boolean,
   "is_complete": boolean,
-  "clarifying_questions": ["single question or empty array"]
+  "clarifying_questions": ["single question or empty array"],
+  "referenced_property_id": "string|null"
 }
 
 Rules:
 - Greeting (سلام/هلا) with no search -> intent=greeting, is_complete=false, clarifying_questions can be empty.
 - If area can be inferred from message or currentFilters -> is_complete=true, fill params_patch, clarifying_questions=[].
 - If area is missing -> is_complete=false, clarifying_questions=["في أي منطقة تبحث؟"] (one question only).
-- Never invent numbers. Merge with currentFilters on client. reset_filters only for "غير المنطقة" / change area.`;
+- Never invent numbers. Merge with currentFilters on client. reset_filters only for "غير المنطقة" / change area.
+- referenced_property_id must be null unless intent is reference_listing and the id exists in top3LastResults.`;
 
-const NO_RESULTS_AR = `حالياً ما لقيت عقار مطابق في هذه المنطقة.
-أقدر:
+const NO_RESULTS_AR = `ما لقيت نفس طلبك بالضبط حالياً، لكن أقدر أتابع لك أول ما ينزل عقار مناسب لك 👌
 
-1. أبحث في مناطق قريبة
-2. أعرض كل العقارات المتوفرة
-3. أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.`;
+خلّني أعرف ميزانيتك أو إذا تبي أوسّع لك البحث.
 
-const NO_RESULTS_EN = `No matching property in this area right now.
-I can:
+وإذا حاب، أقدر أبلّغك مباشرة أول ما ينزل شيء قريب من طلبك.
 
+أقدر كمان:
+1. أبحث لك في مناطق قريبة
+2. أعرض لك العقارات المتوفرة
+3. أسجّل اهتمامك وأوصّلك إشعار أول ما يصير إعلان جديد.`;
+
+const NO_RESULTS_EN = `I couldn't find an exact match for what you asked for right now, but I can follow up as soon as something suitable is listed.
+
+Tell me your budget, or if you'd like me to widen the search.
+
+If you want, I can notify you as soon as something close to your request goes live.
+
+I can also:
 1. Search nearby areas
-2. Show all available properties
-3. Register your interest and notify you when a new listing appears.`;
+2. Show available listings
+3. Save your interest so you get an alert when a new listing appears.`;
 
 const SINGLE_RESULT_ASKED_MORE_AR =
   "حالياً هذا العقار الوحيد المطابق لطلبك في هذه المنطقة.\nإذا حاب أبحث لك في مناطق قريبة ممكن تناسبك.";
@@ -147,7 +166,7 @@ const TYPE_LABEL_AR: Record<string, string> = {
 
 function formatNearbyReplyAr(results: unknown[], requestedAreaLabel: string): string {
   const areaLabel = requestedAreaLabel || "هذه المنطقة";
-  const intro = `حالياً ما لقيت عقار مطابق في ${areaLabel}،\nلكن لقيت عقارات قريبة ممكن تناسبك:\n\n`;
+  const intro = `ما لقيت عقار مطابق في ${areaLabel} حالياً.\nهذي مناطق قريبة وتعطيك نفس المميزات تقريباً:\n\n`;
   const lines = (results as Record<string, unknown>[]).map((r) => {
     const type = (r.type as string) || "";
     const typeLabel = TYPE_LABEL_AR[type] || type;
@@ -156,23 +175,33 @@ function formatNearbyReplyAr(results: unknown[], requestedAreaLabel: string): st
     const priceStr = price >= 1000 ? `${Math.round(price / 1000)} ألف` : String(price);
     return `• ${typeLabel} في ${area} – السعر ${priceStr}`;
   });
-  return intro + lines.join("\n");
+  const outro =
+    "\n\nشوف الخيارات وإذا حاب أركز لك أكثر على منطقة معيّنة أو أرتب لك تواصل.";
+  return intro + lines.join("\n") + outro;
 }
 
 function formatNearbyReplyEn(results: unknown[], requestedAreaLabel: string): string {
   const areaLabel = requestedAreaLabel || "this area";
-  const intro = `No matching property in ${areaLabel} right now.\nFound nearby options that might work:\n\n`;
+  const intro = `No exact match in ${areaLabel} right now.\nThese are nearby areas — you'll get similar benefits to what you're looking for:\n\n`;
   const lines = (results as Record<string, unknown>[]).map((r) => {
     const type = (r.type as string) || "";
     const area = (r.areaEn as string) || (r.areaAr as string) || "";
     const price = typeof r.price === "number" ? r.price : Number(r.price) || 0;
     return `• ${type} in ${area} – KWD ${price}`;
   });
-  return intro + lines.join("\n");
+  const outro =
+    "\n\nHave a look at the options — if you want, I can focus on one area for you or help arrange contact.";
+  return intro + lines.join("\n") + outro;
 }
 
-const SIMILAR_INTRO_AR = "ما لقيت عقار مطابق تماماً لطلبك،\nلكن لقيت عقارات قريبة ممكن تناسبك:\n\n";
-const SIMILAR_INTRO_EN = "No exact match for your request,\nbut here are similar properties that might work:\n\n";
+const SIMILAR_INTRO_AR =
+  "ما لقيت مطابقة تامة لطلبك،\nهذي مناطق قريبة وتعطيك نفس المميزات تقريباً:\n\n";
+const SIMILAR_INTRO_EN =
+  "No exact match for your request.\nThese are nearby options with similar benefits:\n\n";
+const SIMILAR_OUTRO_AR =
+  "\n\nشوف الخيارات وإذا حاب أركز لك أكثر على منطقة معيّنة أو أرتب لك تواصل.";
+const SIMILAR_OUTRO_EN =
+  "\n\nBrowse the options — if you want, I can narrow down to a specific area or help arrange contact.";
 
 function formatSimilarReplyAr(results: Record<string, unknown>[]): string {
   const lines = results.map((r) => {
@@ -181,7 +210,7 @@ function formatSimilarReplyAr(results: Record<string, unknown>[]): string {
     const priceStr = price >= 1000 ? `${Math.round(price / 1000)} ألف` : String(price);
     return `• عقار في ${area} – السعر ${priceStr}`;
   });
-  return SIMILAR_INTRO_AR + lines.join("\n");
+  return SIMILAR_INTRO_AR + lines.join("\n") + SIMILAR_OUTRO_AR;
 }
 
 function formatSimilarReplyEn(results: Record<string, unknown>[]): string {
@@ -190,7 +219,7 @@ function formatSimilarReplyEn(results: Record<string, unknown>[]): string {
     const price = typeof r.price === "number" ? r.price : Number(r.price) || 0;
     return `• Property in ${area} – KWD ${price}`;
   });
-  return SIMILAR_INTRO_EN + lines.join("\n");
+  return SIMILAR_INTRO_EN + lines.join("\n") + SIMILAR_OUTRO_EN;
 }
 
 function appendSuggestionsToReply(reply: string, suggestions: string[], locale: string): string {
@@ -199,25 +228,39 @@ function appendSuggestionsToReply(reply: string, suggestions: string[], locale: 
   return reply + "\n\n" + prefix + suggestions.map((s) => `• ${s}`).join("\n");
 }
 
-const COMPOSE_SYSTEM_AR = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
+const COMPOSE_SYSTEM_AR = `You are a proactive Kuwaiti real estate broker — sales assistant, not just search. Smart Search Mode: fast, helpful, drive the user toward a decision.
 
-STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
+STRICT — NO HALLUCINATION: Only describe properties that exist in the provided JSON array. Use only fields present on each object (type, size, price, area, labels, etc.). No invented addresses, prices, or details.
 
-Format:
-1. Open with a short line that you found options (e.g. "لقيت لك 3 عقارات ممكن تناسبك في القادسية:").
-2. List each property from the results in one line with bullet (•): type, size if available, brief detail, price in د.ك (e.g. "• بيت 400م شارع واحد – السعر 680 ألف").
-3. End with exactly ONE short follow-up question. Examples: "تبي أشوف لك تفاصيل واحد منهم؟" or "ميزانيتك تقريباً كم؟" or "تفضل شارع واحد أو زاوية؟". For house: do NOT ask about bedrooms; ask budget, land size, age, or street type. For apartment: you may ask bedrooms or budget.
-Never ask more than one question. Be direct and broker-like.`;
+Each listing may include a "labels" array from the server. Use it ONLY for urgency — never invent labels:
+- If "high_demand" is in labels for that listing, prefer this tone (that listing only): "العقار عليه طلب، الأفضل تشوفه بسرعة" — helpful, not alarmist.
+- If "good_deal" is in labels (that listing only): "سعره فرصة، لا يطوفك" — friendly nudge, not pushy.
+- If "new_listing" is in labels, note briefly it is recent (إعلان جديد / حديث).
+If "labels" is missing or empty, do NOT claim demand, bargain, or newness.
 
-const COMPOSE_SYSTEM_EN = `You are a proactive Kuwaiti real estate broker. Smart Search Mode: fast, helpful, show results directly.
+Format (Arabic):
+1. The array is already ranked: the FIRST object is the best match. Start by clearly highlighting it, e.g. "أفضل خيار لك حالياً هو:" then one line for that property (type, size if present, area if present, price in د.ك) plus any allowed urgency from "labels" only.
+2. If there are more listings, add a short line like "وفي خيارات ثانية:" then bullets (•) for the remaining ones — one line each, same facts only.
+3. Include a direct CTA using action verbs (اضغط، شوف، أقدر أساعدك، خلني أرتب). Prefer this exact phrasing when it fits: "اضغط على هذا العقار الآن وشوف التفاصيل — وإذا مناسب لك أرتب لك تواصل مباشر". If several listings, you may say "اضغط على أي عقار يعجبك" but keep the same helpful offer — no phone numbers, no WhatsApp, no fake contact (user taps in the app only).
+4. End with exactly ONE short question toward a decision — budget, timing, or serious intent. For house: do NOT ask about bedrooms. For apartment: bedrooms or budget is OK.
+One question only. Tone: helpful broker, natural Kuwaiti, not aggressive.`;
 
-STRICT — NO HALLUCINATION: Only describe properties that exist in the provided search results. No invented addresses, prices, or details.
+const COMPOSE_SYSTEM_EN = `You are a proactive Kuwaiti real estate broker — a sales assistant, not just search. Smart Search Mode: fast, helpful, move the user toward action.
 
-Format:
-1. Open with a short line that you found options (e.g. "Found 3 properties that might work for you in Qadisiya:").
-2. List each property from the results in one line with bullet (•): type, size if available, brief detail, price in KWD.
-3. End with exactly ONE short follow-up question (e.g. "Want details on one of them?" or "What's your budget?" or "Corner or single street?"). For house: do not ask about bedrooms. For apartment: you may ask bedrooms or budget.
-Never ask more than one question. Be direct and broker-like.`;
+STRICT — NO HALLUCINATION: Only describe properties in the provided JSON array. Use only fields on each object. No invented addresses, prices, or details.
+
+Each listing may include a "labels" array from the server. Use ONLY these for urgency — never invent:
+- "high_demand" (that listing only): e.g. "There's solid interest in this one — worth taking a quick look" — helpful, not pushy.
+- "good_deal" (that listing only): e.g. "The price looks like a strong opportunity — worth checking before it's gone" — friendly, not aggressive.
+- "new_listing" → note it is a recent listing.
+If labels are missing or empty, do not claim scarcity, bargain, or recency.
+
+Format (English):
+1. The array is ranked: the FIRST object is the best match. Open with a clear pick, e.g. "Best option for you right now:" then one line for that property (type, size if present, area if present, price in KWD) plus allowed urgency from "labels" only.
+2. If there are more listings, a short "Other options:" then bullets (•) — one line each, facts only.
+3. Direct CTA with action verbs (tap, see, I can help, I can arrange). Prefer: "Tap this listing now to see the details — if it's a fit, I can help arrange direct contact for you." With multiple listings: "Tap any listing you like" + same offer. Never invent phone numbers, links, or WhatsApp — the user taps in the app only.
+4. Exactly ONE closing question toward a decision: budget, timing, or how serious you are. For house: do not ask about bedrooms. For apartment: bedrooms or budget is OK.
+One question total. Warm, professional, not salesy or aggressive.`;
 
 // ---------------------------------------------------------------------------
 // Cloud Functions (orchestrator)
@@ -387,11 +430,14 @@ export const aqaraiAgentAnalyze = onCall(
       .split(/\s+/)
       .map((w) => normalizeAreaName(w))
       .join(" ");
+    const memoryRows = normalizeTop3MemoryRows(top3LastResults);
+    const deterministicListingRef = resolveTop3ResultReference(rawMessage, memoryRows, locale);
+
     const contextStr = [
       "Current filters (use for merge):",
       JSON.stringify(currentFilters),
-      "Last 3 results (id, areaAr, areaEn, type, price, size):",
-      JSON.stringify(top3LastResults.slice(0, 3)),
+      "Last 3 results (propertyId, price, area, propertyType, rank):",
+      JSON.stringify(memoryRows),
       "Last 8 messages (role, content):",
       JSON.stringify(last8Messages.slice(-8)),
       "User message:",
@@ -410,7 +456,7 @@ export const aqaraiAgentAnalyze = onCall(
       });
       const content = completion.choices?.[0]?.message?.content?.trim() || "{}";
       const openaiParsed = extractJson(content);
-      const intent = typeof openaiParsed.intent === "string" ? openaiParsed.intent : "general_question";
+      let intent = typeof openaiParsed.intent === "string" ? openaiParsed.intent : "general_question";
       const paramsPatch =
         openaiParsed.params_patch && typeof openaiParsed.params_patch === "object"
           ? (openaiParsed.params_patch as Record<string, unknown>)
@@ -426,6 +472,23 @@ export const aqaraiAgentAnalyze = onCall(
         paramsPatch.type = kuwaiti.propertyType;
       if (kuwaiti.serviceType && (paramsPatch.serviceType == null || paramsPatch.serviceType === ""))
         paramsPatch.serviceType = kuwaiti.serviceType;
+
+      let referencedPropertyId = "";
+      const fromModelRef =
+        typeof openaiParsed.referenced_property_id === "string"
+          ? openaiParsed.referenced_property_id.trim()
+          : "";
+      if (fromModelRef && memoryRows.some((r) => r.propertyId === fromModelRef)) {
+        referencedPropertyId = fromModelRef;
+      }
+      if (!referencedPropertyId && deterministicListingRef) {
+        referencedPropertyId = deterministicListingRef;
+      }
+      if (referencedPropertyId) {
+        intent = "reference_listing";
+        isCompleteFinal = true;
+        clarifyingQuestionsFinal = [];
+      }
 
       if (!paramsPatch.areaCode && parsed.detectedAreaCode) {
         paramsPatch.areaCode = parsed.detectedAreaCode;
@@ -448,7 +511,7 @@ export const aqaraiAgentAnalyze = onCall(
         (previousContext.budget != null) ||
         (previousContext.propertyType != null && previousContext.propertyType !== "");
 
-      if (parsed.modifier && hasPreviousSearch && !parsed.isNewSearch) {
+      if (parsed.modifier && hasPreviousSearch && !parsed.isNewSearch && !referencedPropertyId) {
         isCompleteFinal = true;
         clarifyingQuestionsFinal = [];
       }
@@ -456,6 +519,7 @@ export const aqaraiAgentAnalyze = onCall(
       const mergedForTurn = {
         ...parsed,
         paramsPatch,
+        modifier: referencedPropertyId ? null : parsed.modifier,
       };
       const context = mergeContextForTurn(previousContext, mergedForTurn);
 
@@ -471,6 +535,7 @@ export const aqaraiAgentAnalyze = onCall(
         is_complete: isCompleteFinal,
         clarifying_questions: clarifyingQuestionsFinal,
       };
+      if (referencedPropertyId) out.referenced_property_id = referencedPropertyId;
       if (kuwaiti.requestType != null) out.requestType = kuwaiti.requestType;
       if (kuwaiti.features != null && kuwaiti.features.length > 0) out.features = kuwaiti.features;
       if (kuwaiti.floors != null) out.floors = kuwaiti.floors;

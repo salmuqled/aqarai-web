@@ -21,6 +21,8 @@ import 'package:aqarai_app/pages/valuation_details_page.dart';
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/property_closure_service.dart';
+import 'package:aqarai_app/pages/owner_chalet_finance_page.dart';
+import 'package:aqarai_app/pages/owner_dashboard_page.dart';
 
 enum AdsFilter { all, active, expired, featured, wanted, valuations }
 
@@ -203,9 +205,8 @@ class _MyAdsPageState extends State<MyAdsPage> {
 
     switch (_filter) {
       case AdsFilter.active:
-        return base
-            .where('status', isEqualTo: 'active')
-            .orderBy('createdAt', descending: true);
+        // Live marketplace slice: filter with [listingDataIsPubliclyDiscoverable] in UI (no status).
+        return base.orderBy('createdAt', descending: true);
 
       case AdsFilter.expired:
         return base
@@ -437,6 +438,30 @@ class _MyAdsPageState extends State<MyAdsPage> {
       appBar: AppBar(
         title: Text(loc.myAds),
         actions: [
+          IconButton(
+            tooltip: loc.ownerDashboardTitle,
+            icon: const Icon(Icons.insights_outlined),
+            onPressed: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const OwnerDashboardPage(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: loc.ownerChaletFinanceTitle,
+            icon: const Icon(Icons.savings_outlined),
+            onPressed: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const OwnerChaletFinancePage(),
+                ),
+              );
+            },
+          ),
           IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
         ],
       ),
@@ -570,7 +595,14 @@ class _MyAdsPageState extends State<MyAdsPage> {
                     ),
                   );
                 }
-                final docs = snap.data?.docs ?? [];
+                var docs = snap.data?.docs ?? [];
+                if (_filter == AdsFilter.active) {
+                  docs = docs
+                      .where(
+                        (doc) => listingDataIsPubliclyDiscoverable(doc.data()),
+                      )
+                      .toList();
+                }
                 if (docs.isEmpty) {
                   return SliverToBoxAdapter(
                     child: Padding(
@@ -627,11 +659,10 @@ class _MyAdsPageState extends State<MyAdsPage> {
         featuredUntil.toDate().isAfter(DateTime.now());
     final serviceLabel = _propertyServiceLabel(d['serviceType']?.toString(), loc);
     final approved = d['approved'] == true;
-    final st = (d['status'] ?? ListingStatus.active).toString();
     final canFeature = approved &&
         !listingDataIsClosedDeal(d) &&
         d['closeRequestSubmitted'] != true &&
-        (st == ListingStatus.active || st == ListingStatus.approvedLegacy);
+        listingDataIsPubliclyDiscoverable(d);
     final showClosureBtn = approved && listingDataCanSubmitClosure(d);
 
     late String typeLabel;

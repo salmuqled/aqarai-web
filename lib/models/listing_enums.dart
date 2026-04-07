@@ -6,6 +6,61 @@ abstract final class ListingCategory {
   static const String chalet = 'chalet';
 }
 
+/// `properties.chaletMode` — only when [listingCategory] is [ListingCategory.chalet].
+///
+/// Missing/unknown values are treated as [daily] for backward compatibility.
+abstract final class ChaletMode {
+  static const String daily = 'daily';
+  static const String monthly = 'monthly';
+  static const String sale = 'sale';
+}
+
+/// Firestore `properties.chaletMode` fragment for UI / reads.
+///
+/// [chaletMode] is null when the field is missing, empty, non-chalet, or not one of
+/// [ChaletMode] values — [effectiveChaletMode] then falls back to [ChaletMode.daily].
+class PropertyListingChaletMode {
+  const PropertyListingChaletMode({this.chaletMode});
+
+  final String? chaletMode;
+
+  String get effectiveChaletMode => chaletMode ?? ChaletMode.daily;
+
+  factory PropertyListingChaletMode.fromListingData(Map<String, dynamic> d) {
+    if (!listingDataIsChalet(d)) {
+      return const PropertyListingChaletMode();
+    }
+    final raw = (d['chaletMode'] ?? '').toString().trim().toLowerCase();
+    if (raw.isEmpty) return const PropertyListingChaletMode();
+    if (raw == ChaletMode.daily ||
+        raw == ChaletMode.monthly ||
+        raw == ChaletMode.sale) {
+      return PropertyListingChaletMode(chaletMode: raw);
+    }
+    return const PropertyListingChaletMode();
+  }
+}
+
+/// Normalized chalet mode; defaults to [ChaletMode.daily] for legacy chalet documents.
+/// For non-chalet maps, returns empty string (callers should not treat as daily).
+String effectiveChaletMode(Map<String, dynamic> d) {
+  if (!listingDataIsChalet(d)) return '';
+  final raw = (d['chaletMode'] ?? '').toString().trim().toLowerCase();
+  if (raw.isEmpty) return ChaletMode.daily;
+  if (raw == ChaletMode.monthly ||
+      raw == ChaletMode.sale ||
+      raw == ChaletMode.daily) {
+    return raw;
+  }
+  return ChaletMode.daily;
+}
+
+/// Nightly calendar booking is only for chalets with [ChaletMode.daily] (or omitted mode).
+bool listingDataChaletAllowsDailyBooking(Map<String, dynamic> d) {
+  if (!listingDataIsChalet(d)) return false;
+  return effectiveChaletMode(d) == ChaletMode.daily;
+}
+
 /// `properties.status`
 abstract final class ListingStatus {
   static const String active = 'active';
@@ -47,6 +102,7 @@ abstract final class DealLeadSource {
   static const String search = 'search';
   static const String featured = 'featured';
   static const String direct = 'direct';
+
   /// "I'm interested" button flow (`deals` only — replaces legacy `interested_leads`).
   static const String interestedButton = 'interested_button';
   static const String unknown = 'unknown';
@@ -71,32 +127,38 @@ abstract final class DealLeadSource {
   }
 }
 
-/// شاليه: لا يُعرض زر إغلاق المرحلة 1 (حجوزات لاحقاً).
+/// Chalet listing — **only** [listingCategory] (no `type` fallback).
 bool listingDataIsChalet(Map<String, dynamic> d) {
-  final cat = (d['listingCategory'] ?? '').toString().toLowerCase().trim();
-  if (cat == ListingCategory.chalet) return true;
-  final t = (d['type'] ?? '').toString().toLowerCase().trim();
-  return t == 'chalet';
+  final cat = (d['listingCategory'] ?? '').toString().trim();
+  return cat == ListingCategory.chalet;
 }
 
+/// Public marketplace discovery — **must match** [propertyPublicDiscovery] in Firestore rules.
+///
+/// Uses only: [approved], [listingCategory], [isActive] (normal only), [hiddenFromPublic].
+/// Does **not** use [status] or [type].
 bool listingDataIsPubliclyDiscoverable(Map<String, dynamic> d) {
   if (d['approved'] != true) return false;
-  if (d['hiddenFromPublic'] == true) return false;
-
-  final raw = d['status'];
-  if (raw == null) return true;
-  final st = raw.toString().trim();
-  if (st.isEmpty) return true;
-  return st == ListingStatus.active || st == ListingStatus.approvedLegacy;
+  if (d['hiddenFromPublic'] != false) return false;
+  final cat = (d['listingCategory'] ?? '').toString().trim();
+  if (cat == ListingCategory.chalet) return true;
+  if (cat == ListingCategory.normal) {
+    return d['isActive'] == true;
+  }
+  return false;
 }
 
 bool listingDataCanSubmitClosure(Map<String, dynamic> d) {
   if (listingDataIsChalet(d)) return false;
   if (d['approved'] != true) return false;
   if (d['closeRequestSubmitted'] == true) return false;
-
-  final st = (d['status'] ?? ListingStatus.active).toString().trim();
-  return st == ListingStatus.active || st == ListingStatus.approvedLegacy;
+  if (d['hiddenFromPublic'] != false) return false;
+  if (d['isActive'] != true) return false;
+  if ((d['listingCategory'] ?? '').toString().trim() !=
+      ListingCategory.normal) {
+    return false;
+  }
+  return true;
 }
 
 bool listingDataIsClosedDeal(Map<String, dynamic> d) {

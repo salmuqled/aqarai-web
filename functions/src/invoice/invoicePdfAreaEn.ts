@@ -12,7 +12,7 @@ const governorateArToEn: Record<string, string> = {
   "محافظة مبارك الكبير": "Mubarak Al-Kabeer Governorate",
 };
 
-const areaArToEn: Record<string, string> = {
+export const areaArToEn: Record<string, string> = {
   "القبلة - جبلة": "Al-Qibla - Jibla",
   "المرقاب": "Al-Murqab",
   "الصالحية": "Al-Sawlihya",
@@ -148,7 +148,7 @@ const areaArToEn: Record<string, string> = {
   "صبحان": "Sabhan",
 };
 
-/** Same normalization as app `ConversationalSearchService._code` on English labels. */
+/** Same normalization as Flutter `propertyLocationCode` / app `ConversationalSearchService._code`. */
 function areaCodeKeyFromEnLabel(en: string): string {
   return en
     .trim()
@@ -158,6 +158,11 @@ function areaCodeKeyFromEnLabel(en: string): string {
     .replace(/[^a-z0-9_]/g, "")
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+/** Exported for property area sanitizer and other callers. */
+export function propertyLocationCode(s: string): string {
+  return areaCodeKeyFromEnLabel(s);
 }
 
 const areaCodeToEnLabel: Record<string, string> = (() => {

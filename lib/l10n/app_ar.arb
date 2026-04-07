@@ -1126,7 +1126,7 @@
   "adminEarningsFilterLast30Days": "30 يوماً",
   "adminRealEarningsHint": "مجاميع مباشرة من Firestore (بدون analytics). المدى الزمني والأيام اليومية وفق توقيت الكويت (UTC+3) من الطوابع UTC، ليظهر الجميع نفس الأرقام.",
   "adminRealEarningsTotalRevenue": "إجمالي الإيراد",
-  "adminRealEarningsLegacyNote": "تُحتسب العمولة للصفقات ذات dealStatus موقّع أو مغلق (مُنهية في CRM). الحالة القديمة «sold» لا تُستخدم في هذا الإجمالي.",
+  "adminRealEarningsLegacyNote": "تُحتسب العمولة للصفقات ذات dealStatus تم توقيع العقد أو مغلق (مُنهية في CRM؛ القيمة المخزّنة signed/closed). الحالة القديمة «sold» لا تُستخدم في هذا الإجمالي.",
   "adminRealEarningsChartEmpty": "لا توجد أحداث بتاريخ لرسم المنحنى.",
   "adminAuctionEarningsTotalFees": "رسوم الإدراج (مدفوعة)",
   "adminAuctionEarningsPaidListings": "مزادات مدفوعة",
@@ -1276,6 +1276,30 @@
 
   "adminDealsTab": "الصفقات",
   "@adminDealsTab": { "description": "تبويب صفقات الأدمن" },
+  "adminDealsSubtabNew": "جديد",
+  "@adminDealsSubtabNew": { "description": "تبويب فرعي: صفقات جديدة" },
+  "adminDealsSubtabInProgress": "قيد المتابعة",
+  "@adminDealsSubtabInProgress": { "description": "تبويب فرعي: صفقات غير جديدة" },
+  "adminDealsSubtabOverdue": "متأخر",
+  "@adminDealsSubtabOverdue": { "description": "تبويب فرعي: متابعة متأخرة" },
+  "adminDealsCollectionTab": "قيد التحصيل",
+  "@adminDealsCollectionTab": { "description": "تبويب صفقات بانتظار سداد العمولة" },
+  "adminDealsCollectionEmpty": "لا صفقات بانتظار تحصيل العمولة.",
+  "@adminDealsCollectionEmpty": { "description": "قائمة فارغة لتبويب التحصيل" },
+  "adminDealSendPaymentDetails": "إرسال بيانات الدفع",
+  "@adminDealSendPaymentDetails": { "description": "مشاركة الآيبان والمبلغ" },
+  "adminDealMarkCommissionReceived": "تم استلام العمولة",
+  "@adminDealMarkCommissionReceived": { "description": "تأكيد استلام العمولة وإغلاق الصفقة" },
+  "adminDealPaymentShareBody": "يرجى تحويل العمولة على الحساب التالي:\nIBAN: {iban}\nالمبلغ: {amount} د.ك",
+  "@adminDealPaymentShareBody": {
+    "description": "نص مشاركة تعليمات التحويل",
+    "placeholders": {
+      "iban": { "type": "String" },
+      "amount": { "type": "String" }
+    }
+  },
+  "adminDealCommissionCollectInvalidStatus": "يمكن تحصيل العمولة للصفقات الموقّعة أو المغلقة فقط.",
+  "adminDealCommissionAlreadyPaid": "تم تسجيل استلام العمولة لهذه الصفقة مسبقاً.",
   "adminDealDetailTitle": "صفقة",
   "adminDealPropertyPrice": "سعر الإعلان",
   "adminDealFinalPrice": "سعر الاتفاق النهائي",
@@ -1283,10 +1307,44 @@
   "adminDealSaveFinancials": "حفظ السعر والعمولة",
   "adminDealCalculateCommission": "احسب العمولة",
   "adminDealFinalPriceRequired": "يجب إدخال سعر الاتفاق أولاً",
+  "adminDealSignedPriceSheetTitle": "أدخل سعر الاتفاق",
+  "@adminDealSignedPriceSheetTitle": { "description": "ورقة سفلية عند اختيار تم توقيع العقد" },
+  "adminDealSignedPriceHint": "مثال: 350",
+  "@adminDealSignedPriceHint": { "description": "تلميح حقل السعر النهائي" },
   "adminDealPipelineStatus": "حالة الصفقة",
   "adminDealBookingAmount": "مبلغ الحجز / العربون",
   "adminDealCommissionPaid": "تم استلام العمولة",
+  "adminDealCommissionPaidLockedHint": "يُفعّل عندما تكون حالة الصفقة: تم توقيع العقد أو مغلق.",
+  "@adminDealCommissionPaidLockedHint": { "description": "عند تعطيل مفتاح العمولة قبل الإنهاء" },
+  "adminDealCommissionPaidFromLedgerHint": "يُحدَّث تلقائياً عند تأكيد دفع عمولة في سجل التحصيل (أدمن ← المدفوعات).",
+  "@adminDealCommissionPaidFromLedgerHint": { "description": "شرح أن حالة استلام العمولة من الخادم" },
+  "adminDealCommissionNotInLedger": "أكّد العمولة في سجل التحصيل أولاً (company_payments)، ثم أغلق الصفقة.",
+  "@adminDealCommissionNotInLedger": { "description": "منع الإغلاق قبل تأكيد العمولة في السجل" },
   "adminDealOpenListing": "فتح الإعلان",
+  "adminDealMarkContacted": "تم التواصل",
+  "@adminDealMarkContacted": { "description": "تحديث آخر تواصل دون تغيير المرحلة" },
+  "adminDealContactMarked": "تم تحديث وقت آخر تواصل",
+  "adminDealAddNoteHint": "أضف ملاحظة",
+  "adminDealSaveNote": "حفظ",
+  "adminDealNoteSaved": "تم حفظ الملاحظة",
+  "adminDealFollowUpDateLabel": "موعد المتابعة",
+  "adminDealFollowUpNotSet": "غير محدد",
+  "adminDealFollowUpIn5Minutes": "بعد ٥ دقائق",
+  "@adminDealFollowUpIn5Minutes": { "description": "جدولة سريعة لمتابعة" },
+  "adminDealFollowUpIn30Minutes": "بعد ٣٠ دقيقة",
+  "@adminDealFollowUpIn30Minutes": { "description": "جدولة سريعة لمتابعة" },
+  "adminDealPickFollowUpDateTime": "اختر التاريخ والوقت",
+  "adminDealFollowUpSaved": "تم حفظ موعد المتابعة",
+  "adminDealFollowUpCleared": "تم إلغاء موعد المتابعة",
+  "adminDealClearFollowUp": "إلغاء الموعد",
+  "adminDealNotesSectionTitle": "الملاحظات",
+  "adminFollowupSectionTitle": "متابعات مستحقة",
+  "@adminFollowupSectionTitle": { "description": "لوحة: صفقات وصل موعد متابعتها" },
+  "adminFollowupSectionSubtitle": "نفس عيّنة الصفقات أعلاه؛ موعد المتابعة قد حان",
+  "@adminFollowupSectionSubtitle": { "description": "نطاق قائمة المتابعة" },
+  "adminFollowupEmpty": "لا توجد صفقات تحتاج متابعة الآن.",
+  "adminFollowupLastNoteLabel": "آخر ملاحظة",
+  "@adminFollowupLastNoteLabel": { "description": "عنوان فوق آخر ملاحظة مختصرة" },
   "adminDealSaved": "تم الحفظ",
   "adminDealServiceSale": "بيع",
   "adminDealServiceRent": "إيجار",
@@ -1301,8 +1359,10 @@
   "adminDealPipelineContacted": "تم التواصل",
   "adminDealPipelineQualified": "مؤهل",
   "adminDealPipelineBooked": "محجوز",
-  "adminDealPipelineSigned": "موقّع",
+  "adminDealPipelineSigned": "تم توقيع العقد",
   "adminDealPipelineClosed": "مغلق",
+  "adminDealPipelineNotInterested": "غير مهتم",
+  "@adminDealPipelineNotInterested": { "description": "مرحلة الصفقة: عميل غير مهتم" },
   "adminDealPipelineOtherCount": "بيانات غير مكتملة: {count}",
   "@adminDealPipelineOtherCount": {
     "description": "عند وجود dealStatus غير المعيار",
@@ -1320,7 +1380,7 @@
   "adminConversionFunnelNewToContacted": "جديد → تم التواصل",
   "adminConversionFunnelContactedToQualified": "تم التواصل → مؤهل",
   "adminConversionFunnelQualifiedToBooked": "مؤهل → محجوز",
-  "adminConversionFunnelBookedToSigned": "محجوز → موقّع",
+  "adminConversionFunnelBookedToSigned": "محجوز → تم توقيع العقد",
 
   "adminCommissionSectionTitle": "العمولات",
   "@adminCommissionSectionTitle": { "description": "عنوان قسم العمولة في اللوحة" },
@@ -1358,7 +1418,7 @@
 
   "adminPrioritySectionTitle": "أولوية المتابعة",
   "@adminPrioritySectionTitle": { "description": "ترتيب المتابعة للعمولات غير المحصّلة" },
-  "adminPrioritySectionSubtitle": "عمولة غير محصّلة — محجوز أو موقّع أو مغلق (نفس عيّنة الصفقات)",
+  "adminPrioritySectionSubtitle": "عمولة غير محصّلة — محجوز أو تم توقيع العقد أو مغلق (نفس عيّنة الصفقات)",
   "@adminPrioritySectionSubtitle": { "description": "نطاق القائمة" },
   "adminPriorityEmpty": "لا توجد صفقات مطابقة لمعايير المتابعة في هذه العيّنة.",
   "adminPriorityLabelHigh": "مرتفع 🔥",
@@ -1382,6 +1442,141 @@
     "placeholders": {
       "count": { "type": "int" }
     }
-  }
+  },
 
+  "adminPropertyChaletModeLabel": "نوع الشاليه",
+  "@adminPropertyChaletModeLabel": { "description": "عنوان نوع الشاليه في بطاقة الأدمن" },
+  "adminPropertyChaletModeDaily": "حجز يومي",
+  "@adminPropertyChaletModeDaily": { "description": "chaletMode يومي" },
+  "adminPropertyChaletModeMonthly": "إيجار شهري",
+  "@adminPropertyChaletModeMonthly": { "description": "chaletMode شهري" },
+  "adminPropertyChaletModeSale": "للبيع",
+  "@adminPropertyChaletModeSale": { "description": "chaletMode بيع" },
+
+  "adminChaletPayoutsTitle": "تحويلات حجوزات الشاليه",
+  "adminChaletPayoutTransferToOwner": "تحويل للمالك",
+  "adminChaletPayoutMarkPaidConfirmTitle": "تأكيد التحويل",
+  "adminChaletPayoutMarkPaidConfirmBody": "هل أنت متأكد أنك حولت هذا المبلغ للمالك؟",
+  "adminChaletPayoutMarkPaidConfirmYes": "نعم، تم التحويل",
+  "adminChaletPayoutNeedsReviewHint": "⚠️ هذه العملية تحتاج مراجعة",
+  "adminChaletPayoutSnackOk": "تم تسجيل التحويل.",
+  "adminChaletPayoutSnackErr": "تعذّر تحديث التحويل.",
+  "ownerChaletFinanceTitle": "أرباح حجوزات الشاليه",
+  "ownerChaletFinanceSubtitle": "من الحجوزات المؤكدة (للقراءة فقط)",
+  "ownerChaletFinanceBookingsCount": "حجوزات بسجل مالي",
+  "ownerChaletFinanceNetTotal": "إجمالي الصافي (حصتك)",
+  "ownerChaletFinanceCommissionTotal": "إجمالي عمولة المنصة",
+  "ownerChaletFinanceEmpty": "لا توجد تحويلات حجوزات شاليه بعد.",
+  "chaletTransactionPayoutPending": "بانتظار التحويل",
+  "chaletTransactionPayoutPaid": "تم التحويل",
+  "chaletTransactionNetLabel": "الصافي (د.ك)",
+  "chaletTransactionCommissionLabel": "العمولة (د.ك)",
+  "adminChaletPayoutsFilterPending": "بانتظار التحويل",
+  "adminChaletPayoutsFilterAll": "كل السجلات",
+  "adminChaletPayoutsTotalPending": "إجمالي المبالغ المطلوب تحويلها",
+  "adminChaletRefundExecute": "تسجيل استرداد للضيف",
+  "adminChaletRefundConfirmTitle": "تسجيل الاسترداد في السجل المالي؟",
+  "adminChaletRefundConfirmBody": "يحدّث السجل المالي فقط (دون تعديل الحجز). يحسب مبلغ الاسترداد حسب سياسة الإلغاء على الخادم.",
+  "adminChaletRefundSnackOk": "تم تسجيل الاسترداد في السجل.",
+  "adminChaletRefundSnackErr": "تعذّر تسجيل الاسترداد.",
+  "chaletTransactionPayoutStatusLabel": "حالة التحويل للمالك",
+  "chaletTransactionOwnerPayoutLabel": "مستحق المالك (د.ك)",
+  "chaletTransactionPlatformRevenueLabel": "إيراد المنصة (د.ك)",
+  "chaletTransactionRefundStatusLabel": "حالة الاسترداد",
+  "chaletTransactionRefundAmountLabel": "استرداد للضيف (د.ك)",
+  "chaletTransactionRefundReferenceLabel": "مرجع الاسترداد",
+  "chaletTransactionPaymentVerifiedLabel": "الدفع مُتحقق",
+  "adminChaletPayoutBlockedHasIssueHint": "التحويل معطّل حتى تُعالَج مشكلة السجل.",
+  "adminChaletLedgerOwnerUnknown": "مالك غير معروف",
+  "adminChaletLedgerHasIssueBadge": "عملية فيها مشكلة",
+  "adminChaletLedgerFinalizedBadge": "تمت المعالجة",
+  "ownerDashboardTitle": "لوحة الشاليه",
+  "ownerDashboardSubtitle": "الإيراد، الإشغال، ومؤشرات الحجوزات",
+  "ownerDashboardMetricPaid": "المستلم",
+  "ownerDashboardMetricPending": "بانتظار التحويل",
+  "ownerDashboardMetricBookings": "الحجوزات",
+  "ownerDashboardMetricCommission": "عمولة المنصة",
+  "ownerDashboardOccupancyTitle": "الإشغال (30 يومًا)",
+  "ownerDashboardOccupancyHint": "نسبة الأيام التي فيها إقامة خلال آخر 30 يومًا",
+  "ownerDashboardChartTitle": "أرباح محققة",
+  "ownerDashboardChartSubtitle": "حسب تاريخ التحويل في الفترة المحددة",
+  "ownerDashboardChartPaidOnly": "الإيرادات اليومية (المدفوعة فقط)",
+  "ownerDashboardChartNoActivity": "لا توجد مدفوعات في هذه الفترة.",
+  "ownerDashboardDataLimitLabel": "آخر {count} عملية",
+  "@ownerDashboardDataLimitLabel": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ownerDashboardDataLimitHint": "قد لا تشمل كل البيانات القديمة",
+  "ownerDashboardMetricPeriodSubtitle": "ضمن الفترة المحددة",
+  "ownerDashboardInsightsTitle": "📈 مؤشرات",
+  "ownerDashboardInsightEarningsUp": "📈 أرباحك ارتفعت — استمر بنفس التسعير",
+  "ownerDashboardInsightNoRecentBookings": "⚠️ لا توجد حجوزات مؤخراً — جرّب تخفيض السعر",
+  "ownerDashboardInsightHighOccupancy": "🔥 شاليهك مطلوب حالياً — جرّب رفع السعر",
+  "ownerDashboardEmptyFiltered": "لا توجد حجوزات في هذه الفترة (ضمن البيانات المحمّلة).",
+  "ownerDashboardRankingTitle": "ترتيب الشاليهات (المدفوع في الفترة)",
+  "ownerDashboardRangeToday": "اليوم",
+  "ownerDashboardRange7": "7 أيام",
+  "ownerDashboardRange30": "30 يومًا",
+  "ownerDashboardRangeMonth": "هذا الشهر",
+  "ownerDashboardLastPayoutLine": "آخر عملية: {when}",
+  "@ownerDashboardLastPayoutLine": {
+    "placeholders": {
+      "when": { "type": "String" }
+    }
+  },
+  "ownerDashboardLastPayoutNone": "لا يوجد تحويل مدفوع في البيانات المحمّلة بعد.",
+  "ownerDashboardRelativeJustNow": "الآن",
+  "ownerDashboardRelativeMinutesAgo": "قبل {count} دقيقة",
+  "@ownerDashboardRelativeMinutesAgo": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ownerDashboardRelativeHoursAgo": "قبل {count} ساعة",
+  "@ownerDashboardRelativeHoursAgo": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ownerDashboardRelativeDaysAgo": "قبل {count} يوم",
+  "@ownerDashboardRelativeDaysAgo": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "ownerDashboardRecentBookings": "أحدث الحجوزات",
+  "ownerDashboardStatusPaid": "تم التحويل",
+  "ownerDashboardStatusPending": "بانتظار التحويل",
+  "ownerDashboardStatusRefunded": "مسترد",
+  "ownerDashboardBestChalet": "أعلى شاليه دخلًا",
+  "ownerDashboardDataNote": "حسب آخر الحجوزات المسجلة",
+  "ownerDashboardEmpty": "لا توجد بيانات حالياً",
+  "ownerDashboardListLimitNote": "عرض أحدث {count}",
+  "@ownerDashboardListLimitNote": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "notificationsInboxTitle": "الإشعارات",
+  "notificationsInboxEmpty": "لا توجد إشعارات حالياً 🚀",
+  "notificationsMarkAllRead": "تعليم الكل كمقروء",
+  "notificationsQuickMenu": "الإشعارات",
+  "notificationsGroupToday": "اليوم",
+  "notificationsGroupYesterday": "أمس",
+  "notificationsGroupOlder": "أقدم",
+  "notificationsSwipeMarkRead": "تعليم كمقروء",
+  "notificationsSwipeDismiss": "إخفاء",
+  "notificationsHiddenSnackbar": "تم إخفاء الإشعار",
+  "notificationsUndoHide": "تراجع",
+  "notificationsHideAll": "إخفاء الكل",
+  "notificationsSectionUnread": "غير مقروء",
+  "notificationsSectionUnreadCount": "غير مقروء ({count})",
+  "@notificationsSectionUnreadCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "notificationsSectionRead": "مقروء"
 }

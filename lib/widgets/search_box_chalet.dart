@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:aqarai_app/data/kuwait_areas.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
+import 'package:aqarai_app/utils/property_form_parsing.dart';
 import 'package:aqarai_app/widgets/property_list.dart';
 
 // ✔ قائمة الشاليهات النهائية
@@ -59,16 +61,6 @@ class _SearchBoxChaletState extends State<SearchBoxChalet> {
   String? selectedPropertyType;
   String selectedServiceType = "sale";
 
-  String _code(String s) {
-    var v = s.trim().toLowerCase();
-    v = v.replaceAll(RegExp(r'\s+'), '_');
-    v = v.replaceAll('-', '_');
-    v = v.replaceAll(RegExp(r'[^a-z0-9_]+'), '');
-    v = v.replaceAll(RegExp(r'_+'), '_');
-    v = v.replaceAll(RegExp(r'^_+|_+$'), '');
-    return v;
-  }
-
   void _search() {
     if (selectedArea == null || selectedPropertyType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -99,7 +91,16 @@ class _SearchBoxChaletState extends State<SearchBoxChalet> {
         ? chaletPropertyTypeCodes[typeIndex]
         : 'chalet';
 
-    final String areaCode = _code(areaLabel);
+    // Match Firestore [areaCode]: resolve from kuwait list, else slug from English label.
+    final String enForSlug = () {
+      final i = chaletAreasAr.indexOf(areaLabel);
+      if (i >= 0 && i < chaletAreasEn.length) return chaletAreasEn[i];
+      final j = chaletAreasEn.indexOf(areaLabel);
+      if (j >= 0) return chaletAreasEn[j];
+      return areaLabel;
+    }();
+    final String selectedAreaCode = resolveAreaCodeFromText(areaLabel) ??
+        propertyLocationCode(enForSlug);
 
     Navigator.push(
       context,
@@ -108,7 +109,7 @@ class _SearchBoxChaletState extends State<SearchBoxChalet> {
           governorateLabel: localeCode == 'ar' ? 'الشاليهات' : 'Chalets',
           areaLabel: areaLabel,
           governorateCode: 'chalet',
-          areaCode: areaCode,
+          areaCode: selectedAreaCode,
           typeFilter: typeCode,
           serviceType: selectedServiceType,
         ),

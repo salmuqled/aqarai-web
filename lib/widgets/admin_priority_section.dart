@@ -111,6 +111,8 @@ class AdminPrioritySection extends StatelessWidget {
         return loc.adminDealPipelineSigned;
       case DealStatus.closed:
         return loc.adminDealPipelineClosed;
+      case DealStatus.notInterested:
+        return loc.adminDealPipelineNotInterested;
       default:
         return status;
     }

@@ -16,8 +16,10 @@ import 'package:aqarai_app/widgets/auction/auction_lot_rejection_strip.dart';
 import 'package:aqarai_app/widgets/auction_registration_status_widget.dart';
 import 'package:aqarai_app/services/interest_lead_flow_service.dart';
 import 'package:aqarai_app/widgets/interested_lead_confirmation_sheet.dart';
+import 'package:aqarai_app/widgets/chalet_booking_widget.dart';
+import 'package:aqarai_app/widgets/booking_bar.dart';
 
-class PropertyDetailsPage extends StatelessWidget {
+class PropertyDetailsPage extends StatefulWidget {
   final String propertyId;
   final bool isAdminView;
 
@@ -42,6 +44,19 @@ class PropertyDetailsPage extends StatelessWidget {
     this.auctionLotId,
     this.auctionId,
   });
+
+  @override
+  State<PropertyDetailsPage> createState() => _PropertyDetailsPageState();
+}
+
+class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
+  final ChaletBookingController _bookingController = ChaletBookingController();
+
+  @override
+  void dispose() {
+    _bookingController.dispose();
+    super.dispose();
+  }
 
   String _translateType(BuildContext context, String value) {
     final loc = AppLocalizations.of(context)!;
@@ -105,89 +120,114 @@ class PropertyDetailsPage extends StatelessWidget {
     final loc = AppLocalizations.of(context)!;
 
     return _RecordPropertyViewOnce(
-      propertyId: propertyId,
-      leadSource: leadSource,
-      skipRecording: isAdminView,
-      captionTrackingId: captionTrackingId,
-      auctionLotId: auctionLotId,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF7F7F7),
+      propertyId: widget.propertyId,
+      leadSource: widget.leadSource,
+      skipRecording: widget.isAdminView,
+      captionTrackingId: widget.captionTrackingId,
+      auctionLotId: widget.auctionLotId,
+      child: FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance
+            .collection('properties')
+            .doc(widget.propertyId)
+            .get(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              backgroundColor: Color(0xFFF7F7F7),
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
 
-        appBar: AppBar(
-          title: Text(
-            loc.propertyDetails,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          centerTitle: true,
-          actions: [
-            if (FirebaseAuth.instance.currentUser != null && !isAdminView)
-              _FavoriteHeart(propertyId: propertyId),
-          ],
-        ),
-
-        body: FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance
-              .collection('properties')
-              .doc(propertyId)
-              .get(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (!snapshot.hasData || !snapshot.data!.exists) {
-              return Center(
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return Scaffold(
+              backgroundColor: const Color(0xFFF7F7F7),
+              body: Center(
                 child: Text(
                   loc.noWantedItems,
                   style: const TextStyle(fontSize: 18),
                 ),
-              );
-            }
+              ),
+            );
+          }
 
-            final data = snapshot.data!.data() as Map<String, dynamic>;
+          final data = snapshot.data!.data() as Map<String, dynamic>;
 
-            final List<String> images = (data['images'] as List<dynamic>? ?? [])
-                .map((e) => e.toString())
-                .toList();
+          final List<String> images = (data['images'] as List<dynamic>? ?? [])
+              .map((e) => e.toString())
+              .toList();
 
-            final String type = data['type'] ?? '';
-            final String serviceType = data['serviceType'] ?? '';
-            final num price = (data['price'] ?? 0) as num;
-            final String governorate =
-                data['governorate'] ??
-                data['governorateAr'] ??
-                data['governorateEn'] ??
-                '';
-            final bool isAr =
-                Localizations.localeOf(context).languageCode == 'ar';
-            final String area =
-                (isAr
-                    ? (data['areaAr'] ?? data['area'])
-                    : (data['areaEn'] ?? data['area'])) ??
-                '';
-            final String description = data['description'] ?? '';
-            final String status = data['status'] ?? '';
-            final Timestamp? createdAt = data['createdAt'] as Timestamp?;
+          final String type = data['type'] ?? '';
+          final String serviceType = data['serviceType'] ?? '';
+          final num price = (data['price'] ?? 0) as num;
+          final String governorate =
+              data['governorate'] ??
+              data['governorateAr'] ??
+              data['governorateEn'] ??
+              '';
+          final bool isAr =
+              Localizations.localeOf(context).languageCode == 'ar';
+          final String area =
+              (isAr
+                  ? (data['areaAr'] ?? data['area'])
+                  : (data['areaEn'] ?? data['area'])) ??
+              '';
+          final String description = data['description'] ?? '';
+          final String status = data['status'] ?? '';
+          final Timestamp? createdAt = data['createdAt'] as Timestamp?;
 
-            final String ownerName = data['fullName'] ?? "";
-            final String ownerPhone = data['ownerPhone'] ?? "";
-            final String ownerId = (data['ownerId'] ?? '').toString().trim();
+          final String ownerName = data['fullName'] ?? "";
+          final String ownerPhone = data['ownerPhone'] ?? "";
+          final String ownerId = (data['ownerId'] ?? '').toString().trim();
 
-            final int roomCount = (data['roomCount'] ?? 0) as int;
-            final int masterRoomCount = (data['masterRoomCount'] ?? 0) as int;
-            final int bathroomCount = (data['bathroomCount'] ?? 0) as int;
-            final int parkingCount = (data['parkingCount'] ?? 0) as int;
-            final double size = (data['size'] ?? 0).toDouble();
+          final int roomCount = (data['roomCount'] ?? 0) as int;
+          final int masterRoomCount = (data['masterRoomCount'] ?? 0) as int;
+          final int bathroomCount = (data['bathroomCount'] ?? 0) as int;
+          final int parkingCount = (data['parkingCount'] ?? 0) as int;
+          final double size = (data['size'] ?? 0).toDouble();
 
-            final bool hasElevator = data['hasElevator'] ?? false;
-            final bool hasCentralAC = data['hasCentralAC'] ?? false;
-            final bool hasSplitAC = data['hasSplitAC'] ?? false;
-            final bool hasMaidRoom = data['hasMaidRoom'] ?? false;
-            final bool hasDriverRoom = data['hasDriverRoom'] ?? false;
-            final bool hasLaundryRoom = data['hasLaundryRoom'] ?? false;
-            final bool hasGarden = data['hasGarden'] ?? false;
+          final bool hasElevator = data['hasElevator'] ?? false;
+          final bool hasCentralAC = data['hasCentralAC'] ?? false;
+          final bool hasSplitAC = data['hasSplitAC'] ?? false;
+          final bool hasMaidRoom = data['hasMaidRoom'] ?? false;
+          final bool hasDriverRoom = data['hasDriverRoom'] ?? false;
+          final bool hasLaundryRoom = data['hasLaundryRoom'] ?? false;
+          final bool hasGarden = data['hasGarden'] ?? false;
 
-            return ListView(
+          final String listingCategory =
+              (data['listingCategory'] ?? ListingCategory.normal)
+                  .toString()
+                  .trim();
+          final bool showChaletBooking =
+              !widget.isAdminView &&
+              listingCategory == ListingCategory.chalet &&
+              listingDataChaletAllowsDailyBooking(data) &&
+              listingDataIsPubliclyDiscoverable(data) &&
+              FirebaseAuth.instance.currentUser?.uid != ownerId;
+
+          return Scaffold(
+            backgroundColor: const Color(0xFFF7F7F7),
+            appBar: AppBar(
+              title: Text(
+                loc.propertyDetails,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              centerTitle: true,
+              actions: [
+                if (FirebaseAuth.instance.currentUser != null &&
+                    !widget.isAdminView)
+                  _FavoriteHeart(propertyId: widget.propertyId),
+              ],
+            ),
+            bottomNavigationBar: showChaletBooking
+                ? BookingBar(
+                    controller: _bookingController,
+                    pricePerNight: price.toDouble(),
+                  )
+                : null,
+            body: ListView(
               padding: const EdgeInsets.all(16),
               children: [
                 _buildImageSlider(images),
@@ -203,30 +243,40 @@ class PropertyDetailsPage extends StatelessWidget {
                   _translateStatus(context, status),
                 ),
 
-                if (!isAdminView &&
-                    auctionLotId != null &&
-                    auctionLotId!.trim().isNotEmpty)
+                if (showChaletBooking) ...[
+                  const SizedBox(height: 16),
+                  ChaletBookingWidget(
+                    propertyId: widget.propertyId,
+                    pricePerNight: price.toDouble(),
+                    controller: _bookingController,
+                    useExternalBookingBar: true,
+                  ),
+                ],
+
+                if (!widget.isAdminView &&
+                    widget.auctionLotId != null &&
+                    widget.auctionLotId!.trim().isNotEmpty)
                   _AuctionRegistrationForLot(
-                    lotDocId: auctionLotId!.trim(),
-                    expectedAuctionId: auctionId,
+                    lotDocId: widget.auctionLotId!.trim(),
+                    expectedAuctionId: widget.auctionId,
                     listingPrice: price.toDouble(),
                   ),
 
-                if (!isAdminView &&
-                    auctionLotId != null &&
-                    auctionLotId!.trim().isNotEmpty)
+                if (!widget.isAdminView &&
+                    widget.auctionLotId != null &&
+                    widget.auctionLotId!.trim().isNotEmpty)
                   _AuctionLotPublicRejectionStrip(
-                    lotDocId: auctionLotId!.trim(),
-                    expectedAuctionId: auctionId,
+                    lotDocId: widget.auctionLotId!.trim(),
+                    expectedAuctionId: widget.auctionId,
                   ),
 
-                if (!isAdminView &&
-                    auctionLotId != null &&
-                    auctionLotId!.trim().isNotEmpty &&
+                if (!widget.isAdminView &&
+                    widget.auctionLotId != null &&
+                    widget.auctionLotId!.trim().isNotEmpty &&
                     ownerId.isNotEmpty &&
                     FirebaseAuth.instance.currentUser?.uid == ownerId)
                   _SellerAuctionOutcomeEntry(
-                    lotId: auctionLotId!.trim(),
+                    lotId: widget.auctionLotId!.trim(),
                   ),
 
                 const SizedBox(height: 16),
@@ -253,12 +303,12 @@ class PropertyDetailsPage extends StatelessWidget {
 
                 const SizedBox(height: 16),
 
-                if (isAdminView)
+                if (widget.isAdminView)
                   _buildOwnerCard(
                     context,
                     ownerName,
                     ownerPhone,
-                    propertyId,
+                    widget.propertyId,
                     ownerId,
                   ),
 
@@ -268,10 +318,11 @@ class PropertyDetailsPage extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
-                if (!isAdminView)
+                // Daily chalets: booking bar + calendar are the primary flow (no duplicate CTA).
+                if (!widget.isAdminView && !showChaletBooking)
                   _buildInterestedButton(
                     context,
-                    propertyId,
+                    widget.propertyId,
                     type,
                     data['areaAr'] ?? '',
                     data['areaEn'] ?? '',
@@ -283,9 +334,9 @@ class PropertyDetailsPage extends StatelessWidget {
                   ),
                 const SizedBox(height: 32),
               ],
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -887,8 +938,10 @@ class _AuctionLotPublicRejectionStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final col = AuctionFirestorePaths.publicLots;
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream:
-          FirebaseFirestore.instance.collection(col).doc(lotDocId).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection(col)
+          .doc(lotDocId)
+          .snapshots(),
       builder: (context, docSnap) {
         final ds = docSnap.data;
         if (ds == null || !ds.exists || ds.data() == null) {
@@ -951,7 +1004,10 @@ class _SellerAuctionOutcomeEntry extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.how_to_vote_outlined, color: Colors.teal.shade800),
+                      Icon(
+                        Icons.how_to_vote_outlined,
+                        color: Colors.teal.shade800,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -971,17 +1027,15 @@ class _SellerAuctionOutcomeEntry extends StatelessWidget {
                     isAr
                         ? 'راجع أعلى مزايدة وقرّر القبول أو الرفض.'
                         : 'Review the highest bid and accept or reject.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade800,
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
                   ),
                   const SizedBox(height: 10),
                   FilledButton(
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => SellerAuctionApprovalPage(lotId: lotId),
+                          builder: (_) =>
+                              SellerAuctionApprovalPage(lotId: lotId),
                         ),
                       );
                     },
@@ -1014,7 +1068,10 @@ class _AuctionRegistrationForLot extends StatelessWidget {
     final col = AuctionFirestorePaths.publicLots;
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection(col).doc(lotDocId).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection(col)
+          .doc(lotDocId)
+          .snapshots(),
       builder: (context, docSnap) {
         if (!docSnap.hasData) return const SizedBox.shrink();
         final ds = docSnap.data!;

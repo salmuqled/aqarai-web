@@ -6,7 +6,7 @@
 // State: _currentFilters (Map), _lastResults (List<QueryDocumentSnapshot>).
 //
 // Flow in _sendMessage():
-//   1) AiBrainService.analyzeMessage(message: text, chatHistory: lastMessages, currentFilters: _currentFilters)
+//   1) AiBrainService.analyzeMessage(..., top3LastResults: last 3 shown listing memory: propertyId, price, area, type, rank)
 //   2) If intent == greeting -> append friendly message, stop
 //   3) If reset_filters == true -> clear _currentFilters and _lastResults
 //   4) Merge params_patch into _currentFilters
@@ -15,6 +15,7 @@
 //   7) Save results to _lastResults
 //   8) Save buyer interest (UserInterestService) if user signed in and filters non-empty; ignore errors
 //   9) Send top 3 to aqaraiAgentCompose (composeMarketingReply), append reply
+//   10) No-results fallback sets _awaitingNotifyConsent; short "yes" (نعم/اي/تمام/ok) saves interest again + confirmation
 //
 // Step-by-step tests:
 //   a) "السلام عليكم" -> intent=greeting, append friendly message, stop
@@ -40,6 +41,7 @@ import 'package:aqarai_app/services/user_activity_service.dart';
 import 'package:aqarai_app/widgets/chat_bubble.dart';
 import 'package:aqarai_app/widgets/listing_card.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
+import 'package:aqarai_app/widgets/notifications_inbox_bell_button.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 
 /// إعلان يُعرض في نتائج المساعد (معتمد وظاهر للعميل).
@@ -78,6 +80,9 @@ class _AssistantPageState extends State<AssistantPage>
 
   /// نتائج آخر استعلام — للرد على المتابعة ولتأليف الرد التسويقي
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _lastResults = [];
+
+  /// True after a no-results reply that offered to notify; next short confirmation saves interest explicitly.
+  bool _awaitingNotifyConsent = false;
 
   /// مناطق قريبة للـ fallback عند عدم وجود نتائج في المنطقة المطلوبة (areaCode → قائمة areaCode)
   static const Map<String, List<String>> _nearbyAreaCodes = {
@@ -190,6 +195,23 @@ class _AssistantPageState extends State<AssistantPage>
         return;
       }
 
+      if (_awaitingNotifyConsent) {
+        if (_isAffirmativeNotifyConsent(text)) {
+          try {
+            await UserInterestService().saveInterest(
+              userId: user.uid,
+              filters: Map<String, dynamic>.from(_currentFilters),
+            );
+          } catch (_) {}
+          _awaitingNotifyConsent = false;
+          _appendReply(_isAr
+              ? 'تمام 👌 راح أبلغك أول ما ينزل شيء مناسب لك'
+              : 'Got it 👌 I\'ll notify you as soon as something suitable is listed.');
+          return;
+        }
+        _awaitingNotifyConsent = false;
+      }
+
       final aiBrain = AiBrainService();
       final lastMessages = _last8Messages();
 
@@ -197,6 +219,8 @@ class _AssistantPageState extends State<AssistantPage>
         message: text,
         chatHistory: lastMessages,
         currentFilters: _currentFilters.isEmpty ? null : Map<String, dynamic>.from(_currentFilters),
+        top3LastResults: _top3MemoryForAnalyze(),
+        locale: _isAr ? 'ar' : 'en',
       );
 
       final intent = result['intent']?.toString() ?? 'general_question';
@@ -229,6 +253,103 @@ class _AssistantPageState extends State<AssistantPage>
         }
       }
 
+      final referencedPropertyId = result['referenced_property_id']?.toString().trim();
+      if (intent == 'reference_listing' &&
+          referencedPropertyId != null &&
+          referencedPropertyId.isNotEmpty) {
+        final idx = _lastResults.indexWhere((d) => d.id == referencedPropertyId);
+        if (idx < 0) {
+          _appendReply(_isAr
+              ? 'ما لقيت نفس العقار في القائمة الحالية. جرّب تبحث مرة ثانية أو اختر من النتائج الظاهرة.'
+              : 'That listing isn\'t in the current results anymore. Try searching again or pick from the list above.');
+          return;
+        }
+        final chosen = _lastResults[idx];
+        final chosenData = chosen.data();
+        if (!mounted) return;
+        setState(() {
+          final ac = chosenData['areaCode']?.toString().trim();
+          if (ac != null && ac.isNotEmpty) _currentFilters['areaCode'] = ac;
+          final ty = chosenData['type']?.toString().trim();
+          if (ty != null && ty.isNotEmpty) _currentFilters['type'] = ty;
+          final st = chosenData['serviceType']?.toString().trim();
+          if (st != null && st.isNotEmpty) _currentFilters['serviceType'] = st;
+          final rest = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(_lastResults);
+          rest.removeAt(idx);
+          _lastResults = [chosen, ...rest];
+        });
+        try {
+          final interestUser = FirebaseAuth.instance.currentUser;
+          if (interestUser != null && _currentFilters.isNotEmpty) {
+            await UserInterestService().saveInterest(
+              userId: interestUser.uid,
+              filters: _currentFilters,
+            );
+          }
+        } catch (_) {}
+        final areaCodeRef = _currentFilters['areaCode']?.toString().trim() ?? '';
+        final userBudgetRef = _currentFilters['budget'] is num
+            ? (_currentFilters['budget'] as num).toDouble()
+            : (_currentFilters['budget'] != null ? double.tryParse(_currentFilters['budget'].toString()) : null);
+        final propsForRank = _buildPropsForRank(_lastResults);
+        var top3ListRef = await aiBrain.rankResults(
+          properties: propsForRank,
+          requestedAreaCode: areaCodeRef,
+          nearbyAreaCodes: const [],
+          userBudget: userBudgetRef,
+          idToken: idToken,
+        );
+        if (top3ListRef.isNotEmpty) {
+          final refPos = top3ListRef.indexWhere((e) => e['id'] == referencedPropertyId);
+          if (refPos > 0) {
+            final c = List<Map<String, dynamic>>.from(top3ListRef);
+            final it = c.removeAt(refPos);
+            top3ListRef = [it, ...c];
+          }
+        } else {
+          top3ListRef = [
+            <String, dynamic>{
+              'id': chosen.id,
+              'areaAr': chosenData['areaAr'],
+              'areaEn': chosenData['areaEn'],
+              'type': chosenData['type'],
+              'price': chosenData['price'],
+              'size': chosenData['size'],
+            },
+          ];
+        }
+        final areaNameRef =
+            areaCodeRef.isNotEmpty ? (_areaCodeToLabel[areaCodeRef] ?? areaCodeRef) : null;
+        final propertyTypeRef = _currentFilters['type']?.toString().trim();
+        final serviceTypeRef = _currentFilters['serviceType']?.toString().trim();
+        final refSuggestions = _buildSmartSuggestions(
+          area: areaNameRef,
+          propertyType: propertyTypeRef?.isNotEmpty == true ? propertyTypeRef : null,
+          serviceType: serviceTypeRef?.isNotEmpty == true ? serviceTypeRef : null,
+          isAr: _isAr,
+        );
+        final refReply = await aiBrain.composeMarketingReply(
+          top3Results: top3ListRef,
+          idToken: idToken,
+          isAr: _isAr,
+          userAskedForMore: false,
+          isNearbyFallback: false,
+          requestedAreaLabel: '',
+          rawMessage: text,
+        );
+        final refReplyResults = _enrichResultsWithFullDocs(
+          top3ListRef.take(3).map((e) => Map<String, dynamic>.from(e)).toList(),
+          _lastResults,
+        );
+        _awaitingNotifyConsent = false;
+        _appendReply(
+          refReply,
+          results: refReplyResults,
+          suggestions: refSuggestions.isNotEmpty ? refSuggestions : null,
+        );
+        return;
+      }
+
       if (!isComplete) {
         final msg = clarifyingQuestions.isNotEmpty
             ? clarifyingQuestions.join('\n')
@@ -243,15 +364,16 @@ class _AssistantPageState extends State<AssistantPage>
       }
 
       final searchService = ConversationalSearchService();
-      final query = searchService.buildQueryFromMap(_currentFilters);
       final userBudgetForQuery = _currentFilters['budget'] is num
           ? (_currentFilters['budget'] as num).toDouble()
           : (_currentFilters['budget'] != null ? double.tryParse(_currentFilters['budget'].toString()) : null);
-      // استعلام Firestore مبسّط (منطقة + معتمد) ثم تصفية نوع الخدمة/العقار محلياً — نجلب عيّنة كافية.
-      final fetchLimit =
-          (userBudgetForQuery != null && userBudgetForQuery > 0) ? 150 : 100;
-      final snapshot = await query.limit(fetchLimit).get();
-      var docs = snapshot.docs
+      final limitPerBranch =
+          (userBudgetForQuery != null && userBudgetForQuery > 0) ? 75 : 50;
+      var docs = await searchService.fetchMarketplaceMergedFromMap(
+        _currentFilters,
+        limitPerCategory: limitPerBranch,
+      );
+      docs = docs
           .where((d) =>
               searchService.documentMatchesConversationFilters(d.data(), _currentFilters))
           .where((d) => _listingVisibleForAssistantSearch(d.data()))
@@ -324,9 +446,11 @@ class _AssistantPageState extends State<AssistantPage>
       if (top3List.isEmpty) {
         final nearbyCodes = areaCode.isNotEmpty ? _nearbyAreaCodes[areaCode] : null;
         if (nearbyCodes != null && nearbyCodes.isNotEmpty) {
-          final nearbyQuery = searchService.buildQueryNearbyFromMap(_currentFilters, nearbyCodes);
-          final nearbySnapshot = await nearbyQuery.get();
-          final nearbyDocs = nearbySnapshot.docs
+          var nearbyDocs = await searchService.fetchNearbyMarketplaceMergedFromMap(
+            _currentFilters,
+            nearbyCodes,
+          );
+          nearbyDocs = nearbyDocs
               .where((d) =>
                   searchService.documentMatchesConversationFilters(d.data(), _currentFilters))
               .where((d) => _listingVisibleForAssistantSearch(d.data()))
@@ -398,18 +522,18 @@ class _AssistantPageState extends State<AssistantPage>
               replyResults = recs.take(3).map((e) => Map<String, dynamic>.from(e as Map)).toList();
             } else {
               reply = _isAr
-                  ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
-                  : 'No matching property in this area right now.\n\nI can:\n1) Search nearby areas\n2) Show all available properties\n3) Register your interest and notify you when a new listing appears.';
+                  ? 'ما لقيت نفس طلبك بالضبط حالياً، لكن أقدر أتابع لك أول ما ينزل عقار مناسب لك 👌\n\nخلّني أعرف ميزانيتك أو إذا تبي أوسّع لك البحث.\n\nوإذا حاب، أقدر أبلّغك مباشرة أول ما ينزل شيء قريب من طلبك.\n\nأقدر كمان:\n1. أبحث لك في مناطق قريبة\n2. أعرض لك العقارات المتوفرة\n3. أسجّل اهتمامك وأوصّلك إشعار أول ما يصير إعلان جديد.'
+                  : 'I couldn\'t find an exact match for what you asked for right now, but I can follow up as soon as something suitable is listed.\n\nTell me your budget, or if you\'d like me to widen the search.\n\nIf you want, I can notify you as soon as something close to your request goes live.\n\nI can also:\n1. Search nearby areas\n2. Show available listings\n3. Save your interest so you get an alert when a new listing appears.';
             }
           } catch (_) {
             reply = _isAr
-                ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
-                : 'No matching property in this area right now.\n\nI can:\n1) Search nearby areas\n2) Show all available properties\n3) Register your interest and notify you when a new listing appears.';
+                ? 'ما لقيت نفس طلبك بالضبط حالياً، لكن أقدر أتابع لك أول ما ينزل عقار مناسب لك 👌\n\nخلّني أعرف ميزانيتك أو إذا تبي أوسّع لك البحث.\n\nوإذا حاب، أقدر أبلّغك مباشرة أول ما ينزل شيء قريب من طلبك.\n\nأقدر كمان:\n1. أبحث لك في مناطق قريبة\n2. أعرض لك العقارات المتوفرة\n3. أسجّل اهتمامك وأوصّلك إشعار أول ما يصير إعلان جديد.'
+                : 'I couldn\'t find an exact match for what you asked for right now, but I can follow up as soon as something suitable is listed.\n\nTell me your budget, or if you\'d like me to widen the search.\n\nIf you want, I can notify you as soon as something close to your request goes live.\n\nI can also:\n1. Search nearby areas\n2. Show available listings\n3. Save your interest so you get an alert when a new listing appears.';
           }
         } else {
           reply = _isAr
-              ? 'حالياً ما لقيت عقار مطابق في هذه المنطقة.\n\nأقدر:\n1) أبحث في مناطق قريبة\n2) أعرض كل العقارات المتوفرة\n3) أسجلك كمهتم وأرسل لك إشعار إذا نزل إعلان جديد.'
-              : 'No matching property in this area right now.\n\nI can:\n1) Search nearby areas\n2) Show all available properties\n3) Register your interest and notify you when a new listing appears.';
+              ? 'ما لقيت نفس طلبك بالضبط حالياً، لكن أقدر أتابع لك أول ما ينزل عقار مناسب لك 👌\n\nخلّني أعرف ميزانيتك أو إذا تبي أوسّع لك البحث.\n\nوإذا حاب، أقدر أبلّغك مباشرة أول ما ينزل شيء قريب من طلبك.\n\nأقدر كمان:\n1. أبحث لك في مناطق قريبة\n2. أعرض لك العقارات المتوفرة\n3. أسجّل اهتمامك وأوصّلك إشعار أول ما يصير إعلان جديد.'
+              : 'I couldn\'t find an exact match for what you asked for right now, but I can follow up as soon as something suitable is listed.\n\nTell me your budget, or if you\'d like me to widen the search.\n\nIf you want, I can notify you as soon as something close to your request goes live.\n\nI can also:\n1. Search nearby areas\n2. Show available listings\n3. Save your interest so you get an alert when a new listing appears.';
         }
       } else {
         reply = await aiBrain.composeMarketingReply(
@@ -435,12 +559,16 @@ class _AssistantPageState extends State<AssistantPage>
         serviceType: serviceType?.isNotEmpty == true ? serviceType : null,
         isAr: _isAr,
       );
+      final isNoResultsNotifyFallback =
+          top3List.isEmpty && (replyResults == null || replyResults.isEmpty);
+      _awaitingNotifyConsent = isNoResultsNotifyFallback;
       _appendReply(
         reply,
         results: replyResults,
         suggestions: suggestions.isNotEmpty ? suggestions : null,
       );
     } catch (e, st) {
+      _awaitingNotifyConsent = false;
       debugPrint('Assistant _sendMessage error: $e');
       debugPrint('Stack trace: $st');
       final isNetworkError = e is SocketException ||
@@ -468,6 +596,35 @@ class _AssistantPageState extends State<AssistantPage>
     if (code == null) return false;
     // 50 = Network is down (macOS/iOS), 51 = Network unreachable, 61 = Connection refused, etc.
     return const [50, 51, 61, 64, 65].contains(code);
+  }
+
+  /// User confirmed they want notify/interest after a no-results fallback (short replies only).
+  static bool _isAffirmativeNotifyConsent(String raw) {
+    final s = raw.trim();
+    if (s.isEmpty) return false;
+    final lower = s.toLowerCase();
+    if (RegExp(r'^(ok|okay|yes|y)([.!…]*)$', caseSensitive: false).hasMatch(lower)) {
+      return true;
+    }
+    final inner = s
+        .replaceAll(RegExp(r'^[\s.!؟،,…]+|[\s.!؟،,…]+$'), '')
+        .trim();
+    const ar = <String>{
+      'نعم',
+      'اي',
+      'أي',
+      'ايه',
+      'أيه',
+      'تمام',
+      'موافق',
+      'اوكي',
+      'أوكي',
+      'ايوه',
+      'أيوه',
+      'ايوة',
+      'أيوة',
+    };
+    return ar.contains(inner) || ar.contains(s);
   }
 
   /// Build contextual suggestion buttons based on current search filters.
@@ -533,6 +690,34 @@ class _AssistantPageState extends State<AssistantPage>
     _scrollToBottom();
   }
 
+  /// Compact memory of the last 3 listings shown (order = rank 1..3) for analyze / reference resolution.
+  List<Map<String, dynamic>> _top3MemoryForAnalyze() {
+    if (_lastResults.isEmpty) return [];
+    final n = _lastResults.length >= 3 ? 3 : _lastResults.length;
+    final out = <Map<String, dynamic>>[];
+    for (var i = 0; i < n; i++) {
+      final doc = _lastResults[i];
+      final d = doc.data();
+      final price = d['price'];
+      num? p;
+      if (price is num) {
+        p = price;
+      } else if (price != null) {
+        p = num.tryParse(price.toString());
+      }
+      final area = '${d['areaAr'] ?? d['areaEn'] ?? ''}'.trim();
+      final ptype = '${d['type'] ?? ''}'.trim();
+      out.add(<String, dynamic>{
+        'propertyId': doc.id,
+        'price': p,
+        'area': area,
+        'propertyType': ptype,
+        'rank': i + 1,
+      });
+    }
+    return out;
+  }
+
   List<Map<String, String>> _last8Messages() {
     final list = <Map<String, String>>[];
     final start = _messages.length > 8 ? _messages.length - 8 : 0;
@@ -590,6 +775,11 @@ class _AssistantPageState extends State<AssistantPage>
   /// True if the user message suggests they want more/different options (e.g. "عندك أكثر؟", "غيره؟").
   bool _userAskedForMoreOptions(String message) {
     final lower = message.trim().toLowerCase();
+    // Listing picks (الثاني، الأرخص…) — not "show me more options"
+    if (RegExp(r'الثاني|الثالث|الأول|الاول|الأرخص|الارخص|الأغلى|الاغلى|اللي قبل|الي قبل|السابق|الأخير|الاخير')
+        .hasMatch(lower)) {
+      return false;
+    }
     const arPatterns = ['أكثر', 'اغير', 'غيره', 'ثاني', 'ثانية', 'غير', 'خيارات', 'بديل', 'بدائل'];
     const enPatterns = ['more', 'another', 'other', 'different', 'alternatives', 'options', 'else'];
     final hasAr = arPatterns.any((p) => lower.contains(p));
@@ -655,6 +845,8 @@ class _AssistantPageState extends State<AssistantPage>
                     ),
                   ),
                   const Spacer(),
+                  const NotificationsInboxBellButton(isOnDarkBackground: false),
+                  const SizedBox(width: 8),
                   Material(
                     color: surfaceLightGrey,
                     borderRadius: BorderRadius.circular(24),

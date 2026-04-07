@@ -19,6 +19,7 @@ import 'package:aqarai_app/widgets/admin_decision_accuracy_section.dart';
 import 'package:aqarai_app/widgets/admin_caption_performance_section.dart';
 import 'package:aqarai_app/widgets/admin_instagram_post_dialog.dart';
 import 'package:aqarai_app/pages/add_company_payment_page.dart';
+import 'package:aqarai_app/pages/admin_chalet_payouts_page.dart';
 import 'package:aqarai_app/pages/admin_auction_earnings_page.dart';
 import 'package:aqarai_app/pages/admin_auction_requests_page.dart';
 import 'package:aqarai_app/pages/admin_control_center_page.dart';
@@ -29,6 +30,9 @@ import 'package:aqarai_app/widgets/admin_outstanding_section.dart';
 import 'package:aqarai_app/widgets/admin_priority_section.dart';
 import 'package:aqarai_app/widgets/admin_conversion_section.dart';
 import 'package:aqarai_app/widgets/admin_deal_pipeline_section.dart';
+import 'package:aqarai_app/widgets/admin_followup_section.dart';
+import 'package:aqarai_app/widgets/admin_analytics_section.dart';
+import 'package:aqarai_app/widgets/admin_crm_snapshot_section.dart';
 import 'package:aqarai_app/widgets/admin_leads_split_section.dart';
 import 'package:aqarai_app/widgets/hybrid_marketing_settings_dialog.dart';
 
@@ -72,6 +76,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         title: Text(isAr ? 'لوحة القرارات' : 'Business dashboard'),
         centerTitle: true,
         actions: [
+          IconButton(
+            tooltip: AppLocalizations.of(context)!.adminChaletPayoutsTitle,
+            icon: const Icon(Icons.payments_outlined),
+            onPressed: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const AdminChaletPayoutsPage(),
+                ),
+              );
+            },
+          ),
           IconButton(
             tooltip: AppLocalizations.of(context)!.companyPaymentAddTitle,
             icon: const Icon(Icons.add_card_outlined),
@@ -397,6 +413,12 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
 
                       const SizedBox(height: 20),
                       AdminDealPipelineSection(dealDocs: docs),
+                      const SizedBox(height: 20),
+                      AdminCrmSnapshotSection(dealDocs: docs, isAr: isAr),
+                      const SizedBox(height: 20),
+                      AdminAnalyticsSection(dealDocs: docs, isAr: isAr),
+                      const SizedBox(height: 20),
+                      AdminFollowupSection(dealDocs: docs),
                       const SizedBox(height: 20),
                       AdminLeadsSplitSection(dealDocs: docs),
                       const SizedBox(height: 20),

@@ -10,8 +10,14 @@ import 'package:device_info_plus/device_info_plus.dart';
 
 // ✅ بدل main.dart
 import 'package:aqarai_app/app/navigation_keys.dart';
+import 'package:aqarai_app/models/listing_enums.dart';
+import 'package:aqarai_app/pages/admin_deal_detail_page.dart';
+import 'package:aqarai_app/pages/assistant_page.dart';
 import 'package:aqarai_app/pages/auction_details_page.dart';
+import 'package:aqarai_app/pages/chalets_page.dart';
+import 'package:aqarai_app/pages/owner_dashboard_page.dart';
 import 'package:aqarai_app/services/notification_click_tracking_service.dart';
+import 'package:aqarai_app/widgets/property_details_page.dart';
 
 // ✅ للتهيئة الآمنة داخل الهاندلر الخلفي
 import 'package:firebase_core/firebase_core.dart';
@@ -129,30 +135,202 @@ class NotificationService {
     });
 
     // 6) الهاندلرز — تتبع «فتح من الإشعار» فقط عند فتح التطبيق من التنبيه (ليس العرض في المقدّمة).
-    FirebaseMessaging.onMessage.listen((m) => _handle(context, m));
+    FirebaseMessaging.onMessage.listen((m) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx == null) return;
+        _handle(ctx, m, openedFromTap: false);
+      });
+    });
     FirebaseMessaging.onMessageOpenedApp.listen((m) {
-      unawaited(NotificationClickTrackingService.recordOpenFromNotification(m));
-      _handle(context, m);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx == null) return;
+        _handle(ctx, m, openedFromTap: true);
+        unawaited(NotificationClickTrackingService.recordOpenFromNotification(m));
+      });
     });
 
     // 7) إذا تم فتح التطبيق من إشعار وهو مغلق مسبقًا
     final initialMsg = await _fcm.getInitialMessage();
     if (initialMsg != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx == null) return;
         unawaited(
           NotificationClickTrackingService.recordOpenFromNotification(initialMsg),
         );
-        _handle(context, initialMsg);
+        _handle(ctx, initialMsg, openedFromTap: true);
       });
     }
 
     return token;
   }
 
+  /// Marks server-backed inbox doc read when user opens a commerce push (best-effort).
+  static Future<void> _markNotificationOpenedIfPresent(
+    Map<String, dynamic> data,
+  ) async {
+    final id = data['notificationId']?.toString().trim() ?? '';
+    if (id.isEmpty) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(id)
+          .update({'isRead': true});
+    } catch (e) {
+      debugPrint('notifications mark read: $e');
+    }
+  }
+
+  /// Opens commerce/chalet deep links (inbox, tests) — same behavior as FCM tap.
+  static void navigateCommerceDeepLink(Map<String, dynamic> data) {
+    _navigateChaletCommerce(Map<String, dynamic>.from(data));
+  }
+
+  static void _navigateChaletCommerce(Map<String, dynamic> data) {
+    unawaited(_markNotificationOpenedIfPresent(data));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final nav = rootNavigatorKey.currentState;
+        if (nav == null) return;
+
+        void pushHome() {
+          nav.push(
+            MaterialPageRoute<void>(builder: (_) => const AssistantPage()),
+          );
+        }
+
+        void pushOwnerDashboard() {
+          nav.push(
+            MaterialPageRoute<void>(
+              builder: (_) => const OwnerDashboardPage(),
+            ),
+          );
+        }
+
+        void pushProperty(String pid) {
+          final trimmed = pid.trim();
+          if (trimmed.isEmpty) {
+            pushHome();
+            return;
+          }
+          nav.push(
+            MaterialPageRoute<void>(
+              builder: (_) => PropertyDetailsPage(
+                propertyId: trimmed,
+                leadSource: DealLeadSource.direct,
+              ),
+            ),
+          );
+        }
+
+        /// Deep link: prefer property; otherwise home (bookingId without property is rare).
+        void openBookingDetailsFromData() {
+          final propertyId = data['propertyId']?.toString().trim() ?? '';
+          final bookingId = data['bookingId']?.toString().trim() ?? '';
+          if (propertyId.isNotEmpty) {
+            pushProperty(propertyId);
+            return;
+          }
+          if (bookingId.isNotEmpty) {
+            pushHome();
+            return;
+          }
+          pushHome();
+        }
+
+        final screenRaw = data['screen']?.toString().trim() ?? '';
+        final nType = data['notificationType']?.toString() ?? '';
+
+        if (screenRaw == 'payout' ||
+            (screenRaw.isEmpty && nType == 'payout')) {
+          pushOwnerDashboard();
+          return;
+        }
+
+        if (screenRaw == 'property' ||
+            (screenRaw.isEmpty && nType == 'refund')) {
+          final propertyId = data['propertyId']?.toString().trim() ?? '';
+          if (propertyId.isNotEmpty) {
+            pushProperty(propertyId);
+          } else {
+            nav.push(
+              MaterialPageRoute<void>(builder: (_) => const ChaletsPage()),
+            );
+          }
+          return;
+        }
+
+        if (screenRaw == 'booking' ||
+            (screenRaw.isEmpty && nType == 'booking')) {
+          openBookingDetailsFromData();
+          return;
+        }
+      } catch (e, st) {
+        debugPrint('Chalet FCM navigation failed: $e\n$st');
+      }
+    });
+  }
+
+  static void _presentChaletForegroundSnackBar(
+    BuildContext context,
+    RemoteMessage message,
+  ) {
+    final loc = Localizations.localeOf(context);
+    final actionLabel = loc.languageCode == 'ar' ? 'عرض' : 'View';
+    final body =
+        message.notification?.body ?? message.notification?.title ?? '';
+    if (body.isEmpty) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = rootNavigatorKey.currentContext ?? context;
+      if (!target.mounted) return;
+      ScaffoldMessenger.maybeOf(target)?.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(body),
+          action: SnackBarAction(
+            label: actionLabel,
+            onPressed: () => _navigateChaletCommerce(message.data),
+          ),
+        ),
+      );
+    });
+  }
+
   /// يعرض الـ Dialog ويستدعي الCallable حسب زر المستخدم
-  static void _handle(BuildContext context, RemoteMessage message) {
+  static void _handle(
+    BuildContext context,
+    RemoteMessage message, {
+    required bool openedFromTap,
+  }) {
     final data = message.data;
+    final nType = data['notificationType']?.toString();
+    final screenRaw = data['screen']?.toString().trim() ?? '';
+    if (nType == 'booking' ||
+        nType == 'payout' ||
+        nType == 'refund' ||
+        screenRaw == 'booking' ||
+        screenRaw == 'property' ||
+        screenRaw == 'payout') {
+      if (openedFromTap) {
+        _navigateChaletCommerce(data);
+      } else {
+        _presentChaletForegroundSnackBar(context, message);
+      }
+      return;
+    }
+
     final type = data['type']?.toString();
+
+    if (type == DealFollowUpFcmTypes.dealFollowup ||
+        type == DealFollowUpFcmTypes.dealFollowupDueLegacy) {
+      _navigateToAdminDealDetail(data);
+      return;
+    }
 
     switch (type) {
       case AuctionApprovalReminderFcmTypes.oneHour:
@@ -277,6 +455,21 @@ class NotificationService {
 
   /// تحديث الاشتراك في Topic الإدمن (تقدر تناديها عند تغيّر الصلاحية)
   /// فتح صفحة تفاصيل القطعة بعد الضغط على تذكير اعتماد المزاد (FCM).
+  /// Opens [AdminDealDetailPage] from FCM `deal_followup` (scheduled follow-up reminders).
+  static void _navigateToAdminDealDetail(Map<String, dynamic> data) {
+    final dealId = data['dealId']?.toString().trim() ?? '';
+    if (dealId.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final nav = rootNavigatorKey.currentState;
+      if (nav == null) return;
+      nav.push(
+        MaterialPageRoute<void>(
+          builder: (_) => AdminDealDetailPage(dealId: dealId),
+        ),
+      );
+    });
+  }
+
   static void _navigateToAuctionApprovalLot(Map<String, dynamic> data) {
     final lotId = data['lotId']?.toString().trim() ?? '';
     if (lotId.isEmpty) return;
@@ -307,6 +500,16 @@ class NotificationService {
 }
 
 /// قيم `data['type']` لتذكيرات اعتماد المزاد (تطابق Cloud Function).
+/// `data['type']` for deal follow-up push (matches Cloud Function payload).
+abstract final class DealFollowUpFcmTypes {
+  DealFollowUpFcmTypes._();
+
+  static const String dealFollowup = 'deal_followup';
+
+  /// Older scheduled job payloads; still open the same screen.
+  static const String dealFollowupDueLegacy = 'deal_followup_due';
+}
+
 abstract final class AuctionApprovalReminderFcmTypes {
   AuctionApprovalReminderFcmTypes._();
 

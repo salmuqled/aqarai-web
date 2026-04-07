@@ -5,6 +5,7 @@ import type { SearchContext } from "./search_context";
 import type { Firestore } from "firebase-admin/firestore";
 import { detectBuyerIntent } from "./intent_parser";
 import { computeAveragePrice, detectBestDeal } from "./ranking_engine";
+import { isNormalListingMarketplaceVisible } from "./propertyVisibility";
 
 export interface InsightBundle {
   priceRangeText?: string;
@@ -68,11 +69,17 @@ async function getMarketSupplyStats(
   if (!areaCode?.trim() || !propertyType?.trim()) return { supplyCount: 0 };
   const q = db
     .collection("properties")
-    .where("areaCode", "==", areaCode.trim())
+    .where("approved", "==", true)
+    .where("isActive", "==", true)
+    .where("listingCategory", "==", "normal")
+    .where("hiddenFromPublic", "==", false)
     .where("type", "==", propertyType.trim())
-    .where("status", "==", "active");
+    .where("areaCode", "==", areaCode.trim());
   const snap = await q.get();
-  return { supplyCount: snap.size };
+  const supplyCount = snap.docs.filter((d) =>
+    isNormalListingMarketplaceVisible(d.data())
+  ).length;
+  return { supplyCount };
 }
 
 type MarketSignal = "high_demand_low_supply" | "high_demand" | "low_demand" | "normal";

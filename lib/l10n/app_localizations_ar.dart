@@ -1457,7 +1457,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminRealEarningsTotalRevenue => 'إجمالي الإيراد';
 
   @override
-  String get adminRealEarningsLegacyNote => 'تُحتسب العمولة للصفقات ذات dealStatus موقّع أو مغلق (مُنهية في CRM). الحالة القديمة «sold» لا تُستخدم في هذا الإجمالي.';
+  String get adminRealEarningsLegacyNote => 'تُحتسب العمولة للصفقات ذات dealStatus تم توقيع العقد أو مغلق (مُنهية في CRM؛ القيمة المخزّنة signed/closed). الحالة القديمة «sold» لا تُستخدم في هذا الإجمالي.';
 
   @override
   String get adminRealEarningsChartEmpty => 'لا توجد أحداث بتاريخ لرسم المنحنى.';
@@ -1854,6 +1854,38 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminDealsTab => 'الصفقات';
 
   @override
+  String get adminDealsSubtabNew => 'جديد';
+
+  @override
+  String get adminDealsSubtabInProgress => 'قيد المتابعة';
+
+  @override
+  String get adminDealsSubtabOverdue => 'متأخر';
+
+  @override
+  String get adminDealsCollectionTab => 'قيد التحصيل';
+
+  @override
+  String get adminDealsCollectionEmpty => 'لا صفقات بانتظار تحصيل العمولة.';
+
+  @override
+  String get adminDealSendPaymentDetails => 'إرسال بيانات الدفع';
+
+  @override
+  String get adminDealMarkCommissionReceived => 'تم استلام العمولة';
+
+  @override
+  String adminDealPaymentShareBody(String iban, String amount) {
+    return 'يرجى تحويل العمولة على الحساب التالي:\nIBAN: $iban\nالمبلغ: $amount د.ك';
+  }
+
+  @override
+  String get adminDealCommissionCollectInvalidStatus => 'يمكن تحصيل العمولة للصفقات الموقّعة أو المغلقة فقط.';
+
+  @override
+  String get adminDealCommissionAlreadyPaid => 'تم تسجيل استلام العمولة لهذه الصفقة مسبقاً.';
+
+  @override
   String get adminDealDetailTitle => 'صفقة';
 
   @override
@@ -1875,6 +1907,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminDealFinalPriceRequired => 'يجب إدخال سعر الاتفاق أولاً';
 
   @override
+  String get adminDealSignedPriceSheetTitle => 'أدخل سعر الاتفاق';
+
+  @override
+  String get adminDealSignedPriceHint => 'مثال: 350';
+
+  @override
   String get adminDealPipelineStatus => 'حالة الصفقة';
 
   @override
@@ -1884,7 +1922,70 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminDealCommissionPaid => 'تم استلام العمولة';
 
   @override
+  String get adminDealCommissionPaidLockedHint => 'يُفعّل عندما تكون حالة الصفقة: تم توقيع العقد أو مغلق.';
+
+  @override
+  String get adminDealCommissionPaidFromLedgerHint => 'يُحدَّث تلقائياً عند تأكيد دفع عمولة في سجل التحصيل (أدمن ← المدفوعات).';
+
+  @override
+  String get adminDealCommissionNotInLedger => 'أكّد العمولة في سجل التحصيل أولاً (company_payments)، ثم أغلق الصفقة.';
+
+  @override
   String get adminDealOpenListing => 'فتح الإعلان';
+
+  @override
+  String get adminDealMarkContacted => 'تم التواصل';
+
+  @override
+  String get adminDealContactMarked => 'تم تحديث وقت آخر تواصل';
+
+  @override
+  String get adminDealAddNoteHint => 'أضف ملاحظة';
+
+  @override
+  String get adminDealSaveNote => 'حفظ';
+
+  @override
+  String get adminDealNoteSaved => 'تم حفظ الملاحظة';
+
+  @override
+  String get adminDealFollowUpDateLabel => 'موعد المتابعة';
+
+  @override
+  String get adminDealFollowUpNotSet => 'غير محدد';
+
+  @override
+  String get adminDealFollowUpIn5Minutes => 'بعد ٥ دقائق';
+
+  @override
+  String get adminDealFollowUpIn30Minutes => 'بعد ٣٠ دقيقة';
+
+  @override
+  String get adminDealPickFollowUpDateTime => 'اختر التاريخ والوقت';
+
+  @override
+  String get adminDealFollowUpSaved => 'تم حفظ موعد المتابعة';
+
+  @override
+  String get adminDealFollowUpCleared => 'تم إلغاء موعد المتابعة';
+
+  @override
+  String get adminDealClearFollowUp => 'إلغاء الموعد';
+
+  @override
+  String get adminDealNotesSectionTitle => 'الملاحظات';
+
+  @override
+  String get adminFollowupSectionTitle => 'متابعات مستحقة';
+
+  @override
+  String get adminFollowupSectionSubtitle => 'نفس عيّنة الصفقات أعلاه؛ موعد المتابعة قد حان';
+
+  @override
+  String get adminFollowupEmpty => 'لا توجد صفقات تحتاج متابعة الآن.';
+
+  @override
+  String get adminFollowupLastNoteLabel => 'آخر ملاحظة';
 
   @override
   String get adminDealSaved => 'تم الحفظ';
@@ -1917,10 +2018,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminDealPipelineBooked => 'محجوز';
 
   @override
-  String get adminDealPipelineSigned => 'موقّع';
+  String get adminDealPipelineSigned => 'تم توقيع العقد';
 
   @override
   String get adminDealPipelineClosed => 'مغلق';
+
+  @override
+  String get adminDealPipelineNotInterested => 'غير مهتم';
 
   @override
   String adminDealPipelineOtherCount(int count) {
@@ -1946,7 +2050,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminConversionFunnelQualifiedToBooked => 'مؤهل → محجوز';
 
   @override
-  String get adminConversionFunnelBookedToSigned => 'محجوز → موقّع';
+  String get adminConversionFunnelBookedToSigned => 'محجوز → تم توقيع العقد';
 
   @override
   String get adminCommissionSectionTitle => 'العمولات';
@@ -2001,7 +2105,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminPrioritySectionTitle => 'أولوية المتابعة';
 
   @override
-  String get adminPrioritySectionSubtitle => 'عمولة غير محصّلة — محجوز أو موقّع أو مغلق (نفس عيّنة الصفقات)';
+  String get adminPrioritySectionSubtitle => 'عمولة غير محصّلة — محجوز أو تم توقيع العقد أو مغلق (نفس عيّنة الصفقات)';
 
   @override
   String get adminPriorityEmpty => 'لا توجد صفقات مطابقة لمعايير المتابعة في هذه العيّنة.';
@@ -2036,4 +2140,303 @@ class AppLocalizationsAr extends AppLocalizations {
   String adminLeadsSplitOtherServiceTypes(int count) {
     return '$count صفقة بنوع خدمة آخر أو غير محدد (خارج التقسيم)';
   }
+
+  @override
+  String get adminPropertyChaletModeLabel => 'نوع الشاليه';
+
+  @override
+  String get adminPropertyChaletModeDaily => 'حجز يومي';
+
+  @override
+  String get adminPropertyChaletModeMonthly => 'إيجار شهري';
+
+  @override
+  String get adminPropertyChaletModeSale => 'للبيع';
+
+  @override
+  String get adminChaletPayoutsTitle => 'تحويلات حجوزات الشاليه';
+
+  @override
+  String get adminChaletPayoutTransferToOwner => 'تحويل للمالك';
+
+  @override
+  String get adminChaletPayoutMarkPaidConfirmTitle => 'تأكيد التحويل';
+
+  @override
+  String get adminChaletPayoutMarkPaidConfirmBody => 'هل أنت متأكد أنك حولت هذا المبلغ للمالك؟';
+
+  @override
+  String get adminChaletPayoutMarkPaidConfirmYes => 'نعم، تم التحويل';
+
+  @override
+  String get adminChaletPayoutNeedsReviewHint => '⚠️ هذه العملية تحتاج مراجعة';
+
+  @override
+  String get adminChaletPayoutSnackOk => 'تم تسجيل التحويل.';
+
+  @override
+  String get adminChaletPayoutSnackErr => 'تعذّر تحديث التحويل.';
+
+  @override
+  String get ownerChaletFinanceTitle => 'أرباح حجوزات الشاليه';
+
+  @override
+  String get ownerChaletFinanceSubtitle => 'من الحجوزات المؤكدة (للقراءة فقط)';
+
+  @override
+  String get ownerChaletFinanceBookingsCount => 'حجوزات بسجل مالي';
+
+  @override
+  String get ownerChaletFinanceNetTotal => 'إجمالي الصافي (حصتك)';
+
+  @override
+  String get ownerChaletFinanceCommissionTotal => 'إجمالي عمولة المنصة';
+
+  @override
+  String get ownerChaletFinanceEmpty => 'لا توجد تحويلات حجوزات شاليه بعد.';
+
+  @override
+  String get chaletTransactionPayoutPending => 'بانتظار التحويل';
+
+  @override
+  String get chaletTransactionPayoutPaid => 'تم التحويل';
+
+  @override
+  String get chaletTransactionNetLabel => 'الصافي (د.ك)';
+
+  @override
+  String get chaletTransactionCommissionLabel => 'العمولة (د.ك)';
+
+  @override
+  String get adminChaletPayoutsFilterPending => 'بانتظار التحويل';
+
+  @override
+  String get adminChaletPayoutsFilterAll => 'كل السجلات';
+
+  @override
+  String get adminChaletPayoutsTotalPending => 'إجمالي المبالغ المطلوب تحويلها';
+
+  @override
+  String get adminChaletRefundExecute => 'تسجيل استرداد للضيف';
+
+  @override
+  String get adminChaletRefundConfirmTitle => 'تسجيل الاسترداد في السجل المالي؟';
+
+  @override
+  String get adminChaletRefundConfirmBody => 'يحدّث السجل المالي فقط (دون تعديل الحجز). يحسب مبلغ الاسترداد حسب سياسة الإلغاء على الخادم.';
+
+  @override
+  String get adminChaletRefundSnackOk => 'تم تسجيل الاسترداد في السجل.';
+
+  @override
+  String get adminChaletRefundSnackErr => 'تعذّر تسجيل الاسترداد.';
+
+  @override
+  String get chaletTransactionPayoutStatusLabel => 'حالة التحويل للمالك';
+
+  @override
+  String get chaletTransactionOwnerPayoutLabel => 'مستحق المالك (د.ك)';
+
+  @override
+  String get chaletTransactionPlatformRevenueLabel => 'إيراد المنصة (د.ك)';
+
+  @override
+  String get chaletTransactionRefundStatusLabel => 'حالة الاسترداد';
+
+  @override
+  String get chaletTransactionRefundAmountLabel => 'استرداد للضيف (د.ك)';
+
+  @override
+  String get chaletTransactionRefundReferenceLabel => 'مرجع الاسترداد';
+
+  @override
+  String get chaletTransactionPaymentVerifiedLabel => 'الدفع مُتحقق';
+
+  @override
+  String get adminChaletPayoutBlockedHasIssueHint => 'التحويل معطّل حتى تُعالَج مشكلة السجل.';
+
+  @override
+  String get adminChaletLedgerOwnerUnknown => 'مالك غير معروف';
+
+  @override
+  String get adminChaletLedgerHasIssueBadge => 'عملية فيها مشكلة';
+
+  @override
+  String get adminChaletLedgerFinalizedBadge => 'تمت المعالجة';
+
+  @override
+  String get ownerDashboardTitle => 'لوحة الشاليه';
+
+  @override
+  String get ownerDashboardSubtitle => 'الإيراد، الإشغال، ومؤشرات الحجوزات';
+
+  @override
+  String get ownerDashboardMetricPaid => 'المستلم';
+
+  @override
+  String get ownerDashboardMetricPending => 'بانتظار التحويل';
+
+  @override
+  String get ownerDashboardMetricBookings => 'الحجوزات';
+
+  @override
+  String get ownerDashboardMetricCommission => 'عمولة المنصة';
+
+  @override
+  String get ownerDashboardOccupancyTitle => 'الإشغال (30 يومًا)';
+
+  @override
+  String get ownerDashboardOccupancyHint => 'نسبة الأيام التي فيها إقامة خلال آخر 30 يومًا';
+
+  @override
+  String get ownerDashboardChartTitle => 'أرباح محققة';
+
+  @override
+  String get ownerDashboardChartSubtitle => 'حسب تاريخ التحويل في الفترة المحددة';
+
+  @override
+  String get ownerDashboardChartPaidOnly => 'الإيرادات اليومية (المدفوعة فقط)';
+
+  @override
+  String get ownerDashboardChartNoActivity => 'لا توجد مدفوعات في هذه الفترة.';
+
+  @override
+  String ownerDashboardDataLimitLabel(int count) {
+    return 'آخر $count عملية';
+  }
+
+  @override
+  String get ownerDashboardDataLimitHint => 'قد لا تشمل كل البيانات القديمة';
+
+  @override
+  String get ownerDashboardMetricPeriodSubtitle => 'ضمن الفترة المحددة';
+
+  @override
+  String get ownerDashboardInsightsTitle => '📈 مؤشرات';
+
+  @override
+  String get ownerDashboardInsightEarningsUp => '📈 أرباحك ارتفعت — استمر بنفس التسعير';
+
+  @override
+  String get ownerDashboardInsightNoRecentBookings => '⚠️ لا توجد حجوزات مؤخراً — جرّب تخفيض السعر';
+
+  @override
+  String get ownerDashboardInsightHighOccupancy => '🔥 شاليهك مطلوب حالياً — جرّب رفع السعر';
+
+  @override
+  String get ownerDashboardEmptyFiltered => 'لا توجد حجوزات في هذه الفترة (ضمن البيانات المحمّلة).';
+
+  @override
+  String get ownerDashboardRankingTitle => 'ترتيب الشاليهات (المدفوع في الفترة)';
+
+  @override
+  String get ownerDashboardRangeToday => 'اليوم';
+
+  @override
+  String get ownerDashboardRange7 => '7 أيام';
+
+  @override
+  String get ownerDashboardRange30 => '30 يومًا';
+
+  @override
+  String get ownerDashboardRangeMonth => 'هذا الشهر';
+
+  @override
+  String ownerDashboardLastPayoutLine(String when) {
+    return 'آخر عملية: $when';
+  }
+
+  @override
+  String get ownerDashboardLastPayoutNone => 'لا يوجد تحويل مدفوع في البيانات المحمّلة بعد.';
+
+  @override
+  String get ownerDashboardRelativeJustNow => 'الآن';
+
+  @override
+  String ownerDashboardRelativeMinutesAgo(int count) {
+    return 'قبل $count دقيقة';
+  }
+
+  @override
+  String ownerDashboardRelativeHoursAgo(int count) {
+    return 'قبل $count ساعة';
+  }
+
+  @override
+  String ownerDashboardRelativeDaysAgo(int count) {
+    return 'قبل $count يوم';
+  }
+
+  @override
+  String get ownerDashboardRecentBookings => 'أحدث الحجوزات';
+
+  @override
+  String get ownerDashboardStatusPaid => 'تم التحويل';
+
+  @override
+  String get ownerDashboardStatusPending => 'بانتظار التحويل';
+
+  @override
+  String get ownerDashboardStatusRefunded => 'مسترد';
+
+  @override
+  String get ownerDashboardBestChalet => 'أعلى شاليه دخلًا';
+
+  @override
+  String get ownerDashboardDataNote => 'حسب آخر الحجوزات المسجلة';
+
+  @override
+  String get ownerDashboardEmpty => 'لا توجد بيانات حالياً';
+
+  @override
+  String ownerDashboardListLimitNote(int count) {
+    return 'عرض أحدث $count';
+  }
+
+  @override
+  String get notificationsInboxTitle => 'الإشعارات';
+
+  @override
+  String get notificationsInboxEmpty => 'لا توجد إشعارات حالياً 🚀';
+
+  @override
+  String get notificationsMarkAllRead => 'تعليم الكل كمقروء';
+
+  @override
+  String get notificationsQuickMenu => 'الإشعارات';
+
+  @override
+  String get notificationsGroupToday => 'اليوم';
+
+  @override
+  String get notificationsGroupYesterday => 'أمس';
+
+  @override
+  String get notificationsGroupOlder => 'أقدم';
+
+  @override
+  String get notificationsSwipeMarkRead => 'تعليم كمقروء';
+
+  @override
+  String get notificationsSwipeDismiss => 'إخفاء';
+
+  @override
+  String get notificationsHiddenSnackbar => 'تم إخفاء الإشعار';
+
+  @override
+  String get notificationsUndoHide => 'تراجع';
+
+  @override
+  String get notificationsHideAll => 'إخفاء الكل';
+
+  @override
+  String get notificationsSectionUnread => 'غير مقروء';
+
+  @override
+  String notificationsSectionUnreadCount(int count) {
+    return 'غير مقروء ($count)';
+  }
+
+  @override
+  String get notificationsSectionRead => 'مقروء';
 }

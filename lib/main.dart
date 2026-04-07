@@ -9,7 +9,9 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:aqarai_app/firebase_options.dart';
 import 'package:aqarai_app/auth/login_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
+import 'package:aqarai_app/app/navigation_keys.dart';
 import 'package:aqarai_app/services/auth_service.dart';
+import 'package:aqarai_app/services/deal_follow_up_local_notifications.dart';
 import 'package:aqarai_app/services/notification_service.dart';
 import 'package:aqarai_app/widgets/banned_user_session_gate.dart';
 
@@ -47,6 +49,8 @@ Future<void> main() async {
     NotificationService.firebaseMessagingBackgroundHandler,
   );
 
+  await DealFollowUpLocalNotifications.initialize();
+
   runApp(const MyApp());
 }
 
@@ -60,6 +64,7 @@ class MyApp extends StatelessWidget {
       valueListenable: appLocale,
       builder: (context, locale, _) {
         return MaterialApp(
+          navigatorKey: rootNavigatorKey,
           debugShowCheckedModeBanner: false,
           theme: aqarAiLightTheme(),
 
@@ -101,6 +106,7 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   StreamSubscription<User?>? _authSub;
+  String? _followUpLaunchFlushUid;
 
   @override
   void initState() {
@@ -131,7 +137,19 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         if (!snapshot.hasData) {
+          _followUpLaunchFlushUid = null;
           return const LoginPage();
+        }
+
+        final uid = snapshot.data!.uid;
+        if (_followUpLaunchFlushUid != uid) {
+          _followUpLaunchFlushUid = uid;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            DealFollowUpLocalNotifications.flushPendingLaunchNavigation();
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              DealFollowUpLocalNotifications.flushPendingLaunchNavigation();
+            });
+          });
         }
 
         return const BannedUserSessionGate(

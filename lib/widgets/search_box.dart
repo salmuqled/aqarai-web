@@ -1,5 +1,6 @@
 // lib/widgets/search_box.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:aqarai_app/widgets/property_list.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
@@ -10,6 +11,8 @@ import 'package:aqarai_app/data/governorates_data_en.dart';
 
 // 🔥 AR → EN mapping
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
+import 'package:aqarai_app/data/kuwait_areas.dart';
+import 'package:aqarai_app/utils/property_form_parsing.dart';
 
 class AqarSearchBox extends StatefulWidget {
   final String? initialSearchType;
@@ -324,7 +327,32 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
               }
 
               final governorateCode = _code(govEn.isNotEmpty ? govEn : govAr);
-              final areaCode = _code(areaEn.isNotEmpty ? areaEn : areaAr);
+
+              // Firestore area filter: single normalized input → resolve → slug fallback.
+              // Priority: selected label → mapped English → Arabic (matches ?? chain intent).
+              final String rawInput;
+              final sel = selectedArea;
+              if (sel != null && sel.isNotEmpty) {
+                rawInput = sel;
+              } else if (areaEn.isNotEmpty) {
+                rawInput = areaEn;
+              } else {
+                rawInput = areaAr;
+              }
+              final String? resolvedCode = resolveAreaCodeFromText(rawInput);
+              final String fallbackCode = propertyLocationCode(
+                areaEn.isNotEmpty ? areaEn : areaAr,
+              );
+              final String selectedAreaCode =
+                  resolvedCode ??
+                  (fallbackCode.isNotEmpty ? fallbackCode : '');
+
+              if (kDebugMode) {
+                debugPrint('AREA INPUT → $rawInput');
+                debugPrint('RESOLVED CODE → $resolvedCode');
+                debugPrint('FALLBACK CODE → $fallbackCode');
+                debugPrint('FINAL CODE → $selectedAreaCode');
+              }
 
               final propertyCode = selectedProperty != null
                   ? _mapPropertyToCode(selectedProperty!, loc)
@@ -339,7 +367,7 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
                         : selectedGovernorate ?? '',
                     areaLabel: selectedArea ?? '',
                     governorateCode: governorateCode,
-                    areaCode: areaCode,
+                    areaCode: selectedAreaCode,
                     typeFilter: propertyCode,
                     serviceType: selectedType == loc.forRent
                         ? "rent"

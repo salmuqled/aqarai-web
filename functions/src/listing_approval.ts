@@ -40,8 +40,10 @@ export const approveListingV2 = onRequest(
 
       const updateData: any = {
         approved,
-        // ⚠️ يجب أن يكون "active" وليس "approved" لأن البحث في التطبيق يفلتر بـ status=active
+        // Display / CRM only — public visibility uses isActive + listingCategory + hiddenFromPublic.
         status: approved ? "active" : "rejected",
+        isActive: approved,
+        hiddenFromPublic: false,
         updatedAt: now,
       };
 

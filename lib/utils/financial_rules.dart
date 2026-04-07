@@ -2,7 +2,8 @@ import 'package:aqarai_app/constants/deal_constants.dart';
 
 /// Single source of truth for deal financial interpretation (`deals` documents).
 
-/// CRM finalized stages only — uses `dealStatus`, not legacy `status`.
+/// CRM finalized stages only (`signed` / `closed`). Not finalized:
+/// `not_interested` and all earlier pipeline stages.
 bool isFinalizedDeal(Map<String, dynamic> m) {
   final s = (m['dealStatus'] ?? '').toString().trim();
   return s == DealStatus.signed || s == DealStatus.closed;
@@ -36,6 +37,12 @@ String? getServiceBucket(Map<String, dynamic> m) {
   return null;
 }
 
+/// True when commission is fully covered or not applicable (no accrual).
+/// Prefer server mirror [commissionPaymentStatus] from Cloud Functions; fall back to legacy flag.
 bool isPaid(Map<String, dynamic> m) {
+  final s = (m['commissionPaymentStatus'] ?? '').toString().trim();
+  if (s == 'paid' || s == 'overpaid' || s == 'not_applicable') {
+    return true;
+  }
   return m['isCommissionPaid'] == true;
 }

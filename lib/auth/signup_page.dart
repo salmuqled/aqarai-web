@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
 class SignupPage extends StatefulWidget {
@@ -49,7 +50,15 @@ class _SignupPageState extends State<SignupPage> {
             password: _passCtrl.text.trim(),
           );
 
-      await userCredential.user?.updateDisplayName(_nameCtrl.text.trim());
+      final newUser = userCredential.user;
+      await newUser?.updateDisplayName(_nameCtrl.text.trim());
+      final uid = newUser?.uid;
+      if (uid != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set(
+          {'name': _nameCtrl.text.trim()},
+          SetOptions(merge: true),
+        );
+      }
 
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
