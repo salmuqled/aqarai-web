@@ -156,7 +156,7 @@ class PropertyClosureService {
     final p = propSnap.data()!;
 
     final requestType = r['requestType']?.toString() ?? CloseRequestType.sale;
-    final finalStatus = finalStatusForRequestType(requestType);
+    final pendingLifecycle = pendingStatusForRequestType(requestType);
 
     // --- Financials: require listing price from request or property; final price falls back to listing.
     final listingPriceRaw = r['listingPrice'] ?? p['price'];
@@ -192,7 +192,10 @@ class PropertyClosureService {
     });
 
     batch.update(propRef, {
-      'status': finalStatus,
+      // Terminal sold/rented/exchanged is applied only when deals.dealStatus == closed
+      // (see DealAdminService). Keep listing in pending admin confirmation until then.
+      'status': pendingLifecycle,
+      'dealStatus': DealStatus.booked,
       'hiddenFromPublic': true,
       'isActive': false,
       'closeApprovedAt': FieldValue.serverTimestamp(),
@@ -289,6 +292,7 @@ class PropertyClosureService {
       'status': ListingStatus.active,
       'isActive': true,
       'closeRequestSubmitted': false,
+      'dealStatus': FieldValue.delete(),
       'closeRequestType': FieldValue.delete(),
       'closeRequestedAt': FieldValue.delete(),
       'closeRequestedBy': FieldValue.delete(),

@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
+import 'package:aqarai_app/utils/property_listing_cover.dart';
+import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 
 class FavoritesPage extends StatelessWidget {
   const FavoritesPage({super.key});
@@ -194,10 +196,7 @@ class _FavoritePropertyTileState extends State<_FavoritePropertyTile> {
         final area = widget.isAr
             ? (data['areaAr'] ?? data['area'] ?? '')
             : (data['areaEn'] ?? data['area'] ?? '');
-        final List<dynamic>? images = data['images'];
-        final imageUrl = (images != null && images.isNotEmpty)
-            ? images.first.toString()
-            : null;
+        final imageUrl = PropertyListingCover.urlFrom(data);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
@@ -222,22 +221,14 @@ class _FavoritePropertyTileState extends State<_FavoritePropertyTile> {
             child: Row(
               children: [
                 if (imageUrl != null && imageUrl.isNotEmpty)
-                  ClipRRect(
+                  ListingThumbnailImage(
+                    imageUrl: imageUrl,
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(12),
                       bottomLeft: Radius.circular(12),
-                    ),
-                    child: Image.network(
-                      imageUrl,
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 100,
-                        height: 100,
-                        color: Colors.grey[300],
-                        child: const Icon(Icons.home, size: 40),
-                      ),
                     ),
                   ),
                 Expanded(

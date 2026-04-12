@@ -2,8 +2,10 @@
  * مساعد عقار أي — استدعاء OpenAI GPT-4o mini
  * يرد باللهجة الكويتية عندما locale = ar
  */
+import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import OpenAI from "openai";
+import { assertAiRateLimit } from "./aiRateLimit";
 
 const SYSTEM_PROMPT_AR = `أنت المساعد الذكي داخل تطبيق عقار أي (AqarAi) في الكويت. المستخدم يكلمك وهو أصلاً داخل التطبيق من شاشة المحادثة هذه.
 - مهم: لا تقل أبداً "استخدم التطبيق" أو "روح للتطبيق" — هو بالفعل داخل التطبيق. رد باللهجة العامية الكويتية، مختصر وودود.
@@ -24,6 +26,7 @@ export const aqaraiAssistant = onCall(
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "يجب تسجيل الدخول أولاً");
     }
+    await assertAiRateLimit(admin.firestore(), request, "assistant_chat");
 
     const { message, locale } = (request.data as { message?: string; locale?: string }) || {};
     const text = typeof message === "string" ? message.trim() : "";

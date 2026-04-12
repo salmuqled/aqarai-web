@@ -28,43 +28,9 @@ import { getMarketSignal } from "./insight_engine";
 import { buildInsights } from "./insight_engine";
 import { buildSmartSuggestions } from "./suggestion_engine";
 import { composeAssistantResponse } from "./response_composer";
+import { assertAiRateLimit } from "./aiRateLimit";
 
 const db = admin.firestore();
-
-// ---------------------------------------------------------------------------
-// Cache (60s TTL)
-// ---------------------------------------------------------------------------
-
-const SEARCH_CACHE = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_TTL_MS = 60000;
-
-function getCacheKey(params: {
-  areaCode?: string;
-  type?: string;
-  serviceType?: string;
-  budget?: number | null;
-}): string {
-  return JSON.stringify({
-    areaCode: params.areaCode ?? "",
-    type: params.type ?? "",
-    serviceType: params.serviceType ?? "",
-    budget: params.budget ?? null,
-  });
-}
-
-function getCachedResult(key: string): unknown | null {
-  const entry = SEARCH_CACHE.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-    SEARCH_CACHE.delete(key);
-    return null;
-  }
-  return entry.data;
-}
-
-function setCachedResult(key: string, data: unknown): void {
-  SEARCH_CACHE.set(key, { data, timestamp: Date.now() });
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -86,6 +52,7 @@ const ANALYZE_SYSTEM = `You are a Kuwaiti real estate expert. Mode: SEARCH FIRST
 
 Normalize Arabic to DB keys:
 - Areas: القادسية->qadisiya, النزهة->nuzha, السالمية->salmiya, الدسمة->dasma, الشامية->shamiya, الخالدية->khaldiya, كيفان->kaifan, الجابرية->jabriya, الفروانية->farwaniya, حولي->hawalli, الأحمدي->ahmadi, الجهراء->jahra, مبارك الكبير->mubarak_al_kabeer (lowercase, underscores for spaces).
+- Spelling variants count as the same area: e.g. الجهرا/جهراء->jahra; القادسيه/القادسيا->qadisiya; ة/ه at word end (السالميه, النزهه, المهبوله, الصباحيه) same as canonical ة forms; do not invent area slugs outside this list.
 - Property types: بيت/قسيمة/دار->house, شقة->apartment, فيلا->villa, شاليه->chalet, أرض->land, مكتب->office, محل->shop.
 - Budget: "حدود 700 ألف" / "700 الف" -> 700000, "500 ألف" -> 500000. Never invent numbers; only from message or currentFilters.
 
@@ -263,6 +230,183 @@ Format (English):
 One question total. Warm, professional, not salesy or aggressive.`;
 
 // ---------------------------------------------------------------------------
+// Shared rank + compose (used by callables; single source of truth for logic)
+// ---------------------------------------------------------------------------
+
+/** Move preferred listing id to front so compose matches reference_listing / "الأرخص" UX. */
+function prioritizeTop3ByListingId(top3: Record<string, unknown>[], preferId: string): void {
+  const id = preferId.trim();
+  if (!id) return;
+  const idx = top3.findIndex((p) => String(p.id ?? "") === id);
+  if (idx > 0) {
+    const [row] = top3.splice(idx, 1);
+    top3.unshift(row);
+  }
+}
+
+async function computeRankedTop3WithLabels(
+  properties: Record<string, unknown>[],
+  requestedAreaCode: string,
+  nearbyAreaCodes: string[],
+  userBudget: number | null
+): Promise<Record<string, unknown>[]> {
+  const top3 = rankPropertyResults(properties, {
+    requestedAreaCode,
+    nearbyAreaCodes,
+    userBudget,
+  });
+
+  let marketSignal = "normal";
+  const propertyType = top3[0]?.type != null ? String(top3[0].type).trim() : "";
+  if (requestedAreaCode && propertyType) {
+    try {
+      marketSignal = await getMarketSignal(db, requestedAreaCode, propertyType);
+    } catch {
+      // non-fatal
+    }
+  }
+
+  const nowMs = Date.now();
+  for (const prop of top3) {
+    const areaCode = (prop.areaCode as string) || "";
+    const sameArea = top3.filter((p) => ((p.areaCode as string) || "") === areaCode);
+    const prices = sameArea
+      .map((p) => (typeof p.price === "number" ? p.price : Number(p.price)))
+      .filter((n) => !Number.isNaN(n));
+    const avgPrice = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : null;
+    prop.labels = computePropertyLabels(prop, marketSignal, nowMs, avgPrice);
+  }
+
+  return top3;
+}
+
+async function composeAgentReply(
+  data: Record<string, unknown>
+): Promise<{ reply: string; results?: Record<string, unknown>[] }> {
+  const top3Results = Array.isArray(data.top3Results) ? (data.top3Results as Record<string, unknown>[]) : [];
+  const locale = data.locale === "ar" ? "ar" : "en";
+  const userAskedForMore = data.userAskedForMore === true;
+  const isNearbyFallback = data.isNearbyFallback === true;
+  const requestedAreaLabel = typeof data.requestedAreaLabel === "string" ? data.requestedAreaLabel : "";
+  const rawMessage =
+    typeof data.rawMessage === "string"
+      ? data.rawMessage.trim()
+      : typeof data.message === "string"
+        ? data.message.trim()
+        : "";
+  const areaCode =
+    typeof data.areaCode === "string"
+      ? data.areaCode.trim()
+      : top3Results[0]?.areaCode != null
+        ? String(top3Results[0].areaCode).trim()
+        : "";
+  const propertyType =
+    typeof data.propertyType === "string"
+      ? data.propertyType.trim()
+      : data.type != null
+        ? String(data.type).trim()
+        : top3Results[0]?.type != null
+          ? String(top3Results[0].type).trim()
+          : "";
+  const serviceType = typeof data.serviceType === "string" ? data.serviceType.trim() : "";
+  const userBudget =
+    data.userBudget != null &&
+    (typeof data.userBudget === "number" || typeof data.userBudget === "string")
+      ? Number(data.userBudget)
+      : undefined;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return {
+      reply: locale === "ar" ? "المساعد مو متصل. جرب لاحقاً." : "Assistant unavailable. Try later.",
+    };
+  }
+
+  const suggestions = buildSmartSuggestions({
+    area: areaCode || undefined,
+    propertyType: propertyType || undefined,
+    serviceType: serviceType || undefined,
+    locale,
+    resultsCount: top3Results.length,
+  });
+
+  if (top3Results.length === 0) {
+    const reply = locale === "ar" ? NO_RESULTS_AR : NO_RESULTS_EN;
+    return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
+  }
+
+  if (isNearbyFallback && top3Results.length > 0) {
+    const reply =
+      locale === "ar"
+        ? formatNearbyReplyAr(top3Results, requestedAreaLabel)
+        : formatNearbyReplyEn(top3Results, requestedAreaLabel);
+    return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
+  }
+
+  if (top3Results.length === 1 && userAskedForMore) {
+    const reply = locale === "ar" ? SINGLE_RESULT_ASKED_MORE_AR : SINGLE_RESULT_ASKED_MORE_EN;
+    return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
+  }
+
+  const areaLabel =
+    requestedAreaLabel ||
+    (top3Results[0]?.areaAr as string) ||
+    (top3Results[0]?.areaEn as string) ||
+    areaCode ||
+    (locale === "ar" ? "هذه المنطقة" : "this area");
+
+  const context: SearchContext = {
+    areaCode: areaCode || undefined,
+    propertyType: propertyType || undefined,
+    serviceType: serviceType || undefined,
+    budget: userBudget,
+  };
+
+  try {
+    const insights = await buildInsights({
+      context,
+      areaLabel,
+      topResults: top3Results,
+      rawMessage: rawMessage || undefined,
+      locale,
+      db,
+    });
+
+    const openai = new OpenAI({ apiKey });
+    const systemContent = locale === "ar" ? COMPOSE_SYSTEM_AR : COMPOSE_SYSTEM_EN;
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemContent },
+        { role: "user", content: JSON.stringify(top3Results) },
+      ],
+      max_tokens: 300,
+    });
+    const mainReplyBody =
+      completion.choices?.[0]?.message?.content?.trim() ||
+      (locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?");
+
+    const payload = composeAssistantResponse({
+      locale,
+      mainReplyBody,
+      results: top3Results,
+      insights,
+      suggestions,
+    });
+
+    return { reply: payload.reply, results: top3Results };
+  } catch (err) {
+    console.error("Agent compose error:", err);
+    const fallback =
+      locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?";
+    return {
+      reply: appendSuggestionsToReply(fallback, suggestions, locale),
+      results: top3Results,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Cloud Functions (orchestrator)
 // ---------------------------------------------------------------------------
 
@@ -270,6 +414,7 @@ export const aqaraiAgentRankResults = onCall(
   { region: "us-central1" },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
+    await assertAiRateLimit(db, request, "agent_rank");
     const data = (request.data as Record<string, unknown>) || {};
     const properties = Array.isArray(data.properties) ? (data.properties as Record<string, unknown>[]) : [];
     const requestedAreaCode = typeof data.requestedAreaCode === "string" ? data.requestedAreaCode.trim() : "";
@@ -281,33 +426,7 @@ export const aqaraiAgentRankResults = onCall(
         ? Number(data.userBudget)
         : null;
 
-    const top3 = rankPropertyResults(properties, {
-      requestedAreaCode,
-      nearbyAreaCodes,
-      userBudget,
-    });
-
-    let marketSignal = "normal";
-    const propertyType = top3[0]?.type != null ? String(top3[0].type).trim() : "";
-    if (requestedAreaCode && propertyType) {
-      try {
-        marketSignal = await getMarketSignal(db, requestedAreaCode, propertyType);
-      } catch {
-        // non-fatal
-      }
-    }
-
-    const nowMs = Date.now();
-    for (const prop of top3) {
-      const areaCode = (prop.areaCode as string) || "";
-      const sameArea = top3.filter((p) => ((p.areaCode as string) || "") === areaCode);
-      const prices = sameArea
-        .map((p) => (typeof p.price === "number" ? p.price : Number(p.price)))
-        .filter((n) => !Number.isNaN(n));
-      const avgPrice = prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : null;
-      prop.labels = computePropertyLabels(prop, marketSignal, nowMs, avgPrice);
-    }
-
+    const top3 = await computeRankedTop3WithLabels(properties, requestedAreaCode, nearbyAreaCodes, userBudget);
     return { top3 };
   }
 );
@@ -316,6 +435,7 @@ export const aqaraiAgentFindSimilar = onCall(
   { region: "us-central1" },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
+    await assertAiRateLimit(db, request, "agent_find_similar");
     const data = (request.data as Record<string, unknown>) || {};
     const requestedAreaCode = typeof data.requestedAreaCode === "string" ? data.requestedAreaCode.trim() : "";
     const propertyType =
@@ -337,18 +457,6 @@ export const aqaraiAgentFindSimilar = onCall(
         ? Number(data.requestedSize)
         : null;
     const locale = data.locale === "ar" ? "ar" : "en";
-
-    const cacheKey = getCacheKey({
-      areaCode: requestedAreaCode || undefined,
-      type: propertyType || undefined,
-      serviceType: undefined,
-      budget: userBudget,
-    });
-    const cached = getCachedResult(cacheKey);
-    if (cached != null) {
-      console.log("CACHE HIT", cacheKey);
-      return cached as { recommendations: Record<string, unknown>[]; reply: string };
-    }
 
     const getMarketSignalFn = (areaCode: string, pType: string) => getMarketSignal(db, areaCode, pType);
     const recommendations = await findSimilarProperties(
@@ -380,9 +488,7 @@ export const aqaraiAgentFindSimilar = onCall(
       reply = appendSuggestionsToReply(reply, suggestions, locale);
     }
 
-    const response = { recommendations, reply };
-    setCachedResult(cacheKey, response);
-    return response;
+    return { recommendations, reply };
   }
 );
 
@@ -390,6 +496,7 @@ export const aqaraiAgentAnalyze = onCall(
   { region: "us-central1", secrets: ["OPENAI_API_KEY"] },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
+    await assertAiRateLimit(db, request, "agent_analyze");
     const data = (request.data as Record<string, unknown>) || {};
     const rawMessage = typeof data.message === "string" ? data.message.trim() : "";
     if (!rawMessage) throw new HttpsError("invalid-argument", "message required");
@@ -551,152 +658,36 @@ export const aqaraiAgentCompose = onCall(
   { region: "us-central1", secrets: ["OPENAI_API_KEY"] },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
+    await assertAiRateLimit(db, request, "agent_compose");
     const data = (request.data as Record<string, unknown>) || {};
-    const top3Results = Array.isArray(data.top3Results) ? (data.top3Results as Record<string, unknown>[]) : [];
-    const locale = data.locale === "ar" ? "ar" : "en";
-    const userAskedForMore = data.userAskedForMore === true;
-    const isNearbyFallback = data.isNearbyFallback === true;
-    const requestedAreaLabel = typeof data.requestedAreaLabel === "string" ? data.requestedAreaLabel : "";
-    const rawMessage =
-      typeof data.rawMessage === "string"
-        ? data.rawMessage.trim()
-        : typeof data.message === "string"
-          ? data.message.trim()
-          : "";
-    const areaCode =
-      typeof data.areaCode === "string"
-        ? data.areaCode.trim()
-        : top3Results[0]?.areaCode != null
-          ? String(top3Results[0].areaCode).trim()
-          : "";
-    const propertyType =
-      typeof data.propertyType === "string"
-        ? data.propertyType.trim()
-        : data.type != null
-          ? String(data.type).trim()
-          : top3Results[0]?.type != null
-            ? String(top3Results[0].type).trim()
-            : "";
-    const serviceType = typeof data.serviceType === "string" ? data.serviceType.trim() : "";
+    return composeAgentReply(data);
+  }
+);
+
+/** Single round-trip: rank (same as aqaraiAgentRankResults) then compose (same as aqaraiAgentCompose). */
+export const aqaraiAgentRankAndCompose = onCall(
+  { region: "us-central1", secrets: ["OPENAI_API_KEY"] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "يجب تسجيل الدخول");
+    await assertAiRateLimit(db, request, "agent_rank_compose");
+    const data = (request.data as Record<string, unknown>) || {};
+    const properties = Array.isArray(data.properties) ? (data.properties as Record<string, unknown>[]) : [];
+    const requestedAreaCode = typeof data.requestedAreaCode === "string" ? data.requestedAreaCode.trim() : "";
+    const nearbyAreaCodes = Array.isArray(data.nearbyAreaCodes)
+      ? (data.nearbyAreaCodes as string[]).map((s) => String(s).trim()).filter(Boolean)
+      : [];
     const userBudget =
-      data.userBudget != null &&
-      (typeof data.userBudget === "number" || typeof data.userBudget === "string")
+      data.userBudget != null && (typeof data.userBudget === "number" || typeof data.userBudget === "string")
         ? Number(data.userBudget)
-        : undefined;
+        : null;
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return {
-        reply: locale === "ar" ? "المساعد مو متصل. جرب لاحقاً." : "Assistant unavailable. Try later.",
-      };
-    }
+    const top3 = await computeRankedTop3WithLabels(properties, requestedAreaCode, nearbyAreaCodes, userBudget);
 
-    const suggestions = buildSmartSuggestions({
-      area: areaCode || undefined,
-      propertyType: propertyType || undefined,
-      serviceType: serviceType || undefined,
-      locale,
-      resultsCount: top3Results.length,
-    });
+    const preferId =
+      typeof data.preferListingIdFirst === "string" ? data.preferListingIdFirst.trim() : "";
+    if (preferId) prioritizeTop3ByListingId(top3, preferId);
 
-    if (top3Results.length === 0) {
-      const reply = locale === "ar" ? NO_RESULTS_AR : NO_RESULTS_EN;
-      return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
-    }
-
-    if (isNearbyFallback && top3Results.length > 0) {
-      const reply =
-        locale === "ar"
-          ? formatNearbyReplyAr(top3Results, requestedAreaLabel)
-          : formatNearbyReplyEn(top3Results, requestedAreaLabel);
-      return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
-    }
-
-    if (top3Results.length === 1 && userAskedForMore) {
-      const reply = locale === "ar" ? SINGLE_RESULT_ASKED_MORE_AR : SINGLE_RESULT_ASKED_MORE_EN;
-      return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
-    }
-
-    const areaLabel =
-      requestedAreaLabel ||
-      (top3Results[0]?.areaAr as string) ||
-      (top3Results[0]?.areaEn as string) ||
-      areaCode ||
-      (locale === "ar" ? "هذه المنطقة" : "this area");
-
-    const isAdmin = request.auth?.token?.admin === true;
-    const canUseCache = areaCode && !isAdmin;
-    if (canUseCache) {
-      const cacheKey = getCacheKey({
-        areaCode,
-        type: propertyType,
-        serviceType,
-        budget: userBudget,
-      });
-      const cached = getCachedResult(cacheKey);
-      if (cached != null) {
-        console.log("CACHE HIT compose", cacheKey);
-        return cached as { reply: string; results: Record<string, unknown>[] };
-      }
-    }
-
-    const context: SearchContext = {
-      areaCode: areaCode || undefined,
-      propertyType: propertyType || undefined,
-      serviceType: serviceType || undefined,
-      budget: userBudget,
-    };
-
-    try {
-      const insights = await buildInsights({
-        context,
-        areaLabel,
-        topResults: top3Results,
-        rawMessage: rawMessage || undefined,
-        locale,
-        db,
-      });
-
-      const openai = new OpenAI({ apiKey });
-      const systemContent = locale === "ar" ? COMPOSE_SYSTEM_AR : COMPOSE_SYSTEM_EN;
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemContent },
-          { role: "user", content: JSON.stringify(top3Results) },
-        ],
-        max_tokens: 300,
-      });
-      const mainReplyBody =
-        completion.choices?.[0]?.message?.content?.trim() ||
-        (locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?");
-
-      const payload = composeAssistantResponse({
-        locale,
-        mainReplyBody,
-        results: top3Results,
-        insights,
-        suggestions,
-      });
-
-      if (canUseCache) {
-        const cacheKey = getCacheKey({
-          areaCode,
-          type: propertyType,
-          serviceType,
-          budget: userBudget,
-        });
-        setCachedResult(cacheKey, { reply: payload.reply, results: top3Results });
-      }
-      return { reply: payload.reply, results: top3Results };
-    } catch (err) {
-      console.error("Agent compose error:", err);
-      const fallback =
-        locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?";
-      return {
-        reply: appendSuggestionsToReply(fallback, suggestions, locale),
-        results: top3Results,
-      };
-    }
+    const { reply } = await composeAgentReply({ ...data, top3Results: top3 });
+    return { top3, reply };
   }
 );

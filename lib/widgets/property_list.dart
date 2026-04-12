@@ -8,6 +8,8 @@ import '../widgets/property_details_page.dart';
 import 'package:aqarai_app/data/kuwait_areas.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/utils/property_area_display.dart';
+import 'package:aqarai_app/utils/property_listing_cover.dart';
+import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 
 bool isValidAreaLabel(String? value) {
   if (value == null) return false;
@@ -59,28 +61,7 @@ class PropertyList extends StatelessWidget {
     String locale,
     Map<String, dynamic> data,
   ) {
-    if (locale == 'ar') return listingStatusLabelAr(data);
-    final st = (data['status'] ?? ListingStatus.active).toString().trim();
-    switch (st) {
-      case ListingStatus.pendingSaleConfirmation:
-        return 'Pending sale';
-      case ListingStatus.pendingRentConfirmation:
-        return 'Pending rent';
-      case ListingStatus.pendingExchangeConfirmation:
-        return 'Pending deal';
-      case ListingStatus.sold:
-        return 'Sold';
-      case ListingStatus.rented:
-        return 'Rented';
-      case ListingStatus.exchanged:
-        return 'Exchanged';
-      case ListingStatus.inactive:
-        return 'Inactive';
-      case ListingStatus.approvedLegacy:
-      case ListingStatus.active:
-      default:
-        return loc.active;
-    }
+    return listingStatusChipLabel(data, locale);
   }
 
   const PropertyList({
@@ -236,10 +217,7 @@ class PropertyList extends StatelessWidget {
                 typeLabel = typeEn;
               }
 
-              final List<dynamic>? images = data['images'];
-              final imageUrl = (images != null && images.isNotEmpty)
-                  ? images.first
-                  : null;
+              final imageUrl = PropertyListingCover.urlFrom(data);
 
               final rawCode = data['areaCode'] ?? data['area_id'];
               final String? areaCode = rawCode == null
@@ -378,14 +356,12 @@ class PropertyList extends StatelessWidget {
                         ),
                       ),
                       if (imageUrl != null)
-                        ClipRRect(
+                        ListingThumbnailImage(
+                          imageUrl: imageUrl.toString(),
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.cover,
                           borderRadius: imageRadius,
-                          child: Image.network(
-                            imageUrl.toString(),
-                            width: 120,
-                            height: 120,
-                            fit: BoxFit.cover,
-                          ),
                         )
                       else
                         Container(

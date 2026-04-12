@@ -32,25 +32,29 @@ node scripts/set-admin-claim.js serviceAccountKey.json YOUR_UID
 
 ---
 
-## الطريقة 2: عبر Cloud Function (إذا فضّلت عدم استخدام المفتاح محلياً)
+## الطريقة 2: عبر Cloud Function (فقط إذا عندك حساب أدمن بالفعل)
 
-1. **انشر الـ Function:**
+> **أول أدمن في المشروع:** استخدم **الطريقة 1** (سكربت + Service Account) أو **Firebase Console** لتعيين `admin: true` — استدعاء `setAdminClaim` **بدون** جلسة أدمن غير مدعوم (معطّل لأسباب أمنية).
+
+1. **انشر الـ Function (إن لزم):**
    ```bash
    cd functions
    npm run build
-   firebase deploy --only functions
+   firebase deploy --only functions:setAdminClaim
    ```
 
-2. **استدعِ الدالة مرة واحدة** بأي طريقة تناسبك، مثلاً من متصفح (Console) أو من تطبيقك:
-   - الـ Function اسمها: `setAdminClaim`
-   - المعطيات: `{ targetUid: "YOUR_UID", secret: "aqarai_admin_setup_2025" }`  
-   (استبدل `YOUR_UID` بالـ UID من Authentication)
+2. **سجّل دخولاً بحساب له صلاحية أدمن** (في التطبيق أو أداة تستخدم نفس مشروع Firebase).
 
-3. بعد النجاح: **سجّل خروج ثم دخول** من التطبيق.
+3. **استدعِ الدالة** (مثلاً من تطبيقك بـ Callable مع المستخدم المسجّل):
+   - الـ Function اسمها: `setAdminClaim`
+   - المعطيات: `{ targetUid: "YOUR_UID" }` فقط  
+   (استبدل `YOUR_UID` بالـ UID من Authentication للمستخدم الجديد)
+
+4. بعد النجاح: المستخدم الجديد يسجّل **خروج ثم دخول** ليتحمّل الـ claim الجديد.
 
 ---
 
 ## ملاحظة أمان
 
-- في الطريقة 2، كلمة السر مضمّنة في الكود (`aqarai_admin_setup_2025`). بعد ما تفعّل الأدمن يمكنك تغييرها أو تعطيل استدعاء الدالة.
+- `setAdminClaim` يقبل فقط من **أدمن حالي**؛ لا يوجد bootstrap مجهول الهوية عبر سر مشترك.
 - لا ترفع ملف `serviceAccountKey.json` إلى Git (يجب أن يكون في `.gitignore`).

@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
+import 'package:aqarai_app/utils/property_listing_cover.dart';
+import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 import 'package:intl/intl.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:aqarai_app/services/firestore.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
@@ -103,18 +105,6 @@ class FeaturedCarousel extends StatelessWidget {
     return NumberFormat.decimalPattern(locale).format(price);
   }
 
-  String? _coverFrom(dynamic images, dynamic coverUrl) {
-    final cover = coverUrl?.toString();
-    if (cover != null && cover.isNotEmpty) return cover;
-
-    if (images is List && images.isNotEmpty) {
-      final first = images.first?.toString();
-      if (first != null && first.isNotEmpty) return first;
-    }
-
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
@@ -176,7 +166,7 @@ class FeaturedCarousel extends StatelessWidget {
                   final doc = docs[index];
                   final data = doc.data();
 
-                  final coverUrl = _coverFrom(data['images'], data['coverUrl']);
+                  final coverUrl = PropertyListingCover.urlFrom(data);
                   final normalizedType = _normalizeType(data['type']);
 
                   String displayType = normalizedType;
@@ -269,23 +259,25 @@ class _FeaturedCard extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Container(
-                height: 120,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(14),
-                  ),
-                  image: (coverUrl != null && coverUrl!.isNotEmpty)
-                      ? DecorationImage(
-                          image: CachedNetworkImageProvider(coverUrl!),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                  color: Colors.grey[200],
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(14),
                 ),
                 child: Stack(
+                  alignment: Alignment.topLeft,
                   children: [
+                    SizedBox(
+                      height: 120,
+                      width: double.infinity,
+                      child: (coverUrl != null && coverUrl!.isNotEmpty)
+                          ? ListingThumbnailImage(
+                              imageUrl: coverUrl!,
+                              width: 280,
+                              height: 120,
+                              fit: BoxFit.cover,
+                            )
+                          : ColoredBox(color: Colors.grey[200]!),
+                    ),
                     Positioned(
                       top: 8,
                       left: 8,

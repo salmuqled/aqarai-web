@@ -1035,6 +1035,14 @@
         {"fieldPath": "featuredUntil", "order": "ASCENDING"},
         {"fieldPath": "createdAt", "order": "DESCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "upload_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "eventType", "order": "ASCENDING"},
+        {"fieldPath": "timestamp", "order": "ASCENDING"}
+      ]
     }
   ],
   "fieldOverrides": [

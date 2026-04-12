@@ -7,4 +7,23 @@ abstract class PaymentService {
     required double amount,
     required String requestId,
   });
+
+  /// Premium checkout for featuring an ad. Gateway integration (MyFatoorah) should
+  /// return a non-empty reference when the user completes payment.
+  Future<FeaturedAdPaymentUiResult> payFeaturedAd({
+    required double amountKwd,
+    required String propertyId,
+    required String description,
+  });
+}
+
+class FeaturedAdPaymentUiResult {
+  const FeaturedAdPaymentUiResult({
+    required this.success,
+    this.paymentId,
+  });
+
+  final bool success;
+  /// MyFatoorah payment id (or equivalent gateway identifier).
+  final String? paymentId;
 }

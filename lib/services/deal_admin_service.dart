@@ -13,6 +13,36 @@ double _money(dynamic v) {
   return double.tryParse(v.toString().trim()) ?? 0;
 }
 
+/// Called only when `deals.dealStatus` becomes [DealStatus.closed] — sets terminal
+/// `properties.status` + `dealStatus: closed` + `sold` (sale only). Invalid terminal
+/// rows without closed deals are corrected by [onPropertyTerminalStatusGuard] (CF).
+void _syncPropertyWhenDealCloses(
+  Transaction tx,
+  FirebaseFirestore db,
+  Map<String, dynamic> deal,
+) {
+  final propertyId = deal['propertyId']?.toString().trim() ?? '';
+  if (propertyId.isEmpty) return;
+
+  final rawType =
+      (deal['dealType'] ?? CloseRequestType.sale).toString().trim();
+  final requestType = rawType == CloseRequestType.rent
+      ? CloseRequestType.rent
+      : rawType == CloseRequestType.exchange
+          ? CloseRequestType.exchange
+          : CloseRequestType.sale;
+
+  final terminal = finalStatusForRequestType(requestType);
+  final soldFlag = requestType == CloseRequestType.sale;
+
+  tx.update(db.collection('properties').doc(propertyId), {
+    'status': terminal,
+    'dealStatus': DealStatus.closed,
+    'sold': soldFlag,
+    'updatedAt': FieldValue.serverTimestamp(),
+  });
+}
+
 /// Admin updates to `deals` (final price, commission, pipeline).
 class DealAdminService {
   DealAdminService({FirebaseFirestore? firestore})
@@ -128,6 +158,7 @@ class DealAdminService {
         patch['closedAt'] = FieldValue.serverTimestamp();
       }
       tx.update(ref, patch);
+      _syncPropertyWhenDealCloses(tx, _db, {...m, ...patch});
     });
   }
 
@@ -183,6 +214,10 @@ class DealAdminService {
       }
 
       tx.update(ref, patch);
+
+      if (newStatus == DealStatus.closed) {
+        _syncPropertyWhenDealCloses(tx, _db, {...m, ...patch});
+      }
 
       // One-time catch-up: pre-finalized saves do not touch analytics/global.
       if (!wasFinalized && nowFinalized) {

@@ -36,6 +36,29 @@ export const approveListingV2 = onRequest(
         });
       }
 
+      const data = snap.data() as Record<string, unknown>;
+
+      if (approved === true) {
+        const st = String(data["status"] ?? "active");
+        if (st === "pending_upload") {
+          return res.status(400).json({
+            ok: false,
+            error:
+              "Owner must upload a listing photo before approval (status is pending_upload).",
+          });
+        }
+
+        const imgs = data["images"];
+        const imagesLen = Array.isArray(imgs) ? imgs.length : 0;
+        if (imagesLen <= 0) {
+          return res.status(400).json({
+            ok: false,
+            error:
+              "Owner must upload a listing photo before approval (images is empty).",
+          });
+        }
+      }
+
       const now = admin.firestore.FieldValue.serverTimestamp();
 
       const updateData: any = {
@@ -48,6 +71,8 @@ export const approveListingV2 = onRequest(
       };
 
       if (approved) {
+        // Normalize legacy/inconsistent states: if approved, listing must have images => hasImage true.
+        updateData.hasImage = true;
         updateData.approvedAt = now;
       } else {
         updateData.rejectedAt = now;

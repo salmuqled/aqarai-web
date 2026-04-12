@@ -1,5 +1,7 @@
 // Phase 1: إغلاق الإعلانات العادية فقط (ليس الشاليه — لا حجوزات في هذه المرحلة).
 
+import 'package:aqarai_app/constants/deal_constants.dart';
+
 /// `properties.listingCategory`
 abstract final class ListingCategory {
   static const String normal = 'normal';
@@ -63,6 +65,12 @@ bool listingDataChaletAllowsDailyBooking(Map<String, dynamic> d) {
 
 /// `properties.status`
 abstract final class ListingStatus {
+  /// Awaiting main photo upload — not shown in public marketplace; admin cannot approve yet.
+  static const String pendingUpload = 'pending_upload';
+
+  /// Awaiting admin approval (`approved != true`); not a Firestore create default — used after data repair.
+  static const String pendingApproval = 'pending_approval';
+
   static const String active = 'active';
   static const String approvedLegacy = 'approved';
 
@@ -135,10 +143,15 @@ bool listingDataIsChalet(Map<String, dynamic> d) {
 
 /// Public marketplace discovery — **must match** [propertyPublicDiscovery] in Firestore rules.
 ///
-/// Uses only: [approved], [listingCategory], [isActive] (normal only), [hiddenFromPublic].
-/// Does **not** use [status] or [type].
+/// Uses: [approved], [status] (blocks [ListingStatus.pendingUpload]), [listingCategory],
+/// [isActive] (normal only), [hiddenFromPublic]. Does **not** use [type].
 bool listingDataIsPubliclyDiscoverable(Map<String, dynamic> d) {
   if (d['approved'] != true) return false;
+  final lifecycle = (d['status'] ?? ListingStatus.active).toString().trim();
+  if (lifecycle == ListingStatus.pendingUpload ||
+      lifecycle == ListingStatus.pendingApproval) {
+    return false;
+  }
   if (d['hiddenFromPublic'] != false) return false;
   final cat = (d['listingCategory'] ?? '').toString().trim();
   if (cat == ListingCategory.chalet) return true;
@@ -150,6 +163,10 @@ bool listingDataIsPubliclyDiscoverable(Map<String, dynamic> d) {
 
 bool listingDataCanSubmitClosure(Map<String, dynamic> d) {
   if (listingDataIsChalet(d)) return false;
+  final st = (d['status'] ?? '').toString().trim();
+  if (st == ListingStatus.pendingUpload || st == ListingStatus.pendingApproval) {
+    return false;
+  }
   if (d['approved'] != true) return false;
   if (d['closeRequestSubmitted'] == true) return false;
   if (d['hiddenFromPublic'] != false) return false;
@@ -161,18 +178,50 @@ bool listingDataCanSubmitClosure(Map<String, dynamic> d) {
   return true;
 }
 
+/// Owner must upload a main image (or retry) before the listing is treated as ready.
+bool listingDataNeedsImageUpload(Map<String, dynamic> d) {
+  final st = (d['status'] ?? ListingStatus.active).toString().trim();
+  if (st == ListingStatus.pendingUpload) return true;
+  final approved = d['approved'] == true;
+
+  bool hasAnyImage() {
+    if (d['hasImage'] == true) return true;
+    final imgs = d['images'];
+    return imgs is List && imgs.isNotEmpty;
+  }
+
+  // Approved listings must never show "re-upload" unless images are truly missing.
+  if (approved) return !hasAnyImage();
+
+  // For non-approved, keep "hasImage:false" as a strong hint for retry flows.
+  if (hasAnyImage()) return false;
+  if (d['hasImage'] == false) return true;
+  return false;
+}
+
+/// True when the listing represents a completed transaction on the property doc.
+/// `sold` / `rented` / `exchanged` must align with [DealStatus.closed] on the same
+/// document (`properties.dealStatus` mirrors CRM closure); see [DealAdminService].
 bool listingDataIsClosedDeal(Map<String, dynamic> d) {
-  final st = (d['status'] ?? '').toString();
-  return st == ListingStatus.sold ||
+  final st = (d['status'] ?? '').toString().trim();
+  if (st == ListingStatus.inactive) return true;
+  // Terminal sale/rent/exchange counts only when CRM pipeline closed the deal.
+  if (st == ListingStatus.sold ||
       st == ListingStatus.rented ||
-      st == ListingStatus.exchanged ||
-      st == ListingStatus.inactive;
+      st == ListingStatus.exchanged) {
+    return (d['dealStatus'] ?? '').toString().trim() == DealStatus.closed;
+  }
+  return false;
 }
 
 /// عناوين عربية لشارة الحالة في «إعلاناتي».
 String listingStatusLabelAr(Map<String, dynamic> d) {
   final st = (d['status'] ?? ListingStatus.active).toString().trim();
   switch (st) {
+    case ListingStatus.pendingUpload:
+      return 'بانتظار رفع الصورة';
+    case ListingStatus.pendingApproval:
+      return 'بانتظار الاعتماد';
     case ListingStatus.pendingSaleConfirmation:
       return 'بانتظار اعتماد البيع';
     case ListingStatus.pendingRentConfirmation:
@@ -191,6 +240,39 @@ String listingStatusLabelAr(Map<String, dynamic> d) {
     case ListingStatus.active:
     default:
       return 'نشط';
+  }
+}
+
+/// Chip / badge for owner + marketplace cards (`ar` | non-`ar`).
+String listingStatusChipLabel(Map<String, dynamic> d, String languageCode) {
+  if (listingDataNeedsImageUpload(d)) {
+    return languageCode == 'ar' ? 'بانتظار رفع الصورة' : 'Photo upload pending';
+  }
+  if (languageCode == 'ar') return listingStatusLabelAr(d);
+  final st = (d['status'] ?? ListingStatus.active).toString().trim();
+  switch (st) {
+    case ListingStatus.pendingUpload:
+      return 'Photo upload pending';
+    case ListingStatus.pendingApproval:
+      return 'Pending approval';
+    case ListingStatus.pendingSaleConfirmation:
+      return 'Pending sale';
+    case ListingStatus.pendingRentConfirmation:
+      return 'Pending rent';
+    case ListingStatus.pendingExchangeConfirmation:
+      return 'Pending deal';
+    case ListingStatus.sold:
+      return 'Sold';
+    case ListingStatus.rented:
+      return 'Rented';
+    case ListingStatus.exchanged:
+      return 'Exchanged';
+    case ListingStatus.inactive:
+      return 'Inactive';
+    case ListingStatus.approvedLegacy:
+    case ListingStatus.active:
+    default:
+      return 'Active';
   }
 }
 

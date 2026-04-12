@@ -135,4 +135,19 @@ export const KUWAIT_AREAS: Record<string, string> = {
   "الفنيطيس": "funaitees",
   "المسايل": "maseila",
   "صبحان": "sabhan",
+
+  // -------------------------------------------------------------------------
+  // Common Arabic spelling / chat variants → same Firestore areaCode.
+  // extractAreaFromText sorts by name length (longest first) so longer official
+  // names (e.g. "الجهراء الصناعية") still win over short prefixes like "الجهرا".
+  // -------------------------------------------------------------------------
+  "الجهرا": "jahra",
+  "جهراء": "jahra",
+  "القادسيه": "qadisiya",
+  "القادسيا": "qadisiya",
+  "المهبوله": "mahboula",
+  "الصباحيه": "sabahiya",
+  "العقيله": "eqaila",
+  "قرطبه": "qurtuba",
+  "العارضيه": "ardiya",
 };

@@ -276,7 +276,9 @@ class ConversationalSearchService {
     list.sort((a, b) => ms(b.data()['createdAt'] as Timestamp?).compareTo(
           ms(a.data()['createdAt'] as Timestamp?),
         ));
-    return list;
+    return list
+        .where((d) => listingDataIsPubliclyDiscoverable(d.data()))
+        .toList();
   }
 
   /// Nearby: sequential area scans (no `whereIn` on areaCode).

@@ -40,9 +40,41 @@ export const approveListing = onCall(
       throw new HttpsError("not-found", "Property not found");
     }
 
+    const d = (snap.data() || {}) as Record<string, any>;
+    const st = String(d.status ?? "active").trim();
+    const images = d.images;
+    const thumbs = d.thumbnails;
+    const imagesLen = Array.isArray(images) ? images.length : 0;
+    const thumbsLen = Array.isArray(thumbs) ? thumbs.length : 0;
+    const hasAnyImages = imagesLen > 0;
+
+    console.log("[approveListing] before", {
+      propertyId,
+      status: st,
+      approved: d.approved === true,
+      hasImage: d.hasImage === true ? true : d.hasImage === false ? false : null,
+      imagesLen,
+      thumbnailsLen: thumbsLen,
+    });
+
+    if (st === "pending_upload") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Owner must upload listing photos before approval (status is pending_upload)."
+      );
+    }
+    if (!hasAnyImages) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Owner must upload listing photos before approval (images is empty)."
+      );
+    }
+
     await ref.update({
       approved: true,
       imagesApproved: true,
+      // Normalize legacy/inconsistent states: if images exist, hasImage must be true.
+      hasImage: true,
       status: "active",
       isActive: true,
       hiddenFromPublic: false,
@@ -50,6 +82,7 @@ export const approveListing = onCall(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    console.log("[approveListing] after", { propertyId, approved: true });
     return { ok: true };
   }
 );
@@ -94,35 +127,43 @@ export const rejectListing = onCall(
 );
 
 /* --------------------------------------------------------
-   🔐 تعيين صلاحية أدمن لمستخدم (مرة واحدة فقط)
-   استدعِها من التطبيق أو من سكربت مع: targetUid + secret
+   🔐 تعيين صلاحية أدمن لمستخدم آخر
+   Anonymous bootstrap (secret-only) is disabled after initial setup for security:
+   only callers with an existing admin session can grant admin. New projects:
+   use functions/scripts/set-admin-claim.js + service account, or Firebase Console.
 -------------------------------------------------------- */
-const ADMIN_SETUP_SECRET = "aqarai_admin_setup_2025"; // غيّره أو اتركه ثم احذف الاستدعاء بعد الاستخدام
 
-export const setAdminClaim = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    const { targetUid, secret } = (request.data as any) || {};
-    if (!targetUid || typeof targetUid !== "string") {
-      throw new HttpsError("invalid-argument", "targetUid is required");
-    }
-    if (secret !== ADMIN_SETUP_SECRET) {
-      throw new HttpsError("permission-denied", "Invalid secret");
-    }
-
-    await admin.auth().setCustomUserClaims(targetUid, { admin: true });
-    await admin
-      .firestore()
-      .collection("admins")
-      .doc(targetUid)
-      .set(
-        { active: true, updatedAt: FieldValue.serverTimestamp() },
-        { merge: true }
-      );
-
-    return { ok: true, message: "Admin claim set for " + targetUid };
+export const setAdminClaim = onCall({ region: "us-central1" }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Sign in required. Anonymous bootstrap for setAdminClaim is disabled for security."
+    );
   }
-);
+  if (request.auth.token?.admin !== true) {
+    throw new HttpsError(
+      "permission-denied",
+      "Only existing admins can grant admin. Anonymous bootstrap is disabled for security."
+    );
+  }
+
+  const { targetUid } = (request.data as any) || {};
+  if (!targetUid || typeof targetUid !== "string") {
+    throw new HttpsError("invalid-argument", "targetUid is required");
+  }
+
+  await admin.auth().setCustomUserClaims(targetUid, { admin: true });
+  await admin
+    .firestore()
+    .collection("admins")
+    .doc(targetUid)
+    .set(
+      { active: true, updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+
+  return { ok: true, message: "Admin claim set for " + targetUid };
+});
 
 // ⛔️ هذا مكان استيراد أي فانكشن ثانية — خارج كل الفانكشنز
 export { approveListingV2 } from "./listing_approval";
@@ -131,8 +172,15 @@ export {
   onPropertyAreaSanitizeCreate,
   onPropertyAreaSanitizeUpdate,
 } from "./propertyAreaSanitize";
+export { onPropertyTerminalStatusGuard } from "./propertyListingTerminalGuard";
 export { aqaraiAssistant } from "./assistant";
-export { aqaraiAgentAnalyze, aqaraiAgentCompose, aqaraiAgentRankResults, aqaraiAgentFindSimilar } from "./agent_brain";
+export {
+  aqaraiAgentAnalyze,
+  aqaraiAgentCompose,
+  aqaraiAgentRankResults,
+  aqaraiAgentRankAndCompose,
+  aqaraiAgentFindSimilar,
+} from "./agent_brain";
 export { onPropertyCreatedBuyerRadar } from "./buyer_radar";
 export { onPropertyUpdatedBuyerNotify } from "./buyer_notifications";
 export {
@@ -195,3 +243,9 @@ export {
   markChaletBookingTransactionPaid,
   processChaletBookingRefund,
 } from "./chalet_booking_finance";
+
+export { featureProperty } from "./featureProperty";
+export { featurePropertyMock } from "./featurePropertyMock";
+export { featurePropertyPaid } from "./featurePropertyPaid";
+export { onFeatureSuggestionEventWritten } from "./aiSuggestionsDailyAgg";
+export { autoTuneAiSuggestionsConfig } from "./aiSuggestionsAutoTune";

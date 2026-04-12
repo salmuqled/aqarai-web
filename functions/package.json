@@ -9,7 +9,9 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "migrate:auction": "npx ts-node --transpile-only scripts/migrateAuctionSchema.ts",
-    "migrate:auction:dry-run": "npx ts-node --transpile-only scripts/migrateAuctionSchema.ts --dry-run"
+    "migrate:auction:dry-run": "npx ts-node --transpile-only scripts/migrateAuctionSchema.ts --dry-run",
+    "cleanup:property-status": "FIREBASE_PROJECT_ID=aqarai-caf5d node scripts/propertyStatusCleanup.mjs",
+    "cleanup:property-status:dry-run": "FIREBASE_PROJECT_ID=aqarai-caf5d node scripts/propertyStatusCleanup.mjs --dry-run"
   },
   "engines": {
     "node": "20"
@@ -20,8 +22,8 @@
     "@types/graphql": "^14.2.3",
     "arabic-reshaper": "^1.1.0",
     "bidi-js": "^1.0.3",
-    "firebase-admin": "^13.0.0",
-    "firebase-functions": "^7.0.0",
+    "firebase-admin": "^13.8.0",
+    "firebase-functions": "^7.2.5",
     "graphql": "^16.12.0",
     "nodemailer": "^8.0.4",
     "openai": "^4.104.0",

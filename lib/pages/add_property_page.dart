@@ -2,12 +2,11 @@
 
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
@@ -16,6 +15,9 @@ import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 
 import 'package:aqarai_app/pages/my_ads_page.dart';
 import 'package:aqarai_app/pages/terms_conditions_page.dart';
+import 'package:aqarai_app/services/image_processing_service.dart';
+import 'package:aqarai_app/services/property_listing_image_service.dart';
+import 'package:aqarai_app/utils/video_embed_url.dart';
 import 'package:aqarai_app/services/seller_radar_service.dart';
 import 'package:aqarai_app/services/user_ban_service.dart';
 import 'package:aqarai_app/utils/property_form_parsing.dart';
@@ -40,7 +42,10 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
 
   int? _interestedBuyersCount;
 
-  File? pickedImage;
+  final List<ProcessedListingPhoto> _listingPhotos = [];
+  bool _processingImages = false;
+  int _processingDone = 0;
+  int _processingTotal = 0;
   bool _loading = false;
 
   // Controllers
@@ -48,6 +53,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   final ownerPhoneController = TextEditingController();
 
   final descriptionController = TextEditingController();
+  final videoUrlController = TextEditingController();
   final roomCountController = TextEditingController();
   final masterRoomCountController = TextEditingController();
   final bathroomCountController = TextEditingController();
@@ -88,6 +94,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     fullNameController.dispose();
     ownerPhoneController.dispose();
     descriptionController.dispose();
+    videoUrlController.dispose();
     roomCountController.dispose();
     masterRoomCountController.dispose();
     bathroomCountController.dispose();
@@ -129,17 +136,127 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     }
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() => pickedImage = File(picked.path));
+  Future<void> _pickImages() async {
+    if (_loading || _processingImages) return;
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    final remaining =
+        ImageProcessingService.maxImages - _listingPhotos.length;
+    if (remaining <= 0) {
+      _toast(isAr ? 'الحد الأقصى 10 صور' : 'Maximum 10 photos.');
+      return;
     }
+
+    final pick =
+        await ImageProcessingService.pickImages(maxSelectable: remaining);
+    if (pick == null || pick.files.isEmpty) return;
+
+    setState(() {
+      _processingImages = true;
+      _processingDone = 0;
+      _processingTotal = pick.files.length;
+    });
+    try {
+      final processed =
+          await ImageProcessingService.processListingPhotosWithProgress(
+        pick.files,
+        onProgress: (done, total) {
+          if (!mounted) return;
+          setState(() {
+            _processingDone = done;
+            _processingTotal = total;
+          });
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _listingPhotos.addAll(processed);
+        _processingImages = false;
+        _processingDone = 0;
+        _processingTotal = 0;
+      });
+      if (pick.truncatedFromSelection) {
+        _toast(
+          isAr
+              ? 'تمت إضافة أول $remaining صور فقط (الحد 10).'
+              : 'Only the first $remaining photos were added (max 10).',
+        );
+      }
+    } catch (e, st) {
+      debugPrint('[AddProperty] Image processing failed: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _processingImages = false;
+          _processingDone = 0;
+          _processingTotal = 0;
+        });
+        _toast(
+          isAr
+              ? 'تعذر معالجة الصور. حاول مجدداً.'
+              : 'Could not process images. Try again.',
+        );
+      }
+    }
+  }
+
+  void _removePickedImageAt(int index) {
+    if (_loading || _processingImages) return;
+    setState(() => _listingPhotos.removeAt(index));
   }
 
   void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  /// Single source of truth: top-level service intent is sale.
+  bool isSaleListing() => selectedServiceType == 'sale';
+
+  /// Chalet offered as daily booking (never apply sale-style KWD ×1000 heuristic).
+  bool isChaletDailyBooking() =>
+      selectedPropertyType == 'chalet' &&
+      selectedChaletMode == ChaletMode.daily;
+
+  /// When state is missing or not one of the known UI values, skip auto-normalization (fail closed).
+  bool _priceNormalizationStateIsDefensible() {
+    if (selectedPropertyType == null || selectedPropertyType!.trim().isEmpty) {
+      return false;
+    }
+    if (selectedServiceType.trim().isEmpty) {
+      return false;
+    }
+    const knownServiceTypes = {'sale', 'rent', 'exchange'};
+    if (!knownServiceTypes.contains(selectedServiceType)) {
+      return false;
+    }
+    if (selectedPropertyType == 'chalet') {
+      const knownChaletModes = {
+        ChaletMode.daily,
+        ChaletMode.monthly,
+        ChaletMode.sale,
+      };
+      if (!knownChaletModes.contains(selectedChaletMode)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Sale-only auto-normalization (e.g. 950 → 950000). Skipped for rent/exchange, chalet daily booking, and unsafe state.
+  ({double price, bool priceAutoCorrected}) _computeListingPrice() {
+    var price = parsePropertyDouble(priceController.text);
+    var priceAutoCorrected = false;
+
+    if (!_priceNormalizationStateIsDefensible()) {
+      return (price: price, priceAutoCorrected: false);
+    }
+
+    if (isSaleListing() && !isChaletDailyBooking()) {
+      if (price >= 100 && price < 10000) {
+        price *= 1000;
+        priceAutoCorrected = true;
+      }
+    }
+    return (price: price, priceAutoCorrected: priceAutoCorrected);
   }
 
   void _openTermsFullPage() {
@@ -170,6 +287,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   }
 
   bool _validate(AppLocalizations loc) {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+
     if (fullNameController.text.trim().isEmpty) {
       _toast("يرجى كتابة اسم المالك");
       return false;
@@ -200,18 +319,54 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       return false;
     }
 
+    if (_listingPhotos.isEmpty) {
+      _toast(
+        isAr
+            ? 'صورة العقار مطلوبة قبل النشر.'
+            : 'A property photo is required before publishing.',
+      );
+      return false;
+    }
+    if (_listingPhotos.length > ImageProcessingService.maxImages) {
+      _toast(
+        isAr
+            ? 'الحد الأقصى 10 صور.'
+            : 'Maximum 10 photos.',
+      );
+      return false;
+    }
+    try {
+      for (final p in _listingPhotos) {
+        if (!p.full.existsSync() ||
+            p.full.lengthSync() <= 0 ||
+            !p.thumbnail.existsSync() ||
+            p.thumbnail.lengthSync() <= 0) {
+          _toast(
+            isAr ? 'ملف الصورة غير صالح.' : 'The image file is not valid.',
+          );
+          return false;
+        }
+      }
+    } on FileSystemException {
+      _toast(
+        isAr
+            ? 'تعذر قراءة الصورة. اختر صورة أخرى.'
+            : 'Could not read the image. Pick another photo.',
+      );
+      return false;
+    }
+
+    final videoTrim = videoUrlController.text.trim();
+    if (videoTrim.isNotEmpty && !VideoEmbedUrl.isEmptyOrValid(videoTrim)) {
+      _toast(
+        isAr
+            ? 'رابط الفيديو غير صالح (يُقبل يوتيوب أو فيميو فقط).'
+            : 'Invalid video link (YouTube or Vimeo only).',
+      );
+      return false;
+    }
+
     return true;
-  }
-
-  Future<String?> _uploadImage(String docId) async {
-    if (pickedImage == null) return null;
-
-    final ref = FirebaseStorage.instance.ref().child(
-      "properties/$docId/${DateTime.now().millisecondsSinceEpoch}.jpg",
-    );
-
-    await ref.putFile(pickedImage!);
-    return ref.getDownloadURL();
   }
 
   Future<User?> _ensureSignedIn() async {
@@ -232,8 +387,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
 
     if (!_validate(loc)) return;
 
+    DocumentReference<Map<String, dynamic>>? createdRef;
+
     try {
       setState(() => _loading = true);
+      final isAr = Localizations.localeOf(context).languageCode == 'ar';
 
       final user = await _ensureSignedIn();
       if (user == null) {
@@ -262,6 +420,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         areaEn.isNotEmpty ? areaEn : areaAr,
       );
 
+      final listingPrice = _computeListingPrice();
+
       final data = {
         "ownerId": user.uid,
         "fullName": fullNameController.text.trim(),
@@ -288,7 +448,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "bathroomCount": parsePropertyInt(bathroomCountController.text),
         "parkingCount": parsePropertyInt(parkingCountController.text),
         "size": parsePropertyDouble(sizeController.text),
-        "price": parsePropertyDouble(priceController.text),
+        "price": listingPrice.price,
+        if (listingPrice.priceAutoCorrected) "priceAutoCorrected": true,
 
         "hasElevator": hasElevator,
         "hasCentralAC": hasCentralAC,
@@ -298,10 +459,15 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "hasLaundryRoom": hasLaundryRoom,
         "hasGarden": hasGarden,
 
+        if (videoUrlController.text.trim().isNotEmpty)
+          "videoUrl": videoUrlController.text.trim(),
+
         "images": [],
+        "hasImage": false,
         "imagesApproved": false,
         "approved": false,
-        "status": "active",
+        "sold": false,
+        "status": ListingStatus.pendingUpload,
         "isActive": true,
 
         // Phase 1: تمييز الشاليه عن العادي (بدون حجوزات في التطبيق بعد)
@@ -316,7 +482,14 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "updatedAt": FieldValue.serverTimestamp(),
       };
 
-      final docRef = await firestore.collection("properties").add(data);
+      createdRef = await firestore.collection("properties").add(data);
+      await createdRef.get();
+      if (kDebugMode) {
+        debugPrint(
+          '[AddProperty] created propertyId=${createdRef.id} '
+          'status=${ListingStatus.pendingUpload} hasImage=false images=0 thumbnails=0 approved=false',
+        );
+      }
 
       final userProfile = <String, dynamic>{
         'name': fullNameController.text.trim(),
@@ -331,21 +504,91 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
             SetOptions(merge: true),
           );
 
-      if (pickedImage != null) {
-        final url = await _uploadImage(docRef.id);
-        if (url != null) {
-          await docRef.update({
-            "images": [url],
+      var imageUploadCompleted = false;
+      try {
+        final batch =
+            await PropertyListingImageService.uploadListingPhotosToStorage(
+          propertyId: createdRef.id,
+          photos: List<ProcessedListingPhoto>.from(_listingPhotos),
+        );
+        try {
+          await PropertyListingImageService.applyUploadedImagesToProperty(
+            propertyId: createdRef.id,
+            fullUrls: batch.map((e) => e.fullUrl).toList(),
+            thumbnailUrls: batch.map((e) => e.thumbUrl).toList(),
+          );
+          imageUploadCompleted = true;
+          if (kDebugMode) {
+            debugPrint(
+              '[AddProperty] upload complete propertyId=${createdRef.id} '
+              'status=${ListingStatus.active} hasImage=true '
+              'images=${batch.length} thumbnails=${batch.length}',
+            );
+          }
+          await ImageProcessingService.tryDeleteProcessedListingPhotos(
+            _listingPhotos,
+          );
+        } catch (e, st) {
+          debugPrint('[AddProperty] Firestore after upload failed: $e\n$st');
+          for (final up in batch) {
+            try {
+              await up.fullRef.delete();
+            } catch (_) {}
+            try {
+              await up.thumbRef.delete();
+            } catch (_) {}
+          }
+          try {
+            await createdRef.update({
+              'id': createdRef.id,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          } catch (_) {}
+          if (mounted) {
+            _toast(
+              isAr
+                  ? '${loc.errorLabel} (حفظ الصورة): $e'
+                  : '${loc.errorLabel} (saving photo): $e',
+            );
+          }
+        }
+      } on FirebaseException catch (e, st) {
+        debugPrint(
+          '[AddProperty] Image upload FirebaseException ${e.code} ${e.message}\n$st',
+        );
+        try {
+          await createdRef.update({
+            'id': createdRef.id,
+            'updatedAt': FieldValue.serverTimestamp(),
           });
+        } catch (_) {}
+        if (mounted) {
+          _toast(
+            isAr
+                ? '${loc.errorLabel}: ${e.code} — ${e.message ?? ""}\nافتح «إعلاناتي» ثم «إعادة رفع الصورة».'
+                : '${loc.errorLabel}: [${e.code}] ${e.message ?? ""}\nUse My Ads → Retry upload.',
+          );
+        }
+      } catch (e, st) {
+        debugPrint('[AddProperty] Image upload failed: $e\n$st');
+        try {
+          await createdRef.update({
+            'id': createdRef.id,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } catch (_) {}
+        if (mounted) {
+          _toast(
+            isAr
+                ? 'تم حفظ العقار. أكمل من «إعلاناتي» باستخدام «إعادة رفع الصورة».\n$e'
+                : 'Listing saved. Open My Ads and tap Retry upload.\n$e',
+          );
         }
       }
 
-      await docRef.update({
-        "id": docRef.id,
-        "updatedAt": FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) _toast(AppLocalizations.of(context)!.propertySentForReview);
+      if (mounted && imageUploadCompleted) {
+        _toast(loc.propertySentForReview);
+      }
 
       if (!mounted) return;
 
@@ -353,8 +596,16 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         context,
         MaterialPageRoute(builder: (_) => const MyAdsPage()),
       );
-    } catch (e) {
-      if (mounted) _toast('${AppLocalizations.of(context)!.errorLabel}: $e');
+    } catch (e, st) {
+      debugPrint('[AddProperty] Publish error: $e\n$st');
+      if (createdRef != null) {
+        try {
+          await createdRef.delete();
+        } catch (_) {}
+      }
+      if (mounted) {
+        _toast('${loc.errorLabel}: $e');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -387,20 +638,206 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       textDirection: textDirection,
       child: Scaffold(
         appBar: AppBar(title: Text(loc.addProperty), centerTitle: true),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            children: [
-              if (pickedImage != null && pickedImage!.existsSync())
+        body: AbsorbPointer(
+          absorbing: _processingImages || _loading,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+              if (_processingImages)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Image.file(pickedImage!, height: 200),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _processingTotal > 0
+                                  ? () {
+                                      final pct = ((_processingDone /
+                                                  _processingTotal) *
+                                              100)
+                                          .clamp(0, 100)
+                                          .round();
+                                      return isArabic
+                                          ? 'جاري المعالجة $_processingDone / $_processingTotal ($pct٪)'
+                                          : 'Processing $_processingDone / $_processingTotal ($pct%)';
+                                    }()
+                                  : (isArabic
+                                      ? 'جاري تحسين الصور والصور المصغّرة…'
+                                      : 'Optimizing photos & thumbnails…'),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_processingTotal > 0) ...[
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            minHeight: 6,
+                            value: _processingTotal > 0
+                                ? (_processingDone / _processingTotal)
+                                    .clamp(0.0, 1.0)
+                                : null,
+                          ),
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 8),
+                        const LinearProgressIndicator(minHeight: 4),
+                      ],
+                    ],
+                  ),
                 ),
 
+              if (!_processingImages &&
+                  _listingPhotos.isEmpty &&
+                  !_loading) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade400),
+                    color: Colors.grey.shade50,
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 40,
+                        color: Colors.grey.shade600,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        isArabic
+                            ? 'أضف صورة واحدة على الأقل (حتى 10 صور)'
+                            : 'Add at least one photo (up to 10)',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              if (_listingPhotos.isNotEmpty) ...[
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    isArabic
+                        ? 'اسحب لإعادة الترتيب — الأولى هي غلاف الإعلان'
+                        : 'Drag to reorder — first photo is the cover',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.black54,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  itemCount: _listingPhotos.length,
+                  onReorder: (oldIndex, newIndex) {
+                    if (_loading || _processingImages) return;
+                    setState(() {
+                      if (newIndex > oldIndex) newIndex -= 1;
+                      final item = _listingPhotos.removeAt(oldIndex);
+                      _listingPhotos.insert(newIndex, item);
+                    });
+                  },
+                  itemBuilder: (context, i) {
+                    final photo = _listingPhotos[i];
+                    final f = photo.full;
+                    return Card(
+                      key: ValueKey('${f.path}_${photo.thumbnail.path}'),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      clipBehavior: Clip.antiAlias,
+                      child: ListTile(
+                        contentPadding: const EdgeInsetsDirectional.only(
+                          start: 8,
+                          end: 4,
+                        ),
+                        leading: ReorderableDragStartListener(
+                          index: i,
+                          child: SizedBox(
+                            width: 72,
+                            height: 72,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                f,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          i == 0
+                              ? (isArabic ? 'غلاف' : 'Cover')
+                              : (isArabic ? 'صورة ${i + 1}' : 'Photo ${i + 1}'),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: i == 0
+                            ? Text(
+                                isArabic
+                                    ? 'تظهر أولاً في القوائم والتفاصيل'
+                                    : 'Shown first in lists & details',
+                              )
+                            : null,
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (i == 0)
+                              Padding(
+                                padding: const EdgeInsetsDirectional.only(end: 6),
+                                child: Icon(
+                                  Icons.star_rounded,
+                                  color: Colors.amber.shade800,
+                                  size: 26,
+                                ),
+                              ),
+                            IconButton(
+                              tooltip: isArabic ? 'حذف' : 'Remove',
+                              onPressed: _loading || _processingImages
+                                  ? null
+                                  : () => _removePickedImageAt(i),
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 4),
+              ],
+
               ElevatedButton.icon(
-                onPressed: _loading ? null : _pickImage,
+                onPressed: (_loading || _processingImages)
+                    ? null
+                    : _pickImages,
                 icon: const Icon(Icons.image),
-                label: Text(loc.choosePropertyImage),
+                label: Text(
+                  isArabic
+                      ? 'إضافة صور (${_listingPhotos.length}/${ImageProcessingService.maxImages})'
+                      : 'Add photos (${_listingPhotos.length}/${ImageProcessingService.maxImages})',
+                ),
               ),
 
               const SizedBox(height: 20),
@@ -732,6 +1169,22 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                 ),
               ),
 
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: videoUrlController,
+                keyboardType: TextInputType.url,
+                decoration: InputDecoration(
+                  labelText: isArabic
+                      ? 'رابط فيديو (يوتيوب أو فيميو فقط)'
+                      : 'Video link (YouTube or Vimeo only)',
+                  hintText: isArabic
+                      ? 'اتركه فارغاً إن لم يكن لديك فيديو'
+                      : 'Leave empty if you have no video',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+
               const SizedBox(height: 22),
 
               if (_interestedBuyersCount != null && _interestedBuyersCount! > 0)
@@ -814,7 +1267,9 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: (_loading || !_acceptedTerms)
+                  onPressed: (_loading ||
+                          _processingImages ||
+                          !_acceptedTerms)
                       ? null
                       : _saveProperty,
                   style: ElevatedButton.styleFrom(
@@ -830,7 +1285,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                   ),
                 ),
               ),
-            ],
+                ],
+            ),
           ),
         ),
       ),

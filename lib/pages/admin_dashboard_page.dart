@@ -24,6 +24,7 @@ import 'package:aqarai_app/pages/admin_auction_earnings_page.dart';
 import 'package:aqarai_app/pages/admin_auction_requests_page.dart';
 import 'package:aqarai_app/pages/admin_control_center_page.dart';
 import 'package:aqarai_app/pages/admin_invoices_page.dart';
+import 'package:aqarai_app/pages/admin_featured_dashboard_page.dart';
 import 'package:aqarai_app/widgets/admin_cashflow_ledger_section.dart';
 import 'package:aqarai_app/widgets/admin_commission_section.dart';
 import 'package:aqarai_app/widgets/admin_outstanding_section.dart';
@@ -35,6 +36,11 @@ import 'package:aqarai_app/widgets/admin_analytics_section.dart';
 import 'package:aqarai_app/widgets/admin_crm_snapshot_section.dart';
 import 'package:aqarai_app/widgets/admin_leads_split_section.dart';
 import 'package:aqarai_app/widgets/hybrid_marketing_settings_dialog.dart';
+import 'package:aqarai_app/widgets/admin_ai_suggestions_analytics_section.dart';
+import 'package:aqarai_app/widgets/admin_ai_suggestions_controls_section.dart';
+import 'package:aqarai_app/widgets/admin_ai_config_history_section.dart';
+import 'package:aqarai_app/widgets/admin_ai_config_rollback_banner.dart';
+import 'package:aqarai_app/widgets/admin_upload_health_section.dart';
 
 /// Admin decision dashboard: `analytics/global` (fast) + bounded `deals` query (detail).
 class AdminDashboardPage extends StatefulWidget {
@@ -132,6 +138,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 context,
                 MaterialPageRoute<void>(
                   builder: (_) => const AdminAuctionRequestsPage(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: isAr ? 'تمييز الإعلانات' : 'Featured ads',
+            icon: const Icon(Icons.star_border_outlined),
+            onPressed: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const AdminFeaturedDashboardPage(),
                 ),
               );
             },
@@ -423,6 +441,16 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
                       AdminLeadsSplitSection(dealDocs: docs),
                       const SizedBox(height: 20),
                       AdminConversionSection(dealDocs: docs),
+                      const SizedBox(height: 20),
+                      AdminAiConfigRollbackBanner(isAr: isAr),
+                      const SizedBox(height: 20),
+                      AdminAiSuggestionsControlsSection(isAr: isAr),
+                      const SizedBox(height: 20),
+                      AdminAiConfigHistorySection(isAr: isAr),
+                      const SizedBox(height: 20),
+                      const AdminAiSuggestionsAnalyticsSection(),
+                      const SizedBox(height: 20),
+                      const AdminUploadHealthSection(),
                       const SizedBox(height: 20),
                       AdminCommissionSection(
                         dealDocs: docs,

@@ -93,6 +93,20 @@ String getAreaName(String? areaCode) {
   return _areaCodeToAr![key] ?? '';
 }
 
+/// Display label for a Firestore [areaCode] slug (assistant suggestions, nearby copy).
+/// Uses the same code→label maps as listing cards so UI matches search/analyze slugs.
+String areaLabelForCode(String? areaCode, {required bool arabic}) {
+  final raw = (areaCode ?? '').trim();
+  if (raw.isEmpty) return '';
+  _ensureAreaCodeMaps();
+  final key = propertyLocationCode(raw);
+  if (key.isEmpty) return raw;
+  if (arabic) {
+    return _areaCodeToAr![key] ?? raw;
+  }
+  return _areaCodeToEn![key] ?? _areaCodeToAr![key] ?? raw;
+}
+
 /// Priority (Arabic display):
 /// 1. areaAr → 2. area → 3. areaEn (reverse EN→AR, else treat as code slug, else raw) →
 /// 4. areaCode / area_id → map to Arabic.

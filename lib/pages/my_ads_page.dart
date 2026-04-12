@@ -1,7 +1,11 @@
 // lib/pages/my_ads_page.dart
 
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -18,13 +22,68 @@ import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/pages/wanted_details_page.dart';
 import 'package:aqarai_app/pages/valuation_details_page.dart';
+import 'package:aqarai_app/constants/deal_constants.dart';
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/property_closure_service.dart';
+import 'package:aqarai_app/utils/property_listing_cover.dart';
+import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
+import 'package:aqarai_app/services/image_processing_service.dart';
+import 'package:aqarai_app/services/property_listing_image_service.dart';
+import 'package:aqarai_app/services/featured_property_service.dart';
+import 'package:aqarai_app/services/payment/payment_service_provider.dart';
 import 'package:aqarai_app/pages/owner_chalet_finance_page.dart';
 import 'package:aqarai_app/pages/owner_dashboard_page.dart';
 
 enum AdsFilter { all, active, expired, featured, wanted, valuations }
+
+String _myAdsClosedDealChipFromServiceType(
+  Map<String, dynamic> d,
+  String languageCode,
+) {
+  final st = (d['serviceType'] ?? 'sale').toString().toLowerCase().trim();
+  if (languageCode == 'ar') {
+    switch (st) {
+      case 'rent':
+        return 'تم التأجير';
+      case 'exchange':
+        return 'تمت الصفقة';
+      case 'sale':
+      default:
+        return 'تم البيع';
+    }
+  }
+  switch (st) {
+    case 'rent':
+      return 'Rented';
+    case 'exchange':
+      return 'Exchanged';
+    case 'sale':
+    default:
+      return 'Sold';
+  }
+}
+
+/// My Ads: Arabic/English "sold" (and peer terminal labels) only when
+/// `properties.dealStatus == DealStatus.closed` — never from `status` alone.
+String _myAdsPropertyStatusChipLabel(Map<String, dynamic> d, String languageCode) {
+  final dealStatus = (d['dealStatus'] ?? '').toString().trim();
+  final listingStatus = (d['status'] ?? ListingStatus.active).toString().trim();
+
+  if (dealStatus == DealStatus.closed) {
+    return _myAdsClosedDealChipFromServiceType(d, languageCode);
+  }
+
+  if (listingStatus == ListingStatus.sold ||
+      listingStatus == ListingStatus.rented ||
+      listingStatus == ListingStatus.exchanged) {
+    final patched = Map<String, dynamic>.from(d);
+    patched['status'] = ListingStatus.active;
+    return listingStatusChipLabel(patched, languageCode);
+  }
+
+  return listingStatusChipLabel(d, languageCode);
+}
 
 class MyAdsPage extends StatefulWidget {
   const MyAdsPage({super.key});
@@ -38,6 +97,9 @@ class _MyAdsPageState extends State<MyAdsPage> {
 
   final _fmtNum = NumberFormat.decimalPattern();
   AdsFilter _filter = AdsFilter.all;
+
+  /// While non-null, main-photo retry is running for this property id.
+  String? _propertyImageRetryBusyId;
 
   static const Color _primaryBlue = Color(0xFF101046);
 
@@ -162,23 +224,6 @@ class _MyAdsPageState extends State<MyAdsPage> {
     }
   }
 
-  String? _coverFrom(dynamic coverUrl, dynamic images) {
-    String? pick(dynamic x) {
-      final s = x?.toString().trim();
-      if (s == null || s.isEmpty) return null;
-      return s;
-    }
-
-    final c = pick(coverUrl);
-    if (c != null) return c;
-
-    if (images is List && images.isNotEmpty) return pick(images.first);
-    if (images is Map && images.values.isNotEmpty) {
-      return pick(images.values.first);
-    }
-    return null;
-  }
-
   // طلبات المطلوب الخاصة بالمستخدم
   Query<Map<String, dynamic>> _wantedQuery(String uid) {
     return firestore
@@ -225,38 +270,6 @@ class _MyAdsPageState extends State<MyAdsPage> {
     }
   }
 
-  // ⭐ تمييز الإعلان — النسخة الصحيحة
-  Future<void> _makeFeatured(String id) async {
-    final now = DateTime.now();
-    final end = now.add(const Duration(days: 7)); // 7 أيام تمييز
-
-    try {
-      await firestore.collection('properties').doc(id).update({
-        'featuredUntil': Timestamp.fromDate(end),
-        'approved': true,
-        'status': 'active',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (!mounted) return;
-
-      final loc = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("✔ ${loc.adFeaturedSevenDays}"),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      final loc = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("${loc.errorLabel}: $e"), backgroundColor: Colors.red),
-      );
-    }
-  }
-
   /// تمييز طلب مطلوب ٧ أيام (لإظهاره في مطلوب مميز)
   Future<void> _makeWantedFeatured(String wantedId) async {
     final now = DateTime.now();
@@ -286,6 +299,107 @@ class _MyAdsPageState extends State<MyAdsPage> {
   }
 
   // حذف فعلي 🚀
+  Future<void> _retryPropertyMainImageUpload(String propertyId) async {
+    if (_propertyImageRetryBusyId != null) return;
+    setState(() => _propertyImageRetryBusyId = propertyId);
+
+    final loc = AppLocalizations.of(context)!;
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+
+      final raw = File(picked.path);
+      if (!await raw.exists() || await raw.length() <= 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isAr ? 'ملف الصورة غير صالح' : 'Invalid image file'),
+            ),
+          );
+        }
+        return;
+      }
+
+      File file;
+      try {
+        file = await ImageProcessingService.processImage(raw);
+      } catch (e, st) {
+        debugPrint('[MyAds] Image process failed: $e\n$st');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isAr
+                    ? 'تعذر معالجة الصورة. حاول صورة أخرى.'
+                    : 'Could not process the image. Try another photo.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final up = await PropertyListingImageService.uploadMainPhotoToStorage(
+        propertyId: propertyId,
+        file: file,
+        isUserRetry: true,
+      );
+      try {
+        await PropertyListingImageService.applyUploadedImageToProperty(
+          propertyId: propertyId,
+          downloadUrl: up.fullUrl,
+          thumbnailUrl: up.thumbUrl,
+          setDocumentIdField: false,
+        );
+      } catch (_) {
+        try {
+          await up.fullRef.delete();
+        } catch (_) {}
+        try {
+          await up.thumbRef.delete();
+        } catch (_) {}
+        rethrow;
+      }
+
+      await ImageProcessingService.tryDeleteTemp(file);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isAr ? 'تم رفع الصورة بنجاح' : 'Photo uploaded successfully',
+          ),
+          backgroundColor: Colors.green.shade700,
+        ),
+      );
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${loc.errorLabel}: ${e.code} ${e.message ?? ""}',
+          ),
+          backgroundColor: Colors.red.shade800,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${loc.errorLabel}: $e'),
+          backgroundColor: Colors.red.shade800,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _propertyImageRetryBusyId = null);
+      }
+    }
+  }
+
   Future<void> _hardDelete(String id) async {
     final loc = AppLocalizations.of(context)!;
 
@@ -425,7 +539,8 @@ class _MyAdsPageState extends State<MyAdsPage> {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      Future.microtask(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -650,15 +765,41 @@ class _MyAdsPageState extends State<MyAdsPage> {
     final id = doc.id;
     final typeEn = (d['type'] ?? '-').toString();
     final area = (d['area'] ?? '-').toString();
-    final cover = _coverFrom(d['coverUrl'], d['images']);
+    final cover = PropertyListingCover.urlFrom(d);
     final createdAt = d['createdAt'] as Timestamp?;
     final expiresAt = d['expiresAt'] as Timestamp?;
     final price = _parseNumFlexible(d['price']);
     final featuredUntil = d['featuredUntil'] as Timestamp?;
     final isFeaturedNow = featuredUntil != null &&
         featuredUntil.toDate().isAfter(DateTime.now());
+    final featuredDaysLeft = (() {
+      if (!isFeaturedNow) return null;
+      final end = featuredUntil.toDate();
+      final diff = end.difference(DateTime.now());
+      if (diff.isNegative) return 0;
+      // Round up so "0.2 days left" shows as 1.
+      return (diff.inHours / 24).ceil().clamp(0, 3650);
+    })();
+    final featuredUrgent = featuredDaysLeft != null && featuredDaysLeft <= 2;
     final serviceLabel = _propertyServiceLabel(d['serviceType']?.toString(), loc);
     final approved = d['approved'] == true;
+    final needsPhoto = listingDataNeedsImageUpload(d);
+    final isAr = locale == 'ar';
+    final statusChip = _myAdsPropertyStatusChipLabel(d, locale);
+    if (kDebugMode) {
+      final st = (d['status'] ?? ListingStatus.active).toString().trim();
+      final dealStatus = (d['dealStatus'] ?? '').toString().trim();
+      final hasImage = d['hasImage'];
+      final imgs = d['images'];
+      final thumbs = d['thumbnails'];
+      final imagesLen = imgs is List ? imgs.length : 0;
+      final thumbsLen = thumbs is List ? thumbs.length : 0;
+      debugPrint(
+        '[MyAds] status-chip propertyId=$id status=$st dealStatus=$dealStatus '
+        'approved=$approved hasImage=$hasImage imagesLen=$imagesLen '
+        'thumbsLen=$thumbsLen needsPhoto=$needsPhoto finalLabel=$statusChip',
+      );
+    }
     final canFeature = approved &&
         !listingDataIsClosedDeal(d) &&
         d['closeRequestSubmitted'] != true &&
@@ -739,13 +880,64 @@ class _MyAdsPageState extends State<MyAdsPage> {
                       alignment: Alignment.centerRight,
                       child: Chip(
                         label: Text(
-                          listingStatusLabelAr(d),
+                          statusChip,
                           style: const TextStyle(fontSize: 11),
                         ),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
+                    if (needsPhoto) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.orange.shade300),
+                              ),
+                              child: Text(
+                                isAr
+                                    ? 'مطلوب رفع صورة لإرسال الطلب للاعتماد'
+                                    : 'Upload a photo before admin can approve',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange.shade900,
+                                ),
+                                textAlign: TextAlign.end,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            FilledButton.tonalIcon(
+                              onPressed: _propertyImageRetryBusyId == id
+                                  ? null
+                                  : () => _retryPropertyMainImageUpload(id),
+                              icon: _propertyImageRetryBusyId == id
+                                  ? SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.blue.shade800,
+                                      ),
+                                    )
+                                  : const Icon(Icons.cloud_upload_outlined, size: 20),
+                              label: Text(isAr ? 'إعادة رفع الصورة' : 'Retry upload'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (showClosureBtn) ...[
                       const SizedBox(height: 6),
                       Align(
@@ -774,9 +966,11 @@ class _MyAdsPageState extends State<MyAdsPage> {
               Flexible(
                 child: _Actions(
                   loc: loc,
+                  propertyId: id,
                   featured: isFeaturedNow,
+                  featuredDaysLeft: featuredDaysLeft,
+                  featuredUrgent: featuredUrgent,
                   canFeature: canFeature,
-                  onFeature: () => _makeFeatured(id),
                   onDelete: () => _hardDelete(id),
                 ),
               ),
@@ -1076,38 +1270,273 @@ class _MyAdsPageState extends State<MyAdsPage> {
   }
 }
 
-class _Actions extends StatelessWidget {
+class _Actions extends StatefulWidget {
   final AppLocalizations loc;
+  final String propertyId;
   final bool featured;
+  final int? featuredDaysLeft;
+  final bool featuredUrgent;
   final bool canFeature;
-  final VoidCallback onFeature;
   final VoidCallback onDelete;
 
   const _Actions({
     required this.loc,
+    required this.propertyId,
     required this.featured,
+    required this.featuredDaysLeft,
+    required this.featuredUrgent,
     required this.canFeature,
-    required this.onFeature,
     required this.onDelete,
   });
 
   @override
+  State<_Actions> createState() => _ActionsState();
+}
+
+class _FeaturePlan {
+  const _FeaturePlan({
+    required this.durationDays,
+    required this.priceKwd,
+    required this.labelAr,
+  });
+
+  final int durationDays;
+  final int priceKwd;
+  final String labelAr;
+}
+
+class _ActionsState extends State<_Actions> {
+  bool _loadingFeature = false;
+
+  static const _plans = <_FeaturePlan>[
+    _FeaturePlan(durationDays: 3, priceKwd: 5, labelAr: '3 أيام'),
+    _FeaturePlan(durationDays: 7, priceKwd: 10, labelAr: '7 أيام'),
+    _FeaturePlan(durationDays: 14, priceKwd: 15, labelAr: '14 يوم'),
+    _FeaturePlan(durationDays: 30, priceKwd: 25, labelAr: '30 يوم'),
+  ];
+
+  Future<_FeaturePlan?> _pickPlan(BuildContext context) {
+    return showModalBottomSheet<_FeaturePlan>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (ctx) {
+        final bestValue = _plans[2]; // 14 days as a nice middle value
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 6),
+                const Text(
+                  'اختر مدة التمييز',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 12),
+                ..._plans.map((p) {
+                  final highlight = p == bestValue;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: InkWell(
+                      onTap: () => Navigator.pop(ctx, p),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: highlight
+                                ? Colors.blue.withValues(alpha: 0.45)
+                                : Colors.black.withValues(alpha: 0.08),
+                            width: highlight ? 1.6 : 1,
+                          ),
+                          color: highlight
+                              ? Colors.blue.withValues(alpha: 0.06)
+                              : Colors.white,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.star,
+                              color: highlight ? Colors.blue : Colors.grey,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.labelAr,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  if (highlight) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'أفضل قيمة',
+                                      style: TextStyle(
+                                        color: Colors.blue.shade700,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            Text(
+                              '${p.priceKwd} د.ك',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _runFeatureFlow(BuildContext context) async {
+    if (_loadingFeature) return;
+    final plan = await _pickPlan(context);
+    if (plan == null) return;
+
+    setState(() => _loadingFeature = true);
+    try {
+      final ui = await PaymentServiceProvider.instance.payFeaturedAd(
+        amountKwd: plan.priceKwd.toDouble(),
+        propertyId: widget.propertyId,
+        description: 'تمييز إعلان',
+      );
+      if (!ui.success) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم إلغاء الدفع')),
+        );
+        return;
+      }
+      final pid = ui.paymentId?.trim() ?? '';
+      if (pid.isEmpty) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('فشل الدفع: رقم العملية غير متوفر'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      await FeaturedPropertyService.featurePropertyPaid(
+        propertyId: widget.propertyId,
+        durationDays: plan.durationDays,
+        amountKwd: plan.priceKwd.toDouble(),
+        paymentId: pid,
+        gateway: 'MyFatoorah',
+      );
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم تمييز الإعلان بنجاح'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loadingFeature = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final accent =
+        widget.featuredUrgent ? Colors.orange.shade800 : Colors.blue;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (canFeature)
+        if (widget.featured) ...[
+          InkWell(
+            onTap: _loadingFeature ? null : () => _runFeatureFlow(context),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_loadingFeature) ...[
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: accent,
+                      ),
+                    ),
+                  ] else ...[
+                    Icon(Icons.star, color: accent, size: 18),
+                  ],
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      widget.featuredDaysLeft == null
+                          ? widget.loc.extendFeature
+                          : '${widget.loc.extendFeature} (${widget.featuredDaysLeft}d)',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: accent,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (widget.canFeature)
           TextButton.icon(
-            onPressed: onFeature,
-            icon: const Icon(Icons.star),
+            onPressed: _loadingFeature ? null : () => _runFeatureFlow(context),
+            icon: _loadingFeature
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.star),
             style: TextButton.styleFrom(foregroundColor: Colors.blue),
-            label: Text(featured ? loc.extendFeature : loc.makeFeatured),
+            label: Text(
+              widget.featured ? widget.loc.extendFeature : widget.loc.makeFeatured,
+            ),
           ),
         TextButton.icon(
-          onPressed: onDelete,
+          onPressed: widget.onDelete,
           icon: const Icon(Icons.delete_outline),
           style: TextButton.styleFrom(foregroundColor: Colors.red),
-          label: Text(loc.delete),
+          label: Text(widget.loc.delete),
         ),
       ],
     );
@@ -1121,19 +1550,23 @@ class _CoverThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 72,
-      height: 52,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.grey[200],
-        image: (url != null && url!.isNotEmpty)
-            ? DecorationImage(image: NetworkImage(url!), fit: BoxFit.cover)
-            : null,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 72,
+        height: 52,
+        child: (url != null && url!.isNotEmpty)
+            ? ListingThumbnailImage(
+                imageUrl: url!,
+                width: 72,
+                height: 52,
+                fit: BoxFit.cover,
+              )
+            : ColoredBox(
+                color: Colors.grey[200]!,
+                child: const Icon(Icons.home, color: Colors.black45),
+              ),
       ),
-      child: (url == null || url!.isEmpty)
-          ? const Icon(Icons.home, color: Colors.black45)
-          : null,
     );
   }
 }

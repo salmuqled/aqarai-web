@@ -26,6 +26,7 @@ service cloud.firestore {
 
     function propertyPublicDiscovery(data) {
       return data.approved == true
+        && (!('status' in data) || data.status != 'pending_upload')
         && 'hiddenFromPublic' in data
         && data.hiddenFromPublic == false
         && 'listingCategory' in data
@@ -59,17 +60,105 @@ service cloud.firestore {
         && isFalseOrMissing('approved')
         && isFalseOrMissing('imagesApproved')
         && request.resource.data.listingCategory in ['normal', 'chalet']
-        && request.resource.data.hiddenFromPublic == false;
+        && request.resource.data.hiddenFromPublic == false
+        && request.resource.data.status == 'pending_upload'
+        && request.resource.data.hasImage == false;
 
       // ✏️ التعديل:
       // - الأدمن
       // - أو صاحب الإعلان فقط
-      allow update: if
-        isAdmin()
-        ||
-        (
+      function ownerPropertyContentUpdateAllowed() {
+        // Owners may edit only user-authored listing fields (NO moderation / featuring / payments).
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          // Basic content
+          'title',
+          'description',
+          'price',
+          'type',
+          'serviceType',
+          'listingCategory',
+          'chaletMode',
+
+          // Location (display + search codes)
+          'governorateAr',
+          'governorateEn',
+          'areaAr',
+          'areaEn',
+          'governorateCode',
+          'areaCode',
+
+          // Details
+          'roomCount',
+          'masterRoomCount',
+          'bathroomCount',
+          'parkingCount',
+          'size',
+
+          // Amenities
+          'hasElevator',
+          'hasCentralAC',
+          'hasSplitAC',
+          'hasMaidRoom',
+          'hasDriverRoom',
+          'hasLaundryRoom',
+          'hasGarden',
+
+          // Media
+          'images',
+          'thumbnails',
+          'coverUrl',
+          'videoUrl',
+
+          // Housekeeping
+          'updatedAt',
+          'id'
+        ]);
+      }
+
+      // Owner finished Storage upload: pending_upload + hasImage:false → active + image URLs.
+      function ownerCompletePendingUpload() {
+        return isSignedIn()
+          && resource.data.ownerId == request.auth.uid
+          && resource.data.status == 'pending_upload'
+          && (!('hasImage' in resource.data) || resource.data.hasImage == false)
+          && request.resource.data.status == 'active'
+          && request.resource.data.hasImage == true
+          && request.resource.data.images is list
+          && request.resource.data.images.size() > 0
+          && request.resource.data.thumbnails is list
+          && request.resource.data.thumbnails.size() == request.resource.data.images.size()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['images', 'thumbnails', 'hasImage', 'status', 'updatedAt', 'id']);
+      }
+
+      function ownerPropertyClosureUpdateAllowed() {
+        // Owner closure request flow updates visibility + status to a *pending* confirmation.
+        // This keeps sales/closure UX working while still blocking arbitrary status edits.
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'hiddenFromPublic',
+          'isActive',
+          'status',
+          'closeRequestSubmitted',
+          'closeRequestType',
+          'closeRequestedAt',
+          'closeRequestedBy',
+          'updatedAt'
+        ])
+        && request.resource.data.hiddenFromPublic == true
+        && request.resource.data.isActive == false
+        && request.resource.data.closeRequestSubmitted == true
+        && request.resource.data.closeRequestedBy == request.auth.uid;
+      }
+
+      allow update: if isAdmin()
+        || (
           isSignedIn()
           && resource.data.ownerId == request.auth.uid
+          && (
+            ownerPropertyContentUpdateAllowed()
+            || ownerPropertyClosureUpdateAllowed()
+            || ownerCompletePendingUpload()
+          )
         );
 
       // ❌ الحذف:
@@ -261,6 +350,47 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    /* AI suggestions config change log (append-only for clients). */
+    match /ai_config_history/{entryId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    /* Property image upload telemetry (append-only; owner writes own rows). */
+    match /upload_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.keys()
+             .hasOnly(['propertyId', 'userId', 'eventType', 'timestamp'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.propertyId is string
+        && request.resource.data.eventType is string
+        && request.resource.data.eventType in [
+          'image_upload_started',
+          'image_upload_failed',
+          'image_upload_retry',
+          'image_upload_success'
+        ];
+      allow update, delete: if false;
+    }
+
+    /* Featured listing suggestion funnel (owner-only analytics writes). */
+    match /feature_suggestion_events/{eventId} {
+      allow read: if isAdmin();
+      allow create, update: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.propertyId is string
+        && request.resource.data.suggestionType is string
+        && request.resource.data.event is string
+        && request.resource.data.event in [
+          'suggestion_shown',
+          'suggestion_clicked',
+          'ai_conversion_success'
+        ];
+      allow delete: if false;
+    }
+
     /* ============================================================
         Admin settings (global — hybrid marketing, etc.)
     ============================================================ */
@@ -277,7 +407,25 @@ service cloud.firestore {
 
     match /system_alerts/{alertId} {
       allow read: if isAdmin();
-      allow create, delete: if false;
+
+      function uploadIssueAlertCreateValid() {
+        let d = request.resource.data;
+        return d.type == 'upload_issue'
+          && d.severity == 'warning'
+          && d.read == false
+          && d.titleEn is string
+          && d.titleAr is string
+          && d.messageEn is string
+          && d.messageAr is string
+          && d.metrics is map
+          && d.keys().hasOnly([
+            'type', 'severity', 'titleEn', 'titleAr', 'messageEn', 'messageAr',
+            'read', 'metrics', 'timestamp', 'createdAt', 'updatedAt'
+          ]);
+      }
+
+      allow create: if isAdmin() && uploadIssueAlertCreateValid();
+      allow delete: if false;
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['read', 'readAt']);
@@ -859,6 +1007,11 @@ service cloud.firestore {
     ============================================================ */
 
     match /system/{docId} {
+      allow read, write: if false;
+    }
+
+    /* AI callable rate counters — Admin SDK / Cloud Functions only */
+    match /ai_call_rate_limits/{uid} {
       allow read, write: if false;
     }
 

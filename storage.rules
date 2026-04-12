@@ -12,6 +12,28 @@ service firebase.storage {
       return request.auth != null && request.auth.token.admin == true;
     }
 
+    // iOS sometimes sends null or octet-stream; listing uploads set image/jpeg from the client.
+    function isLikelyListingImageUpload() {
+      return request.resource.contentType == null
+        || request.resource.contentType.matches('image/.*')
+        || request.resource.contentType == 'application/octet-stream'
+        || request.resource.contentType == 'binary/octet-stream';
+    }
+
+    // Preferred: uploader uid is in the path — avoids Storage→Firestore get() edge cases (unauthorized).
+    match /users/{userId}/property_images/{propertyId}/{imageFile} {
+      allow read: if true;
+
+      allow write: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.size < 12 * 1024 * 1024
+        && request.resource.size > 0
+        && isLikelyListingImageUpload();
+
+      allow delete: if isAdmin()
+        || (isSignedIn() && request.auth.uid == userId);
+    }
+
     match /auction_request_images/{userId}/{requestId}/{imageFile} {
       allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
       allow write: if isSignedIn()
@@ -19,6 +41,25 @@ service firebase.storage {
         && request.resource.size < 12 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+    }
+
+    // Legacy listing photos (older app builds). New uploads use users/{uid}/property_images/...
+    match /properties/{propertyId}/{imageFile} {
+      allow read: if true;
+
+      function propertyOwnedByCaller() {
+        return firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.ownerId
+            == request.auth.uid;
+      }
+
+      allow write: if isSignedIn()
+        && propertyOwnedByCaller()
+        && request.resource.size < 12 * 1024 * 1024
+        && request.resource.size > 0
+        && isLikelyListingImageUpload();
+
+      allow delete: if isAdmin()
+        || (isSignedIn() && propertyOwnedByCaller());
     }
 
     match /generated_posts/{allPaths=**} {
