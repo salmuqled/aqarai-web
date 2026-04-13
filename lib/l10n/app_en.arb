@@ -484,6 +484,9 @@
   "propertySentForReview": "Property sent for review",
   "@propertySentForReview": { "description": "Message after submitting property for review" },
 
+  "publishSuccessBlessing": "We wish you every success with your property 🤍",
+  "@publishSuccessBlessing": { "description": "Warm success message after a listing is published with images" },
+
   "moderationMenu": "Moderation",
   "@moderationMenu": { "description": "Admin moderation menu label" },
 

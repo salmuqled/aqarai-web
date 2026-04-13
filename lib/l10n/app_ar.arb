@@ -484,6 +484,9 @@
   "propertySentForReview": "تم إرسال العقار للمراجعة",
   "@propertySentForReview": { "description": "رسالة بعد إرسال عقار للمراجعة" },
 
+  "publishSuccessBlessing": "نسأل الله أن يوفقك في عقارك 🤍",
+  "@publishSuccessBlessing": { "description": "رسالة تهنئة بعد نشر العقار بنجاح" },
+
   "moderationMenu": "الإشراف",
   "@moderationMenu": { "description": "قائمة إشراف الأدمن" },
 

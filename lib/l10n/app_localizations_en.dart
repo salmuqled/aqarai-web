@@ -550,6 +550,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get propertySentForReview => 'Property sent for review';
 
   @override
+  String get publishSuccessBlessing => 'We wish you every success with your property 🤍';
+
+  @override
   String get moderationMenu => 'Moderation';
 
   @override

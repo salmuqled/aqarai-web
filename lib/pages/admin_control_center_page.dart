@@ -17,6 +17,7 @@ import 'package:aqarai_app/services/admin_settings_service.dart';
 import 'package:aqarai_app/services/auth_service.dart';
 import 'package:aqarai_app/services/system_alerts_service.dart';
 import 'package:aqarai_app/widgets/admin_system_alerts_section.dart';
+import 'package:aqarai_app/widgets/admin_upload_health_section.dart';
 
 /// Admin hub: hybrid marketing status, trust, notification performance, and controls.
 class AdminControlCenterPage extends StatefulWidget {
@@ -28,6 +29,17 @@ class AdminControlCenterPage extends StatefulWidget {
 
 class _AdminControlCenterPageState extends State<AdminControlCenterPage> {
   Future<bool> _adminGateFuture = AuthService.isAdmin();
+
+  /// Stable Firestore listeners — nested [StreamBuilder]s must not call *.watch()
+  /// in [build] or outer emissions tear down inner subscriptions (UI jank).
+  late final Stream<List<SystemAlert>> _alertsStream =
+      SystemAlertsService.watchAlerts();
+  late final Stream<HybridMarketingSettings> _settingsStream =
+      AdminSettingsService.watchSettings();
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _learningStream =
+      AdminControlCenterService.watchLearningState();
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _perfLogsStream =
+      AdminControlCenterService.watchNotificationLogsForPerformance();
 
   Future<void> _persistHybrid(HybridMarketingSettings h) async {
     await AdminSettingsService.saveSettings(h);
@@ -115,19 +127,19 @@ class _AdminControlCenterPageState extends State<AdminControlCenterPage> {
           );
         }
         return StreamBuilder<List<SystemAlert>>(
-          stream: SystemAlertsService.watchAlerts(),
+          stream: _alertsStream,
           builder: (context, alertSnap) {
             final alerts = alertSnap.data ?? [];
             final unreadAlerts = alerts.where((a) => !a.read).length;
 
             return StreamBuilder<HybridMarketingSettings>(
-              stream: AdminSettingsService.watchSettings(),
+              stream: _settingsStream,
               builder: (context, hybridSnap) {
                 final hybrid =
                     hybridSnap.data ?? HybridMarketingSettings.defaults;
 
                 return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  stream: AdminControlCenterService.watchLearningState(),
+                  stream: _learningStream,
                   builder: (context, stateSnap) {
                     final raw = stateSnap.data?.data();
                     final accuracy = DecisionAccuracySnapshot.fromStateMap(raw);
@@ -141,7 +153,18 @@ class _AdminControlCenterPageState extends State<AdminControlCenterPage> {
                         actions: [
                           if (unreadAlerts > 0)
                             Padding(
-                              padding: const EdgeInsets.only(right: 10),
+                              padding: EdgeInsets.only(
+                                // RTL: bell sits on physical left — inset from screen edge.
+                                // LTR: bell on physical right — inset from screen edge.
+                                left: Directionality.of(context) ==
+                                        TextDirection.rtl
+                                    ? 12
+                                    : 0,
+                                right: Directionality.of(context) ==
+                                        TextDirection.ltr
+                                    ? 12
+                                    : 0,
+                              ),
                               child: Badge(
                                 label: Text('$unreadAlerts'),
                                 child: const Icon(
@@ -162,6 +185,8 @@ class _AdminControlCenterPageState extends State<AdminControlCenterPage> {
                               alerts: alerts,
                               streamError: alertSnap.hasError,
                             ),
+                            const SizedBox(height: 18),
+                            const AdminUploadHealthSection(),
                             const SizedBox(height: 18),
                             if (hybridSnap.hasError)
                               _ErrorBanner(
@@ -186,8 +211,7 @@ class _AdminControlCenterPageState extends State<AdminControlCenterPage> {
                         _TrustSection(loc: loc, trust: trust),
                         _SectionTitle(text: loc.adminControlCenterPerformance),
                         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                          stream: AdminControlCenterService
-                              .watchNotificationLogsForPerformance(),
+                          stream: _perfLogsStream,
                           builder: (context, perfSnap) {
                             if (perfSnap.hasError) {
                               return _ErrorBanner(
@@ -338,7 +362,8 @@ class _SystemStatusGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
-      childAspectRatio: 1.45,
+      // Arabic labels are often two lines; taller cells avoid bottom overflow.
+      childAspectRatio: 1.02,
       children: [
         _StatusCard(
           icon: Icons.bolt_outlined,
@@ -393,13 +418,21 @@ class _StatusCard extends StatelessWidget {
           children: [
             Icon(icon, color: iconColor, size: 26),
             const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                height: 1.25,
-                color: Colors.blueGrey.shade900,
+            Expanded(
+              child: Align(
+                alignment: AlignmentDirectional.topStart,
+                child: Text(
+                  title,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    height: 1.25,
+                    color: Colors.blueGrey.shade900,
+                  ),
+                ),
               ),
             ),
           ],

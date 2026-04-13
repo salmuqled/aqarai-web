@@ -19,6 +19,10 @@ class _AdminAiConfigRollbackBannerState extends State<AdminAiConfigRollbackBanne
   int? _dismissedForVersion;
   String? _busyRestoringDocId;
 
+  /// One Firestore listener for this State — do not call [watch] in [build].
+  late final Stream<AiSuggestionsAutoConfig> _configStream =
+      AiSuggestionsAutoConfigService.watch();
+
   bool get isAr => widget.isAr;
 
   Future<void> _confirmAndRestore(
@@ -80,7 +84,7 @@ class _AdminAiConfigRollbackBannerState extends State<AdminAiConfigRollbackBanne
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<AiSuggestionsAutoConfig>(
-      stream: AiSuggestionsAutoConfigService.watch(),
+      stream: _configStream,
       builder: (context, snap) {
         final cfg = snap.data;
         if (cfg == null) {

@@ -73,7 +73,14 @@ export const approveListingV2 = onRequest(
       if (approved) {
         // Normalize legacy/inconsistent states: if approved, listing must have images => hasImage true.
         updateData.hasImage = true;
-        updateData.approvedAt = now;
+        // Listing validity: expires 90 days after approval (same instant as approvedAt).
+        const approvedAtTs = admin.firestore.Timestamp.now();
+        const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+        const expiresAtTs = admin.firestore.Timestamp.fromMillis(
+          approvedAtTs.toMillis() + ninetyDaysMs
+        );
+        updateData.approvedAt = approvedAtTs;
+        updateData.expiresAt = expiresAtTs;
       } else {
         updateData.rejectedAt = now;
         updateData.rejectReason = reason ?? "";

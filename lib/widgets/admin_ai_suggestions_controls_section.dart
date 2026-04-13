@@ -20,6 +20,10 @@ class _AdminAiSuggestionsControlsSectionState
     extends State<AdminAiSuggestionsControlsSection> {
   Timer? _relativeClock;
 
+  /// Stable listener — parent dashboard rebuilds must not call [watch] each frame.
+  late final Stream<AiSuggestionsAutoConfig> _configStream =
+      AiSuggestionsAutoConfigService.watch();
+
   @override
   void initState() {
     super.initState();
@@ -69,7 +73,7 @@ class _AdminAiSuggestionsControlsSectionState
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<AiSuggestionsAutoConfig>(
-      stream: AiSuggestionsAutoConfigService.watch(),
+      stream: _configStream,
       builder: (context, snap) {
         if (snap.hasError) {
           return Card(

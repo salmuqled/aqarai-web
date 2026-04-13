@@ -19,6 +19,16 @@ class _AdminAiSuggestionsAnalyticsSectionState
 
   _AiWindow _window = _AiWindow.d7;
 
+  /// Single future per load; must not be recreated in [build] or every parent
+  /// rebuild (e.g. dashboard streams + scroll) will restart Firestore work and jank.
+  late Future<AiSuggestionAnalyticsSnapshot> _snapshotFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapshotFuture = _svc.load(window: _dur(_window));
+  }
+
   Duration _dur(_AiWindow w) {
     switch (w) {
       case _AiWindow.h24:
@@ -70,37 +80,49 @@ class _AdminAiSuggestionsAnalyticsSectionState
           side: BorderSide(color: Colors.grey.shade200),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, color: AppColors.navy),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-              if (foot != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  foot,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              Icon(icon, color: AppColors.navy, size: 22),
+              const SizedBox(height: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (foot != null)
+                      Text(
+                        foot,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                  ],
                 ),
-              ],
+              ),
             ],
           ),
         ),
       );
     }
-
-    final future = _svc.load(window: _dur(_window));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -122,7 +144,10 @@ class _AdminAiSuggestionsAnalyticsSectionState
               value: _window,
               onChanged: (v) {
                 if (v == null) return;
-                setState(() => _window = v);
+                setState(() {
+                  _window = v;
+                  _snapshotFuture = _svc.load(window: _dur(_window));
+                });
               },
               items: _AiWindow.values
                   .map((w) => DropdownMenuItem<_AiWindow>(
@@ -142,7 +167,7 @@ class _AdminAiSuggestionsAnalyticsSectionState
         ),
         const SizedBox(height: 12),
         FutureBuilder<AiSuggestionAnalyticsSnapshot>(
-          future: future,
+          future: _snapshotFuture,
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
               return const Center(child: Padding(
@@ -209,7 +234,7 @@ class _AdminAiSuggestionsAnalyticsSectionState
               metricCard(
                 label: isAr ? 'إيراد لكل ظهور' : 'Revenue per shown',
                 value: _kwd(d.revenuePerShown),
-                icon: Icons.savings_outlined,
+                icon: Icons.account_balance_wallet_outlined,
                 foot: 'revenue ÷ shown',
               ),
               metricCard(
@@ -223,13 +248,18 @@ class _AdminAiSuggestionsAnalyticsSectionState
               builder: (context, c) {
                 final wide = c.maxWidth >= 720;
                 final crossAxisCount = wide ? 4 : 2;
-                return GridView.count(
-                  crossAxisCount: crossAxisCount,
+                // Fixed row height: wide aspect ratios (e.g. 2.2) were too short for
+                // Arabic labels + value + optional foot (bottom overflow ~24–45px).
+                final rowExtent = wide ? 136.0 : 152.0;
+                return GridView(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    mainAxisExtent: rowExtent,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  childAspectRatio: wide ? 2.6 : 2.2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
                   children: cards,
                 );
               },

@@ -277,10 +277,11 @@ class _MetricCardGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget card({
+    Widget metricCard({
       required IconData icon,
       required String title,
       required String value,
+      EdgeInsetsGeometry padding = const EdgeInsets.all(14),
     }) {
       return Card(
         elevation: 0,
@@ -289,9 +290,10 @@ class _MetricCardGrid extends StatelessWidget {
           side: BorderSide(color: Colors.grey.shade200),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: padding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, color: AppColors.navy, size: 24),
               const SizedBox(height: 10),
@@ -313,49 +315,37 @@ class _MetricCardGrid extends StatelessWidget {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, c) {
-        final wide = c.maxWidth > 520;
-        final children = <Widget>[
-          card(
-            icon: Icons.trending_up,
-            title: loc.adminRealEarningsTotalRevenue,
-            value: fmt(agg.totalRevenueKwd),
-          ),
-          card(
-            icon: Icons.gavel,
-            title: loc.adminAuctionEarningsPaidListings,
-            value: '${agg.paidAuctionCount}',
-          ),
-          card(
-            icon: Icons.handshake_outlined,
-            title: loc.adminAuctionEarningsDealsCompleted,
-            value: '${agg.soldDealCount}',
-          ),
-        ];
-
-        if (wide) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: children[0]),
-              const SizedBox(width: 12),
-              Expanded(child: children[1]),
-              const SizedBox(width: 12),
-              Expanded(child: children[2]),
-            ],
-          );
-        }
-
-        return Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        metricCard(
+          icon: Icons.trending_up,
+          title: loc.adminRealEarningsTotalRevenue,
+          value: fmt(agg.totalRevenueKwd),
+          padding: const EdgeInsets.fromLTRB(14, 22, 14, 22),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (var i = 0; i < children.length; i++) ...[
-              if (i > 0) const SizedBox(height: 10),
-              children[i],
-            ],
+            Expanded(
+              child: metricCard(
+                icon: Icons.gavel,
+                title: loc.adminAuctionEarningsPaidListings,
+                value: '${agg.paidAuctionCount}',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: metricCard(
+                icon: Icons.handshake_outlined,
+                title: loc.adminAuctionEarningsDealsCompleted,
+                value: '${agg.soldDealCount}',
+              ),
+            ),
           ],
-        );
-      },
+        ),
+      ],
     );
   }
 }
@@ -407,7 +397,7 @@ class _RevenueBreakdownSection extends StatelessWidget {
             );
             final commCard = _BreakdownMoneyCard(
               accent: const Color(0xFF00897B),
-              icon: Icons.savings_outlined,
+              icon: Icons.account_balance_wallet_outlined,
               title: loc.adminAuctionEarningsEstCommission,
               amountLabel: fmt(agg.totalCommissionKwd),
               shareLabel: _shareLabel(agg.totalCommissionKwd),

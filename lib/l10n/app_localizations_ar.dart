@@ -550,6 +550,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get propertySentForReview => 'تم إرسال العقار للمراجعة';
 
   @override
+  String get publishSuccessBlessing => 'نسأل الله أن يوفقك في عقارك 🤍';
+
+  @override
   String get moderationMenu => 'الإشراف';
 
   @override

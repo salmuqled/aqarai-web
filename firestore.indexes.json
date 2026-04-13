@@ -374,6 +374,22 @@
       ]
     },
     {
+      "collectionGroup": "payment_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "action", "order": "ASCENDING"},
+        {"fieldPath": "timestamp", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "analytics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "kind", "order": "ASCENDING"},
+        {"fieldPath": "day", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "wanted_requests",
       "queryScope": "COLLECTION",
       "fields": [

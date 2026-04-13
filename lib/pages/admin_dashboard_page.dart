@@ -40,8 +40,6 @@ import 'package:aqarai_app/widgets/admin_ai_suggestions_analytics_section.dart';
 import 'package:aqarai_app/widgets/admin_ai_suggestions_controls_section.dart';
 import 'package:aqarai_app/widgets/admin_ai_config_history_section.dart';
 import 'package:aqarai_app/widgets/admin_ai_config_rollback_banner.dart';
-import 'package:aqarai_app/widgets/admin_upload_health_section.dart';
-
 /// Admin decision dashboard: `analytics/global` (fast) + bounded `deals` query (detail).
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -72,18 +70,21 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     return '${(share * 100).toStringAsFixed(1)}%';
   }
 
-  @override
-  Widget build(BuildContext context) {
+  /// Quick actions moved out of [AppBar] — same navigations as before.
+  Widget _buildAdminDashboardQuickActionsBar(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    const gap = SizedBox(width: 12);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
-      appBar: AppBar(
-        title: Text(isAr ? 'لوحة القرارات' : 'Business dashboard'),
-        centerTitle: true,
-        actions: [
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      primary: false,
+      physics: const ClampingScrollPhysics(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           IconButton(
-            tooltip: AppLocalizations.of(context)!.adminChaletPayoutsTitle,
+            tooltip: loc.adminChaletPayoutsTitle,
             icon: const Icon(Icons.payments_outlined),
             onPressed: () {
               Navigator.push<void>(
@@ -94,8 +95,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               );
             },
           ),
+          gap,
           IconButton(
-            tooltip: AppLocalizations.of(context)!.companyPaymentAddTitle,
+            tooltip: loc.companyPaymentAddTitle,
             icon: const Icon(Icons.add_card_outlined),
             onPressed: () {
               Navigator.push<void>(
@@ -106,8 +108,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               );
             },
           ),
+          gap,
           IconButton(
-            tooltip: AppLocalizations.of(context)!.adminInvoicesTitle,
+            tooltip: loc.adminInvoicesTitle,
             icon: const Icon(Icons.receipt_long_outlined),
             onPressed: () {
               Navigator.push<void>(
@@ -118,8 +121,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               );
             },
           ),
+          gap,
           IconButton(
-            tooltip: AppLocalizations.of(context)!.adminAuctionEarningsTitle,
+            tooltip: loc.adminAuctionEarningsTitle,
             icon: const Icon(Icons.account_balance_wallet_outlined),
             onPressed: () {
               Navigator.push<void>(
@@ -130,8 +134,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               );
             },
           ),
+          gap,
           IconButton(
-            tooltip: AppLocalizations.of(context)!.adminAuctionRequestsTitle,
+            tooltip: loc.adminAuctionRequestsTitle,
             icon: const Icon(Icons.gavel_outlined),
             onPressed: () {
               Navigator.push<void>(
@@ -142,6 +147,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               );
             },
           ),
+          gap,
           IconButton(
             tooltip: isAr ? 'تمييز الإعلانات' : 'Featured ads',
             icon: const Icon(Icons.star_border_outlined),
@@ -154,8 +160,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               );
             },
           ),
+          gap,
           IconButton(
-            tooltip: AppLocalizations.of(context)!.adminControlCenterTitle,
+            tooltip: loc.adminControlCenterTitle,
             icon: const Icon(Icons.dashboard_customize_outlined),
             onPressed: () {
               Navigator.push<void>(
@@ -166,17 +173,32 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               );
             },
           ),
+          gap,
           IconButton(
-            tooltip: AppLocalizations.of(context)!.hybridSettingsTooltip,
+            tooltip: loc.hybridSettingsTooltip,
             icon: const Icon(Icons.tune_outlined),
             onPressed: () => showHybridMarketingSettingsDialog(context: context),
           ),
+          gap,
           IconButton(
-            tooltip: AppLocalizations.of(context)!.instagramPostAppBarTooltip,
+            tooltip: loc.instagramPostAppBarTooltip,
             icon: const Icon(Icons.image_outlined),
             onPressed: () => showAdminInstagramPostGenerator(context),
           ),
         ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F7F7),
+      appBar: AppBar(
+        title: Text(isAr ? 'لوحة القرارات' : 'Business dashboard'),
+        centerTitle: true,
       ),
       body: FutureBuilder<bool>(
         future: _adminGateFuture,
@@ -190,11 +212,24 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               onRetry: _retryAdminGate,
             );
           }
-          return _DashboardStreams(
-            analytics: _analytics,
-            fmtKwd: _fmtKwd,
-            fmtPct: _fmtPct,
-            isAr: isAr,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: _buildAdminDashboardQuickActionsBar(context),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _DashboardStreams(
+                  analytics: _analytics,
+                  fmtKwd: _fmtKwd,
+                  fmtPct: _fmtPct,
+                  isAr: isAr,
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -276,6 +311,253 @@ class _DashboardStreams extends StatefulWidget {
 class _DashboardStreamsState extends State<_DashboardStreams> {
   DealsTimeGrouping _timeGrouping = DealsTimeGrouping.month;
 
+  /// Stable stream instances — calling [watchDealsForDashboard] on every
+  /// [build] creates new Firestore listeners; parent stream updates then
+  /// cancel/re-subscribe inner streams (severe jank when scrolling / syncing).
+  late final Stream<GlobalAnalyticsSnapshot> _globalStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _dealsStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _viewsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _globalStream = widget.analytics.watchGlobalAnalytics();
+    _dealsStream = widget.analytics.watchDealsForDashboard();
+    _viewsStream = widget.analytics.watchViewsForDashboard();
+  }
+
+  /// Lazy section builders: consumed by [CustomScrollView] slivers (header adapters +
+  /// [SliverList]) so only visible rows build, plus cache extent.
+  List<Widget Function(BuildContext)> _buildDashboardScrollItemBuilders({
+    required bool isAr,
+    required bool showTopLoading,
+    required GlobalAnalyticsSnapshot global,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> viewDocs,
+    required List<SourceStats> bySource,
+    required List<TimeStats> byTime,
+    required List<AreaStats> byArea,
+    required List<PropertyTypeStats> byType,
+    required bool dealsLoading,
+  }) {
+    final fmtKwd = widget.fmtKwd;
+    final fmtPct = widget.fmtPct;
+    final analytics = widget.analytics;
+    final aiPctFromGlobal = global.aiDealShare;
+    final b = <Widget Function(BuildContext)>[];
+
+    b.add((_) => _AdminDashboardLoadingStrip(show: showTopLoading));
+
+    b.add(
+      (_) => _AdminDashboardExecutiveMetricsSection(
+        isAr: isAr,
+        global: global,
+        fmtKwd: fmtKwd,
+        fmtPct: fmtPct,
+        aiPctFromGlobal: aiPctFromGlobal,
+      ),
+    );
+
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminDealPipelineSection(dealDocs: docs));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminCrmSnapshotSection(dealDocs: docs, isAr: isAr));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminAnalyticsSection(dealDocs: docs, isAr: isAr));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminFollowupSection(dealDocs: docs));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminLeadsSplitSection(dealDocs: docs));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminConversionSection(dealDocs: docs));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminAiConfigRollbackBanner(isAr: isAr));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminAiSuggestionsControlsSection(isAr: isAr));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminAiConfigHistorySection(isAr: isAr));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => const AdminAiSuggestionsAnalyticsSection());
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminCommissionSection(dealDocs: docs, fmtKwd: fmtKwd));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminOutstandingSection(dealDocs: docs, fmtKwd: fmtKwd));
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminPrioritySection(dealDocs: docs, fmtKwd: fmtKwd));
+    b.add((_) => const SizedBox(height: 20));
+    b.add(
+      (_) => AdminCashflowLedgerSection(fmtKwd: fmtKwd, isAr: isAr),
+    );
+
+    b.add((_) => const SizedBox(height: 16));
+    b.add(
+      (_) => AdminCaptionPerformanceSection(
+        key: const ValueKey<String>('adminCaptionPerformance'),
+        isAr: isAr,
+      ),
+    );
+    b.add((_) => const SizedBox(height: 16));
+    b.add((_) => AdminCaptionLearningSection(isAr: isAr));
+    b.add((_) => const SizedBox(height: 16));
+    b.add((_) => AdminDecisionAccuracySection(isAr: isAr));
+    b.add((_) => const SizedBox(height: 16));
+    b.add((context) {
+      final day = AdminIntelligenceService.buildDaySampleMetrics(
+        deals: docs,
+        views: viewDocs,
+      );
+      final recommendations = AdminRecommendationsService.generateRecommendations(
+        day: day,
+        totalDealsGlobal: global.totalDeals.round(),
+        dealDocs: docs,
+        viewDocs: viewDocs,
+        context: context,
+        isAr: isAr,
+      );
+      return buildRecommendationsSection(recommendations, isAr: isAr);
+    });
+
+    b.add((_) => const SizedBox(height: 8));
+    b.add(
+      (_) => _Footnote(
+        isAr
+            ? 'آخر ${AdminAnalyticsService.kDashboardDealsLimit} صفقة و ${AdminAnalyticsService.kDashboardViewsLimit} مشاهدة للذكاء والتحويل.'
+            : 'Intelligence uses latest ${AdminAnalyticsService.kDashboardDealsLimit} deals + ${AdminAnalyticsService.kDashboardViewsLimit} views.',
+      ),
+    );
+
+    b.add((_) => const SizedBox(height: 20));
+    b.add((_) => AdminNotificationPerformanceSection(
+          analytics: analytics,
+          isAr: isAr,
+        ));
+
+    b.add((_) => const SizedBox(height: 24));
+    b.add(
+      (_) => _IntelligenceBlock(
+        global: global,
+        dealDocs: docs,
+        viewDocs: viewDocs,
+        isAr: isAr,
+      ),
+    );
+
+    b.add((_) => const SizedBox(height: 28));
+    b.add(
+      (_) => _SectionTitle(
+        isAr ? 'تفصيل حسب المصدر' : 'Source breakdown',
+        subtitle: isAr
+            ? 'من مجموعة الصفقات (إيراد = السعر النهائي)'
+            : 'From deals (revenue = final price)',
+      ),
+    );
+    b.add((_) => const SizedBox(height: 10));
+    b.add((_) {
+      if (docs.isEmpty && !dealsLoading) {
+        return _EmptyHint(isAr: isAr);
+      }
+      return _SourceBreakdownTable(
+        rows: bySource,
+        fmtKwd: fmtKwd,
+        isAr: isAr,
+      );
+    });
+
+    b.add((_) => const SizedBox(height: 28));
+    b.add(
+      (_) => _SectionTitle(
+        isAr ? 'الصفقات عبر الزمن' : 'Deals over time',
+        subtitle: isAr ? 'حسب تاريخ الإغلاق' : 'By closedAt',
+      ),
+    );
+    b.add((_) => const SizedBox(height: 10));
+    b.add(
+      (_) => Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: SegmentedButton<DealsTimeGrouping>(
+          segments: [
+            ButtonSegment(
+              value: DealsTimeGrouping.day,
+              label: Text(isAr ? 'يوم' : 'Day'),
+            ),
+            ButtonSegment(
+              value: DealsTimeGrouping.week,
+              label: Text(isAr ? 'أسبوع' : 'Week'),
+            ),
+            ButtonSegment(
+              value: DealsTimeGrouping.month,
+              label: Text(isAr ? 'شهر' : 'Month'),
+            ),
+          ],
+          selected: {_timeGrouping},
+          onSelectionChanged: (s) {
+            setState(() => _timeGrouping = s.first);
+          },
+        ),
+      ),
+    );
+    b.add((_) => const SizedBox(height: 16));
+    b.add((_) => _DealsOverTimeChart(stats: byTime, isAr: isAr));
+
+    b.add((_) => const SizedBox(height: 28));
+    b.add(
+      (_) => _SectionTitle(
+        isAr ? 'أبرز المناطق' : 'Top areas',
+        subtitle: isAr
+            ? 'محافظة + منطقة (أعلى 5 حسب الإيراد)'
+            : 'Governorate + area (top 5 by revenue)',
+      ),
+    );
+    b.add((_) => const SizedBox(height: 10));
+    if (byArea.isEmpty && docs.isNotEmpty) {
+      b.add(
+        (_) => Text(
+          isAr ? 'لا توجد بيانات منطقة' : 'No area fields on sample',
+          style: TextStyle(color: Colors.grey.shade600),
+        ),
+      );
+    } else if (docs.isEmpty && !dealsLoading) {
+      b.add((_) => _EmptyHint(isAr: isAr));
+    } else {
+      for (final a in byArea) {
+        final tile = a;
+        b.add(
+          (_) => _AreaTile(stats: tile, fmtKwd: fmtKwd, isAr: isAr),
+        );
+      }
+    }
+
+    b.add((_) => const SizedBox(height: 28));
+    b.add(
+      (_) => _SectionTitle(
+        isAr ? 'أنواع العقار' : 'Property types',
+        subtitle: isAr
+            ? 'عدد الصفقات لكل نوع (العينة)'
+            : 'Deal count per type (sample)',
+      ),
+    );
+    b.add((_) => const SizedBox(height: 10));
+    if (docs.isEmpty && !dealsLoading) {
+      b.add((_) => _EmptyHint(isAr: isAr));
+    } else {
+      final maxCount = byType.isEmpty
+          ? 1
+          : byType.map((e) => e.count).reduce(math.max);
+      for (final t in byType) {
+        final row = t;
+        b.add(
+          (_) => _TypeBar(
+            label: row.propertyType,
+            count: row.count,
+            maxCount: maxCount,
+          ),
+        );
+      }
+    }
+
+    return b;
+  }
+
   static String _firestoreErrorMessage(Object? error, bool isAr) {
     final s = error?.toString() ?? '';
     if (s.contains('permission-denied') ||
@@ -287,11 +569,56 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
     return s;
   }
 
+  /// [CustomScrollView] body: fixed “header” rows as [SliverToBoxAdapter], rest lazy
+  /// via [SliverList]. Quick actions stay in the parent [Column] (unchanged layout).
+  Widget _buildDashboardCustomScrollView(
+    BuildContext context,
+    List<Widget Function(BuildContext)> scrollBuilders,
+  ) {
+    return CustomScrollView(
+      key: const PageStorageKey<String>('adminDashboardBodyScroll'),
+      cacheExtent: 800,
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          sliver: scrollBuilders.length >= 2
+              ? SliverMainAxisGroup(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: scrollBuilders[0](context),
+                    ),
+                    SliverToBoxAdapter(
+                      child: scrollBuilders[1](context),
+                    ),
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (BuildContext c, int index) =>
+                            scrollBuilders[index + 2](c),
+                        childCount: scrollBuilders.length - 2,
+                        addAutomaticKeepAlives: true,
+                        addRepaintBoundaries: true,
+                      ),
+                    ),
+                  ],
+                )
+              : SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (BuildContext c, int index) => scrollBuilders[index](c),
+                    childCount: scrollBuilders.length,
+                    addAutomaticKeepAlives: true,
+                    addRepaintBoundaries: true,
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAr = widget.isAr;
     return StreamBuilder<GlobalAnalyticsSnapshot>(
-        stream: widget.analytics.watchGlobalAnalytics(),
+        stream: _globalStream,
         builder: (context, globalSnap) {
           if (globalSnap.hasError) {
             return _ErrorState(
@@ -304,7 +631,7 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
               !globalSnap.hasData;
 
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: widget.analytics.watchDealsForDashboard(),
+            stream: _dealsStream,
             builder: (context, dealsSnap) {
               if (dealsSnap.hasError) {
                 return _ErrorState(
@@ -321,7 +648,7 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
               final docs = dealsSnap.data?.docs ?? const [];
 
               return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: widget.analytics.watchViewsForDashboard(),
+                stream: _viewsStream,
                 builder: (context, viewsSnap) {
                   if (viewsSnap.hasError) {
                     return _ErrorState(
@@ -348,292 +675,124 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
                     docs,
                   );
 
-                  // Prefer deal-derived totals in detail table; global still authoritative for cards when deals sample empty.
-                  final aiPctFromGlobal = global.aiDealShare;
+                  final showTopLoading =
+                      globalLoading || dealsLoading || viewsLoading;
 
-                  return ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                    children: [
-                      if (globalLoading || dealsLoading || viewsLoading)
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 16),
-                          child: LinearProgressIndicator(minHeight: 3),
-                        ),
+                  final scrollBuilders = _buildDashboardScrollItemBuilders(
+                    isAr: isAr,
+                    showTopLoading: showTopLoading,
+                    global: global,
+                    docs: docs,
+                    viewDocs: viewDocs,
+                    bySource: bySource,
+                    byTime: byTime,
+                    byArea: byArea,
+                    byType: byType,
+                    dealsLoading: dealsLoading,
+                  );
 
-                      // --- Section 1: executive metrics (analytics/global) ---
-                      _SectionTitle(
-                        isAr ? 'مؤشرات رئيسية' : 'Top metrics',
-                        subtitle: isAr
-                            ? 'من مستند التجميع السريع'
-                            : 'From analytics/global',
-                      ),
-                      const SizedBox(height: 10),
-                      LayoutBuilder(
-                        builder: (context, c) {
-                          final wide = c.maxWidth > 560;
-                          final m1 = _MetricCard(
-                            label: isAr ? 'إجمالي الصفقات' : 'Total deals',
-                            value: '${global.totalDeals.round()}',
-                            icon: Icons.handshake_outlined,
-                          );
-                          final m2 = _MetricCard(
-                            label: isAr ? 'حجم التداول' : 'Total volume',
-                            value: widget.fmtKwd(global.totalVolume),
-                            icon: Icons.payments_outlined,
-                          );
-                          final m3 = _MetricCard(
-                            label: isAr ? 'إجمالي العمولة' : 'Total commission',
-                            value: widget.fmtKwd(global.totalCommission),
-                            icon: Icons.account_balance_wallet_outlined,
-                          );
-                          final m4 = _MetricCard(
-                            label: isAr
-                                ? 'نسبة صفقات الذكاء الاصطناعي'
-                                : 'AI deals share',
-                            value: widget.fmtPct(aiPctFromGlobal),
-                            icon: Icons.smart_toy_outlined,
-                            foot: 'aiDeals ÷ totalDeals',
-                          );
-                          if (wide) {
-                            return Column(
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(child: m1),
-                                    const SizedBox(width: 12),
-                                    Expanded(child: m2),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(child: m3),
-                                    const SizedBox(width: 12),
-                                    Expanded(child: m4),
-                                  ],
-                                ),
-                              ],
-                            );
-                          }
-                          return Column(
-                            children: [
-                              m1,
-                              const SizedBox(height: 10),
-                              m2,
-                              const SizedBox(height: 10),
-                              m3,
-                              const SizedBox(height: 10),
-                              m4,
-                            ],
-                          );
-                        },
-                      ),
-
-                      const SizedBox(height: 20),
-                      AdminDealPipelineSection(dealDocs: docs),
-                      const SizedBox(height: 20),
-                      AdminCrmSnapshotSection(dealDocs: docs, isAr: isAr),
-                      const SizedBox(height: 20),
-                      AdminAnalyticsSection(dealDocs: docs, isAr: isAr),
-                      const SizedBox(height: 20),
-                      AdminFollowupSection(dealDocs: docs),
-                      const SizedBox(height: 20),
-                      AdminLeadsSplitSection(dealDocs: docs),
-                      const SizedBox(height: 20),
-                      AdminConversionSection(dealDocs: docs),
-                      const SizedBox(height: 20),
-                      AdminAiConfigRollbackBanner(isAr: isAr),
-                      const SizedBox(height: 20),
-                      AdminAiSuggestionsControlsSection(isAr: isAr),
-                      const SizedBox(height: 20),
-                      AdminAiConfigHistorySection(isAr: isAr),
-                      const SizedBox(height: 20),
-                      const AdminAiSuggestionsAnalyticsSection(),
-                      const SizedBox(height: 20),
-                      const AdminUploadHealthSection(),
-                      const SizedBox(height: 20),
-                      AdminCommissionSection(
-                        dealDocs: docs,
-                        fmtKwd: widget.fmtKwd,
-                      ),
-                      const SizedBox(height: 20),
-                      AdminOutstandingSection(
-                        dealDocs: docs,
-                        fmtKwd: widget.fmtKwd,
-                      ),
-                      const SizedBox(height: 20),
-                      AdminPrioritySection(
-                        dealDocs: docs,
-                        fmtKwd: widget.fmtKwd,
-                      ),
-                      const SizedBox(height: 20),
-                      AdminCashflowLedgerSection(
-                        fmtKwd: widget.fmtKwd,
-                        isAr: isAr,
-                      ),
-
-                      const SizedBox(height: 16),
-                      AdminCaptionPerformanceSection(isAr: isAr),
-                      const SizedBox(height: 16),
-                      AdminCaptionLearningSection(isAr: isAr),
-                      const SizedBox(height: 16),
-                      AdminDecisionAccuracySection(isAr: isAr),
-                      const SizedBox(height: 16),
-                      Builder(
-                        builder: (ctx) {
-                          // Decision engine: today vs yesterday AI share, conversion sample, deal counts — no extra queries.
-                          final day =
-                              AdminIntelligenceService.buildDaySampleMetrics(
-                            deals: docs,
-                            views: viewDocs,
-                          );
-                          final recommendations =
-                              AdminRecommendationsService.generateRecommendations(
-                            day: day,
-                            totalDealsGlobal: global.totalDeals.round(),
-                            dealDocs: docs,
-                            viewDocs: viewDocs,
-                            context: ctx,
-                            isAr: isAr,
-                          );
-                          return buildRecommendationsSection(
-                            recommendations,
-                            isAr: isAr,
-                          );
-                        },
-                      ),
-
-                      const SizedBox(height: 8),
-                      _Footnote(
-                        isAr
-                            ? 'آخر ${AdminAnalyticsService.kDashboardDealsLimit} صفقة و ${AdminAnalyticsService.kDashboardViewsLimit} مشاهدة للذكاء والتحويل.'
-                            : 'Intelligence uses latest ${AdminAnalyticsService.kDashboardDealsLimit} deals + ${AdminAnalyticsService.kDashboardViewsLimit} views.',
-                      ),
-
-                      const SizedBox(height: 20),
-                      AdminNotificationPerformanceSection(
-                        analytics: widget.analytics,
-                        isAr: isAr,
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // --- Intelligence: conversion, insights, alerts ---
-                      _IntelligenceBlock(
-                        global: global,
-                        dealDocs: docs,
-                        viewDocs: viewDocs,
-                        isAr: isAr,
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      // --- Section 2: source breakdown (deals) ---
-                      _SectionTitle(
-                        isAr ? 'تفصيل حسب المصدر' : 'Source breakdown',
-                        subtitle: isAr
-                            ? 'من مجموعة الصفقات (إيراد = السعر النهائي)'
-                            : 'From deals (revenue = final price)',
-                      ),
-                      const SizedBox(height: 10),
-                      if (docs.isEmpty && !dealsLoading)
-                        _EmptyHint(isAr: isAr)
-                      else
-                        _SourceBreakdownTable(
-                          rows: bySource,
-                          fmtKwd: widget.fmtKwd,
-                          isAr: isAr,
-                        ),
-
-                      const SizedBox(height: 28),
-
-                      // --- Section 3: deals over time ---
-                      _SectionTitle(
-                        isAr ? 'الصفقات عبر الزمن' : 'Deals over time',
-                        subtitle: isAr ? 'حسب تاريخ الإغلاق' : 'By closedAt',
-                      ),
-                      const SizedBox(height: 10),
-                      Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: SegmentedButton<DealsTimeGrouping>(
-                          segments: [
-                            ButtonSegment(
-                              value: DealsTimeGrouping.day,
-                              label: Text(isAr ? 'يوم' : 'Day'),
-                            ),
-                            ButtonSegment(
-                              value: DealsTimeGrouping.week,
-                              label: Text(isAr ? 'أسبوع' : 'Week'),
-                            ),
-                            ButtonSegment(
-                              value: DealsTimeGrouping.month,
-                              label: Text(isAr ? 'شهر' : 'Month'),
-                            ),
-                          ],
-                          selected: {_timeGrouping},
-                          onSelectionChanged: (s) {
-                            setState(() => _timeGrouping = s.first);
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _DealsOverTimeChart(stats: byTime, isAr: isAr),
-
-                      const SizedBox(height: 28),
-
-                      // --- Section 4: top areas ---
-                      _SectionTitle(
-                        isAr ? 'أبرز المناطق' : 'Top areas',
-                        subtitle: isAr
-                            ? 'محافظة + منطقة (أعلى 5 حسب الإيراد)'
-                            : 'Governorate + area (top 5 by revenue)',
-                      ),
-                      const SizedBox(height: 10),
-                      if (byArea.isEmpty && docs.isNotEmpty)
-                        Text(
-                          isAr
-                              ? 'لا توجد بيانات منطقة'
-                              : 'No area fields on sample',
-                          style: TextStyle(color: Colors.grey.shade600),
-                        )
-                      else if (docs.isEmpty && !dealsLoading)
-                        _EmptyHint(isAr: isAr)
-                      else
-                        ...byArea.map(
-                          (a) =>
-                              _AreaTile(
-                                  stats: a, fmtKwd: widget.fmtKwd, isAr: isAr),
-                        ),
-
-                      const SizedBox(height: 28),
-
-                      // --- Section 5: property types ---
-                      _SectionTitle(
-                        isAr ? 'أنواع العقار' : 'Property types',
-                        subtitle: isAr
-                            ? 'عدد الصفقات لكل نوع (العينة)'
-                            : 'Deal count per type (sample)',
-                      ),
-                      const SizedBox(height: 10),
-                      if (docs.isEmpty && !dealsLoading)
-                        _EmptyHint(isAr: isAr)
-                      else
-                        ...byType.map(
-                          (t) => _TypeBar(
-                            label: t.propertyType,
-                            count: t.count,
-                            maxCount: byType.isEmpty
-                                ? 1
-                                : byType.map((e) => e.count).reduce(math.max),
-                          ),
-                        ),
-                    ],
+                  return _buildDashboardCustomScrollView(
+                    context,
+                    scrollBuilders,
                   );
                 },
               );
             },
           );
         },
+    );
+  }
+}
+
+class _AdminDashboardLoadingStrip extends StatelessWidget {
+  const _AdminDashboardLoadingStrip({required this.show});
+
+  final bool show;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: show ? 16 : 0),
+      child: SizedBox(
+        height: show ? 3 : 0,
+        child: show
+            ? const LinearProgressIndicator(minHeight: 3)
+            : const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+class _AdminDashboardExecutiveMetricsSection extends StatelessWidget {
+  const _AdminDashboardExecutiveMetricsSection({
+    required this.isAr,
+    required this.global,
+    required this.fmtKwd,
+    required this.fmtPct,
+    required this.aiPctFromGlobal,
+  });
+
+  final bool isAr;
+  final GlobalAnalyticsSnapshot global;
+  final String Function(num) fmtKwd;
+  final String Function(double? share) fmtPct;
+  final double? aiPctFromGlobal;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle(
+          isAr ? 'مؤشرات رئيسية' : 'Top metrics',
+          subtitle: isAr
+              ? 'من مستند التجميع السريع'
+              : 'From analytics/global',
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final m1 = _MetricCard(
+                label: isAr ? 'إجمالي الصفقات' : 'Total deals',
+                value: '${global.totalDeals.round()}',
+                icon: Icons.handshake_outlined,
+              );
+              final m2 = _MetricCard(
+                label: isAr ? 'حجم التداول' : 'Total volume',
+                value: fmtKwd(global.totalVolume),
+                icon: Icons.payments_outlined,
+              );
+              final m3 = _MetricCard(
+                label: isAr ? 'إجمالي العمولة' : 'Total commission',
+                value: fmtKwd(global.totalCommission),
+                icon: Icons.account_balance_wallet_outlined,
+              );
+              final m4 = _MetricCard(
+                label: isAr
+                    ? 'نسبة صفقات الذكاء الاصطناعي'
+                    : 'AI deals share',
+                value: fmtPct(aiPctFromGlobal),
+                icon: Icons.smart_toy_outlined,
+                foot: 'aiDeals ÷ totalDeals',
+              );
+              final innerW = constraints.maxWidth;
+              final cellW = (innerW - 12) / 2;
+              final aspect = cellW < 152 ? 0.92 : 1.1;
+              return GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: aspect,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [m1, m2, m3, m4],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -800,6 +959,8 @@ class _SourceBreakdownTable extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
+        primary: false,
+        physics: const ClampingScrollPhysics(),
         child: DataTable(
           headingRowColor: WidgetStateProperty.all(
             AppColors.navy.withValues(alpha: 0.06),
@@ -972,26 +1133,9 @@ class _DealsOverTimeChart extends StatelessWidget {
                   ),
                 ),
               ],
-              lineTouchData: LineTouchData(
-                enabled: true,
-                touchTooltipData: LineTouchTooltipData(
-                  getTooltipItems: (touched) {
-                    final out = <LineTooltipItem>[];
-                    for (final t in touched) {
-                      final i = t.x.round();
-                      if (i < 0 || i >= stats.length) continue;
-                      final s = stats[i];
-                      out.add(
-                        LineTooltipItem(
-                          '${s.label}\n${s.dealCount} deals\n${s.totalRevenue.toStringAsFixed(0)} KWD',
-                          const TextStyle(color: Colors.white, fontSize: 12),
-                        ),
-                      );
-                    }
-                    return out;
-                  },
-                ),
-              ),
+              // Disabled so chart touch does not compete with the parent ListView
+              // vertical scroll (gesture arena freezes / multi-swipe issues).
+              lineTouchData: const LineTouchData(enabled: false),
             ),
           ),
         ),
@@ -1280,6 +1424,8 @@ class _IntelligenceBlock extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            primary: false,
+            physics: const ClampingScrollPhysics(),
             child: DataTable(
               headingRowColor: WidgetStateProperty.all(
                 AppColors.navy.withValues(alpha: 0.06),

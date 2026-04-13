@@ -17,6 +17,9 @@ class AdminUploadHealthSection extends StatefulWidget {
 class _AdminUploadHealthSectionState extends State<AdminUploadHealthSection> {
   _UploadHealthWindow _window = _UploadHealthWindow.d7;
 
+  /// Cached so parent rebuilds (scroll / streams) do not restart [UploadHealthService.load] every frame.
+  late Future<UploadHealthSnapshot> _healthFuture;
+
   /// Avoid duplicate [system_alerts] rows for the same snapshot + window.
   String? _lastLoggedIssueDedupeKey;
 
@@ -45,6 +48,12 @@ class _AdminUploadHealthSectionState extends State<AdminUploadHealthSection> {
   static String _pct(double? r) {
     if (r == null) return '—';
     return '${(r * 100).clamp(0, 999).toStringAsFixed(1)}%';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _healthFuture = UploadHealthService.load(window: _dur(_window));
   }
 
   @override
@@ -108,6 +117,7 @@ class _AdminUploadHealthSectionState extends State<AdminUploadHealthSection> {
                 setState(() {
                   _window = v;
                   _lastLoggedIssueDedupeKey = null;
+                  _healthFuture = UploadHealthService.load(window: _dur(_window));
                 });
               },
               items: _UploadHealthWindow.values
@@ -130,8 +140,7 @@ class _AdminUploadHealthSectionState extends State<AdminUploadHealthSection> {
         ),
         const SizedBox(height: 12),
         FutureBuilder<UploadHealthSnapshot>(
-          key: ValueKey(_window),
-          future: UploadHealthService.load(window: _dur(_window)),
+          future: _healthFuture,
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
               return const Center(

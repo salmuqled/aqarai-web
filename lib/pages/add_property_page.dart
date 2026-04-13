@@ -208,6 +208,43 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _showPublishSuccessSnackBar(AppLocalizations loc) {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        duration: const Duration(milliseconds: 2600),
+        dismissDirection: DismissDirection.horizontal,
+        content: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.check_circle_rounded,
+              size: 22,
+              color: scheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                loc.publishSuccessBlessing,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      snackBarAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 380),
+        reverseDuration: Duration(milliseconds: 300),
+      ),
+    );
+  }
+
   /// Single source of truth: top-level service intent is sale.
   bool isSaleListing() => selectedServiceType == 'sale';
 
@@ -587,7 +624,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       }
 
       if (mounted && imageUploadCompleted) {
-        _toast(loc.propertySentForReview);
+        _showPublishSuccessSnackBar(loc);
       }
 
       if (!mounted) return;
@@ -1264,6 +1301,18 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                 ),
               ),
 
+              if (_loading) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Center(
+                    child: _PublishingLoadingBlock(
+                      primaryColor: theme.colorScheme.primary,
+                      isArabic: isArabic,
+                    ),
+                  ),
+                ),
+              ],
+
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -1289,6 +1338,103 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Subtle pulse + fade-in while publishing (add property).
+class _PublishingLoadingBlock extends StatefulWidget {
+  const _PublishingLoadingBlock({
+    required this.primaryColor,
+    required this.isArabic,
+  });
+
+  final Color primaryColor;
+  final bool isArabic;
+
+  @override
+  State<_PublishingLoadingBlock> createState() =>
+      _PublishingLoadingBlockState();
+}
+
+class _PublishingLoadingBlockState extends State<_PublishingLoadingBlock>
+    with TickerProviderStateMixin {
+  late final AnimationController _pulse;
+  late final AnimationController _fade;
+  late final Animation<double> _pulseScale;
+  late final Animation<double> _fadeOpacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat(reverse: true);
+    _fade = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    )..forward();
+    _pulseScale = Tween<double>(begin: 0.94, end: 1.0).animate(
+      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+    );
+    _fadeOpacity = CurvedAnimation(
+      parent: _fade,
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    _fade.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
+    return FadeTransition(
+      opacity: _fadeOpacity,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ScaleTransition(
+            scale: _pulseScale,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: widget.primaryColor,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            widget.isArabic
+                ? 'جاري نشر العقار...'
+                : 'Publishing your listing...',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: onSurface,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.isArabic ? 'يرجى الانتظار' : 'Please wait',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
       ),
     );
   }

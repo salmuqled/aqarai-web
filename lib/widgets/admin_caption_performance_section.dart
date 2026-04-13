@@ -24,9 +24,18 @@ class AdminCaptionPerformanceSection extends StatefulWidget {
 }
 
 class _AdminCaptionPerformanceSectionState
-    extends State<AdminCaptionPerformanceSection> {
-  late final Future<List<CaptionPerformance>> _performanceFuture =
-      CaptionPerformanceService().getPerformance();
+    extends State<AdminCaptionPerformanceSection>
+    with AutomaticKeepAliveClientMixin {
+  late final Future<List<CaptionPerformance>> _performanceFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _performanceFuture = CaptionPerformanceService().getPerformance();
+  }
+
+  @override
+  bool get wantKeepAlive => true;
 
   static String _emojiFor(String id) {
     switch (id) {
@@ -43,6 +52,7 @@ class _AdminCaptionPerformanceSectionState
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final loc = AppLocalizations.of(context)!;
 
     return FutureBuilder<List<CaptionPerformance>>(

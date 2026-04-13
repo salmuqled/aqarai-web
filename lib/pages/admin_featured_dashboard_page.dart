@@ -164,12 +164,13 @@ class _AdminFeaturedDashboardPageState extends State<AdminFeaturedDashboardPage>
                     side: BorderSide(color: Colors.grey.shade200),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(icon, color: AppColors.navy),
-                        const SizedBox(height: 8),
+                        Icon(icon, size: 22, color: AppColors.navy),
+                        const SizedBox(height: 6),
                         Text(
                           title,
                           style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
@@ -177,19 +178,26 @@ class _AdminFeaturedDashboardPageState extends State<AdminFeaturedDashboardPage>
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          value,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.navy,
+                        FittedBox(
+                          alignment: AlignmentDirectional.centerStart,
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            value,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.navy,
+                            ),
+                            maxLines: 1,
                           ),
                         ),
                         if (foot != null) ...[
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Text(
                             foot,
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ],
@@ -244,7 +252,7 @@ class _AdminFeaturedDashboardPageState extends State<AdminFeaturedDashboardPage>
                 card(
                   title: isAr ? 'إيراد لكل ظهور' : 'Revenue per suggestion',
                   value: _kwd(d.revenuePerSuggestionKwd),
-                  icon: Icons.savings_outlined,
+                  icon: Icons.account_balance_wallet_outlined,
                   foot: isAr ? 'إيراد AI ÷ الظهور' : 'AI revenue ÷ shown',
                 ),
               ];
@@ -258,11 +266,13 @@ class _AdminFeaturedDashboardPageState extends State<AdminFeaturedDashboardPage>
                       builder: (context, c) {
                         final wide = c.maxWidth >= 900;
                         final cross = wide ? 4 : 2;
+                        // Taller cells than width/2.2 — Arabic labels + foot lines need room
+                        // or GridView clips and shows yellow/black overflow stripes.
                         return GridView.count(
                           crossAxisCount: cross,
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          childAspectRatio: wide ? 2.7 : 2.2,
+                          childAspectRatio: wide ? 1.52 : 1.28,
                           mainAxisSpacing: 10,
                           crossAxisSpacing: 10,
                           children: cards,

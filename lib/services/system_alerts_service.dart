@@ -12,6 +12,7 @@ abstract final class SystemAlertsService {
   static const String _collection = 'system_alerts';
 
   static const String typeUploadIssue = 'upload_issue';
+  static const String typeClientError = 'client_error';
 
   /// Newest first by [SystemAlert.updatedAt] / [SystemAlert.createdAt] (client sort; no index required).
   static Stream<List<SystemAlert>> watchAlerts() {
@@ -64,6 +65,43 @@ abstract final class SystemAlertsService {
       return true;
     } catch (e) {
       debugPrint('[SystemAlerts] logUploadReliabilityIssue failed: $e');
+      return false;
+    }
+  }
+
+  /// Admin client: uncaught Flutter/async errors (shown in [AdminSystemAlertsSection]).
+  static Future<bool> logClientError({
+    required String fingerprint,
+    required String exceptionType,
+    required String detail,
+  }) async {
+    var summary = detail.split(RegExp(r'\r?\n')).first.trim();
+    if (summary.length > 240) summary = summary.substring(0, 240);
+    if (summary.isEmpty) summary = exceptionType;
+
+    final metrics = <String, dynamic>{
+      'fingerprint': fingerprint,
+      'exceptionType': exceptionType,
+      'detail': detail,
+    };
+    try {
+      final now = FieldValue.serverTimestamp();
+      await _db.collection(_collection).add({
+        'type': typeClientError,
+        'severity': 'warning',
+        'titleEn': 'App error',
+        'titleAr': 'خطأ في التطبيق',
+        'messageEn': summary,
+        'messageAr': 'تفاصيل: $summary — راجع مركز التحكم إن احتجت المزيد.',
+        'read': false,
+        'metrics': metrics,
+        'timestamp': now,
+        'createdAt': now,
+        'updatedAt': now,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('[SystemAlerts] logClientError failed: $e');
       return false;
     }
   }

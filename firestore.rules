@@ -424,7 +424,31 @@ service cloud.firestore {
           ]);
       }
 
-      allow create: if isAdmin() && uploadIssueAlertCreateValid();
+      function clientErrorAlertCreateValid() {
+        let d = request.resource.data;
+        let m = d.metrics;
+        return d.type == 'client_error'
+          && d.severity == 'warning'
+          && d.read == false
+          && d.titleEn is string
+          && d.titleAr is string
+          && d.messageEn is string
+          && d.messageAr is string
+          && m is map
+          && m.keys().hasOnly(['fingerprint', 'exceptionType', 'detail'])
+          && m.fingerprint is string
+          && m.exceptionType is string
+          && m.detail is string
+          && m.fingerprint.size() <= 200
+          && m.exceptionType.size() <= 200
+          && m.detail.size() <= 1500
+          && d.keys().hasOnly([
+            'type', 'severity', 'titleEn', 'titleAr', 'messageEn', 'messageAr',
+            'read', 'metrics', 'timestamp', 'createdAt', 'updatedAt'
+          ]);
+      }
+
+      allow create: if isAdmin() && (uploadIssueAlertCreateValid() || clientErrorAlertCreateValid());
       allow delete: if false;
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys()

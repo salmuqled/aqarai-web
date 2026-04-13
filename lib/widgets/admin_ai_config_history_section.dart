@@ -18,6 +18,9 @@ class AdminAiConfigHistorySection extends StatefulWidget {
 class _AdminAiConfigHistorySectionState extends State<AdminAiConfigHistorySection> {
   String? _restoringDocId;
 
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _historyStream =
+      AiSuggestionsAutoConfigService.historyQuery().snapshots();
+
   bool get isAr => widget.isAr;
 
   static String _relTime(Timestamp? t, bool isAr) {
@@ -88,7 +91,7 @@ class _AdminAiConfigHistorySectionState extends State<AdminAiConfigHistorySectio
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: AiSuggestionsAutoConfigService.historyQuery().snapshots(),
+      stream: _historyStream,
       builder: (context, snap) {
         if (snap.hasError) {
           return Text(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:aqarai_app/firebase_options.dart';
 import 'package:aqarai_app/auth/login_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
 import 'package:aqarai_app/app/navigation_keys.dart';
+import 'package:aqarai_app/services/admin_client_error_reporter.dart';
 import 'package:aqarai_app/services/auth_service.dart';
 import 'package:aqarai_app/services/deal_follow_up_local_notifications.dart';
 import 'package:aqarai_app/services/notification_service.dart';
@@ -51,7 +53,25 @@ Future<void> main() async {
 
   await DealFollowUpLocalNotifications.initialize();
 
-  runApp(const MyApp());
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    AdminClientErrorReporter.scheduleReport(
+      details.exception,
+      details.stack,
+    );
+  };
+
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    AdminClientErrorReporter.scheduleReport(error, stack);
+    return true;
+  };
+
+  runZonedGuarded(
+    () => runApp(const MyApp()),
+    (Object error, StackTrace stack) {
+      AdminClientErrorReporter.scheduleReport(error, stack);
+    },
+  );
 }
 
 class MyApp extends StatelessWidget {

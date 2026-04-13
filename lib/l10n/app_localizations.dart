@@ -1169,6 +1169,12 @@ abstract class AppLocalizations {
   /// **'Property sent for review'**
   String get propertySentForReview;
 
+  /// Warm success message after a listing is published with images
+  ///
+  /// In en, this message translates to:
+  /// **'We wish you every success with your property 🤍'**
+  String get publishSuccessBlessing;
+
   /// Admin moderation menu label
   ///
   /// In en, this message translates to:
