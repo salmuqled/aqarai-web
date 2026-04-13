@@ -326,9 +326,246 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
     _viewsStream = widget.analytics.watchViewsForDashboard();
   }
 
-  /// Lazy section builders: consumed by [CustomScrollView] slivers (header adapters +
-  /// [SliverList]) so only visible rows build, plus cache extent.
-  List<Widget Function(BuildContext)> _buildDashboardScrollItemBuilders({
+  void _appendIntelligenceBlockSlivers(
+    List<Widget> out, {
+    required GlobalAnalyticsSnapshot global,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> dealDocs,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> viewDocs,
+    required bool isAr,
+  }) {
+    void box(Widget child) => out.add(SliverToBoxAdapter(child: child));
+
+    final totalDealsGlobal = global.totalDeals.round();
+    final viewN = viewDocs.length;
+    final overallConv = AdminIntelligenceService.calculateConversion(
+      viewN,
+      totalDealsGlobal,
+    );
+    final aiPct = global.aiDealShare ?? 0.0;
+
+    final insights = AdminIntelligenceService.generateInsights(
+      totalDeals: totalDealsGlobal,
+      aiPercentage: aiPct,
+      conversionRate: overallConv,
+    );
+
+    final day = AdminIntelligenceService.buildDaySampleMetrics(
+      deals: dealDocs,
+      views: viewDocs,
+    );
+
+    final alerts = AdminIntelligenceService.generateAlerts(
+      todayDeals: day.todayDeals,
+      yesterdayDeals: day.yesterdayDeals,
+      todayAiPercentage: day.todayAiShare,
+      yesterdayAiPercentage: day.yesterdayAiShare,
+      conversionToday: day.conversionTodaySample,
+      conversionYesterday: day.conversionYesterdaySample,
+    );
+
+    final vHist = AdminIntelligenceService.countByLeadSource(viewDocs);
+    final dHist = AdminIntelligenceService.countByLeadSource(dealDocs);
+    final convBySrc = AdminIntelligenceService.calculateConversionBySource(
+      dealDocs,
+      viewDocs,
+    );
+
+    final sources = AdminIntelligenceService.canonicalSources;
+
+    box(
+      _SectionTitle(
+        isAr ? 'الذكاء التشغيلي' : 'Operational intelligence',
+        subtitle: isAr
+            ? 'تحويل، رؤى، وتنبيهات (عيّنة مشاهدات + عيّنة صفقات)'
+            : 'Conversion, insights & alerts (views sample + deals sample)',
+      ),
+    );
+    box(const SizedBox(height: 10));
+
+    box(
+      Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: Colors.grey.shade200),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.filter_alt_outlined, color: AppColors.navy),
+                  const SizedBox(width: 8),
+                  Text(
+                    isAr ? 'معدل التحويل' : 'Conversion rate',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isAr
+                    ? 'الصفقات (analytics) ÷ عيّنة المشاهدات الأخيرة'
+                    : 'Deals (analytics/global) ÷ latest views sample',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                isAr
+                    ? 'معدل التحويل: ${_IntelligenceUi.fmtConv(overallConv)}'
+                    : 'Conversion rate: ${_IntelligenceUi.fmtConv(overallConv)}',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.navy,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isAr
+                    ? 'صفقات: $totalDealsGlobal · مشاهدات (عينة): $viewN'
+                    : 'Deals: $totalDealsGlobal · Views (sample): $viewN',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+              ),
+              const Divider(height: 20),
+              Text(
+                isAr
+                    ? 'تحويل العينة حسب المصدر في الجدول أدناه (صفقات/مشاهدات ضمن نفس العيّنتين).'
+                    : 'Per-source table uses the same two samples (deals ÷ views per channel).',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    box(const SizedBox(height: 14));
+
+    out.add(
+      SliverMainAxisGroup(
+        slivers: [
+          SliverToBoxAdapter(
+            child: RepaintBoundary(
+              child: _IntelligenceConversionTableHeader(isAr: isAr),
+            ),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (BuildContext c, int index) {
+                final s = sources[index];
+                return _IntelligenceConversionDataRow(
+                  sourceLabel: _IntelligenceUi.sourceLabel(s, isAr),
+                  views: '${vHist[s] ?? 0}',
+                  deals: '${dHist[s] ?? 0}',
+                  convLabel: _IntelligenceUi.fmtConv(convBySrc[s] ?? 0),
+                  isLast: index == sources.length - 1,
+                );
+              },
+              childCount: sources.length,
+              addAutomaticKeepAlives: true,
+              addRepaintBoundaries: true,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    box(const SizedBox(height: 20));
+
+    box(
+      Text(
+        isAr ? 'رؤى' : 'Insights',
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: AppColors.navy,
+        ),
+      ),
+    );
+    box(const SizedBox(height: 8));
+    for (final en in insights) {
+      final text = isAr ? (_IntelligenceUi.intelAr(en) ?? en) : en;
+      final positive = _IntelligenceUi.isPositiveInsight(en);
+      box(
+        Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          elevation: 0,
+          color: positive ? Colors.green.shade50 : Colors.blue.shade50,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: positive ? Colors.green.shade200 : Colors.blue.shade100,
+            ),
+          ),
+          child: ListTile(
+            leading: Icon(
+              positive ? Icons.trending_up : Icons.lightbulb_outline,
+              color: positive ? Colors.green.shade800 : Colors.blue.shade800,
+            ),
+            title: Text('💡 $text'),
+          ),
+        ),
+      );
+    }
+
+    box(const SizedBox(height: 12));
+
+    box(
+      Text(
+        isAr ? 'تنبيهات' : 'Alerts',
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: AppColors.navy,
+        ),
+      ),
+    );
+    box(const SizedBox(height: 8));
+    if (alerts.isEmpty) {
+      box(
+        Text(
+          isAr ? 'لا تنبيهات حالياً.' : 'No active alerts.',
+          style: TextStyle(color: Colors.grey.shade600),
+        ),
+      );
+    } else {
+      for (final line in alerts) {
+        final text = isAr ? (_IntelligenceUi.intelAr(line) ?? line) : line;
+        box(
+          Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            elevation: 0,
+            color: Colors.red.shade50,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.red.shade200),
+            ),
+            child: ListTile(
+              leading: Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.red.shade800,
+              ),
+              title: Text(
+                text,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Dashboard body as explicit slivers for [CustomScrollView]. Source breakdown
+  /// rows use [SliverList] (true lazy) instead of a nested [ListView].
+  List<Widget> _buildDashboardSlivers({
+    required BuildContext context,
     required bool isAr,
     required bool showTopLoading,
     required GlobalAnalyticsSnapshot global,
@@ -344,12 +581,14 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
     final fmtPct = widget.fmtPct;
     final analytics = widget.analytics;
     final aiPctFromGlobal = global.aiDealShare;
-    final b = <Widget Function(BuildContext)>[];
+    final out = <Widget>[];
 
-    b.add((_) => _AdminDashboardLoadingStrip(show: showTopLoading));
+    void box(Widget child) => out.add(SliverToBoxAdapter(child: child));
 
-    b.add(
-      (_) => _AdminDashboardExecutiveMetricsSection(
+    box(_AdminDashboardLoadingStrip(show: showTopLoading));
+
+    box(
+      _AdminDashboardExecutiveMetricsSection(
         isAr: isAr,
         global: global,
         fmtKwd: fmtKwd,
@@ -358,121 +597,150 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
       ),
     );
 
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminDealPipelineSection(dealDocs: docs));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminCrmSnapshotSection(dealDocs: docs, isAr: isAr));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminAnalyticsSection(dealDocs: docs, isAr: isAr));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminFollowupSection(dealDocs: docs));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminLeadsSplitSection(dealDocs: docs));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminConversionSection(dealDocs: docs));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminAiConfigRollbackBanner(isAr: isAr));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminAiSuggestionsControlsSection(isAr: isAr));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminAiConfigHistorySection(isAr: isAr));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => const AdminAiSuggestionsAnalyticsSection());
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminCommissionSection(dealDocs: docs, fmtKwd: fmtKwd));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminOutstandingSection(dealDocs: docs, fmtKwd: fmtKwd));
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminPrioritySection(dealDocs: docs, fmtKwd: fmtKwd));
-    b.add((_) => const SizedBox(height: 20));
-    b.add(
-      (_) => AdminCashflowLedgerSection(fmtKwd: fmtKwd, isAr: isAr),
+    box(const SizedBox(height: 20));
+    box(AdminDealPipelineSection(dealDocs: docs));
+    box(const SizedBox(height: 20));
+    box(AdminCrmSnapshotSection(dealDocs: docs, isAr: isAr));
+    box(const SizedBox(height: 20));
+    box(AdminAnalyticsSection(dealDocs: docs, isAr: isAr));
+    box(const SizedBox(height: 20));
+    box(AdminFollowupSection(dealDocs: docs));
+    box(const SizedBox(height: 20));
+    box(AdminLeadsSplitSection(dealDocs: docs));
+    box(const SizedBox(height: 20));
+    box(AdminConversionSection(dealDocs: docs));
+    box(const SizedBox(height: 20));
+    box(AdminAiConfigRollbackBanner(isAr: isAr));
+    box(const SizedBox(height: 20));
+    box(AdminAiSuggestionsControlsSection(isAr: isAr));
+    box(const SizedBox(height: 20));
+    box(AdminAiConfigHistorySection(isAr: isAr));
+    box(const SizedBox(height: 20));
+    box(const AdminAiSuggestionsAnalyticsSection());
+    box(const SizedBox(height: 20));
+    box(
+      RepaintBoundary(
+        child: AdminCommissionSection(dealDocs: docs, fmtKwd: fmtKwd),
+      ),
     );
+    box(const SizedBox(height: 20));
+    box(AdminOutstandingSection(dealDocs: docs, fmtKwd: fmtKwd));
+    box(const SizedBox(height: 20));
+    box(AdminPrioritySection(dealDocs: docs, fmtKwd: fmtKwd));
+    box(const SizedBox(height: 20));
+    box(AdminCashflowLedgerSection(fmtKwd: fmtKwd, isAr: isAr));
 
-    b.add((_) => const SizedBox(height: 16));
-    b.add(
-      (_) => AdminCaptionPerformanceSection(
+    box(const SizedBox(height: 16));
+    box(
+      AdminCaptionPerformanceSection(
         key: const ValueKey<String>('adminCaptionPerformance'),
         isAr: isAr,
       ),
     );
-    b.add((_) => const SizedBox(height: 16));
-    b.add((_) => AdminCaptionLearningSection(isAr: isAr));
-    b.add((_) => const SizedBox(height: 16));
-    b.add((_) => AdminDecisionAccuracySection(isAr: isAr));
-    b.add((_) => const SizedBox(height: 16));
-    b.add((context) {
-      final day = AdminIntelligenceService.buildDaySampleMetrics(
-        deals: docs,
-        views: viewDocs,
-      );
-      final recommendations = AdminRecommendationsService.generateRecommendations(
-        day: day,
-        totalDealsGlobal: global.totalDeals.round(),
-        dealDocs: docs,
-        viewDocs: viewDocs,
-        context: context,
-        isAr: isAr,
-      );
-      return buildRecommendationsSection(recommendations, isAr: isAr);
-    });
+    box(const SizedBox(height: 16));
+    box(AdminCaptionLearningSection(isAr: isAr));
+    box(const SizedBox(height: 16));
+    box(AdminDecisionAccuracySection(isAr: isAr));
+    box(const SizedBox(height: 16));
+    box(
+      Builder(
+        builder: (ctx) {
+          final day = AdminIntelligenceService.buildDaySampleMetrics(
+            deals: docs,
+            views: viewDocs,
+          );
+          final recommendations =
+              AdminRecommendationsService.generateRecommendations(
+            day: day,
+            totalDealsGlobal: global.totalDeals.round(),
+            dealDocs: docs,
+            viewDocs: viewDocs,
+            context: ctx,
+            isAr: isAr,
+          );
+          return buildRecommendationsSection(recommendations, isAr: isAr);
+        },
+      ),
+    );
 
-    b.add((_) => const SizedBox(height: 8));
-    b.add(
-      (_) => _Footnote(
+    box(const SizedBox(height: 8));
+    box(
+      _Footnote(
         isAr
             ? 'آخر ${AdminAnalyticsService.kDashboardDealsLimit} صفقة و ${AdminAnalyticsService.kDashboardViewsLimit} مشاهدة للذكاء والتحويل.'
             : 'Intelligence uses latest ${AdminAnalyticsService.kDashboardDealsLimit} deals + ${AdminAnalyticsService.kDashboardViewsLimit} views.',
       ),
     );
 
-    b.add((_) => const SizedBox(height: 20));
-    b.add((_) => AdminNotificationPerformanceSection(
-          analytics: analytics,
-          isAr: isAr,
-        ));
-
-    b.add((_) => const SizedBox(height: 24));
-    b.add(
-      (_) => _IntelligenceBlock(
-        global: global,
-        dealDocs: docs,
-        viewDocs: viewDocs,
+    box(const SizedBox(height: 20));
+    box(
+      AdminNotificationPerformanceSection(
+        analytics: analytics,
         isAr: isAr,
       ),
     );
 
-    b.add((_) => const SizedBox(height: 28));
-    b.add(
-      (_) => _SectionTitle(
+    box(const SizedBox(height: 24));
+    _appendIntelligenceBlockSlivers(
+      out,
+      global: global,
+      dealDocs: docs,
+      viewDocs: viewDocs,
+      isAr: isAr,
+    );
+
+    box(const SizedBox(height: 28));
+    box(
+      _SectionTitle(
         isAr ? 'تفصيل حسب المصدر' : 'Source breakdown',
         subtitle: isAr
             ? 'من مجموعة الصفقات (إيراد = السعر النهائي)'
             : 'From deals (revenue = final price)',
       ),
     );
-    b.add((_) => const SizedBox(height: 10));
-    b.add((_) {
-      if (docs.isEmpty && !dealsLoading) {
-        return _EmptyHint(isAr: isAr);
-      }
-      return _SourceBreakdownTable(
-        rows: bySource,
-        fmtKwd: fmtKwd,
-        isAr: isAr,
+    box(const SizedBox(height: 10));
+    if (docs.isEmpty && !dealsLoading) {
+      box(_EmptyHint(isAr: isAr));
+    } else {
+      out.add(
+        SliverMainAxisGroup(
+          slivers: [
+            SliverToBoxAdapter(
+              child: RepaintBoundary(
+                child: _SourceBreakdownCardHeader(isAr: isAr),
+              ),
+            ),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (BuildContext c, int index) {
+                  final r = bySource[index];
+                  return _SourceBreakdownDataRow(
+                    row: r,
+                    isAr: isAr,
+                    fmtKwd: fmtKwd,
+                    isLast: index == bySource.length - 1,
+                  );
+                },
+                childCount: bySource.length,
+                addAutomaticKeepAlives: true,
+                addRepaintBoundaries: true,
+              ),
+            ),
+          ],
+        ),
       );
-    });
+    }
 
-    b.add((_) => const SizedBox(height: 28));
-    b.add(
-      (_) => _SectionTitle(
+    box(const SizedBox(height: 28));
+    box(
+      _SectionTitle(
         isAr ? 'الصفقات عبر الزمن' : 'Deals over time',
         subtitle: isAr ? 'حسب تاريخ الإغلاق' : 'By closedAt',
       ),
     );
-    b.add((_) => const SizedBox(height: 10));
-    b.add(
-      (_) => Align(
+    box(const SizedBox(height: 10));
+    box(
+      Align(
         alignment: AlignmentDirectional.centerStart,
         child: SegmentedButton<DealsTimeGrouping>(
           segments: [
@@ -496,57 +764,55 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
         ),
       ),
     );
-    b.add((_) => const SizedBox(height: 16));
-    b.add((_) => _DealsOverTimeChart(stats: byTime, isAr: isAr));
+    box(const SizedBox(height: 16));
+    box(_DealsOverTimeChart(stats: byTime, isAr: isAr));
 
-    b.add((_) => const SizedBox(height: 28));
-    b.add(
-      (_) => _SectionTitle(
+    box(const SizedBox(height: 28));
+    box(
+      _SectionTitle(
         isAr ? 'أبرز المناطق' : 'Top areas',
         subtitle: isAr
             ? 'محافظة + منطقة (أعلى 5 حسب الإيراد)'
             : 'Governorate + area (top 5 by revenue)',
       ),
     );
-    b.add((_) => const SizedBox(height: 10));
+    box(const SizedBox(height: 10));
     if (byArea.isEmpty && docs.isNotEmpty) {
-      b.add(
-        (_) => Text(
+      box(
+        Text(
           isAr ? 'لا توجد بيانات منطقة' : 'No area fields on sample',
           style: TextStyle(color: Colors.grey.shade600),
         ),
       );
     } else if (docs.isEmpty && !dealsLoading) {
-      b.add((_) => _EmptyHint(isAr: isAr));
+      box(_EmptyHint(isAr: isAr));
     } else {
       for (final a in byArea) {
         final tile = a;
-        b.add(
-          (_) => _AreaTile(stats: tile, fmtKwd: fmtKwd, isAr: isAr),
-        );
+        box(_AreaTile(stats: tile, fmtKwd: fmtKwd, isAr: isAr));
       }
     }
 
-    b.add((_) => const SizedBox(height: 28));
-    b.add(
-      (_) => _SectionTitle(
+    box(const SizedBox(height: 28));
+    box(
+      _SectionTitle(
         isAr ? 'أنواع العقار' : 'Property types',
         subtitle: isAr
             ? 'عدد الصفقات لكل نوع (العينة)'
             : 'Deal count per type (sample)',
       ),
     );
-    b.add((_) => const SizedBox(height: 10));
+    box(const SizedBox(height: 10));
     if (docs.isEmpty && !dealsLoading) {
-      b.add((_) => _EmptyHint(isAr: isAr));
+      box(_EmptyHint(isAr: isAr));
     } else {
       final maxCount = byType.isEmpty
           ? 1
           : byType.map((e) => e.count).reduce(math.max);
       for (final t in byType) {
         final row = t;
-        b.add(
-          (_) => _TypeBar(
+        box(
+          _TypeBar(
             label: row.propertyType,
             count: row.count,
             maxCount: maxCount,
@@ -555,7 +821,7 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
       }
     }
 
-    return b;
+    return out;
   }
 
   static String _firestoreErrorMessage(Object? error, bool isAr) {
@@ -569,46 +835,17 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
     return s;
   }
 
-  /// [CustomScrollView] body: fixed “header” rows as [SliverToBoxAdapter], rest lazy
-  /// via [SliverList]. Quick actions stay in the parent [Column] (unchanged layout).
-  Widget _buildDashboardCustomScrollView(
-    BuildContext context,
-    List<Widget Function(BuildContext)> scrollBuilders,
-  ) {
+  /// [CustomScrollView] with explicit dashboard slivers (no nested vertical lists).
+  Widget _buildDashboardCustomScrollView(List<Widget> dashboardSlivers) {
     return CustomScrollView(
       key: const PageStorageKey<String>('adminDashboardBodyScroll'),
       cacheExtent: 800,
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          sliver: scrollBuilders.length >= 2
-              ? SliverMainAxisGroup(
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: scrollBuilders[0](context),
-                    ),
-                    SliverToBoxAdapter(
-                      child: scrollBuilders[1](context),
-                    ),
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (BuildContext c, int index) =>
-                            scrollBuilders[index + 2](c),
-                        childCount: scrollBuilders.length - 2,
-                        addAutomaticKeepAlives: true,
-                        addRepaintBoundaries: true,
-                      ),
-                    ),
-                  ],
-                )
-              : SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (BuildContext c, int index) => scrollBuilders[index](c),
-                    childCount: scrollBuilders.length,
-                    addAutomaticKeepAlives: true,
-                    addRepaintBoundaries: true,
-                  ),
-                ),
+          sliver: SliverMainAxisGroup(
+            slivers: dashboardSlivers,
+          ),
         ),
       ],
     );
@@ -678,7 +915,8 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
                   final showTopLoading =
                       globalLoading || dealsLoading || viewsLoading;
 
-                  final scrollBuilders = _buildDashboardScrollItemBuilders(
+                  final dashboardSlivers = _buildDashboardSlivers(
+                    context: context,
                     isAr: isAr,
                     showTopLoading: showTopLoading,
                     global: global,
@@ -691,10 +929,7 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
                     dealsLoading: dealsLoading,
                   );
 
-                  return _buildDashboardCustomScrollView(
-                    context,
-                    scrollBuilders,
-                  );
+                  return _buildDashboardCustomScrollView(dashboardSlivers);
                 },
               );
             },
@@ -937,72 +1172,150 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _SourceBreakdownTable extends StatelessWidget {
-  const _SourceBreakdownTable({
-    required this.rows,
-    required this.fmtKwd,
-    required this.isAr,
-  });
+/// Top of source breakdown “card” (sits above [SliverList] data rows).
+class _SourceBreakdownCardHeader extends StatelessWidget {
+  const _SourceBreakdownCardHeader({required this.isAr});
 
-  final List<SourceStats> rows;
-  final String Function(num) fmtKwd;
   final bool isAr;
+
+  static const double _hPad = 16;
+  static const double _vPad = 12;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: Colors.grey.shade200),
+    final headerStyle = const TextStyle(fontWeight: FontWeight.bold);
+    final border = BorderSide(color: Colors.grey.shade200);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(14),
+          topRight: Radius.circular(14),
+        ),
+        border: Border(top: border, left: border, right: border),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        primary: false,
-        physics: const ClampingScrollPhysics(),
-        child: DataTable(
-          headingRowColor: WidgetStateProperty.all(
-            AppColors.navy.withValues(alpha: 0.06),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(13),
+          topRight: Radius.circular(13),
+        ),
+        child: ColoredBox(
+          color: AppColors.navy.withValues(alpha: 0.06),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: _hPad,
+              vertical: _vPad,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    isAr ? 'المصدر' : 'Source',
+                    style: headerStyle,
+                  ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Text(
+                    isAr ? 'الصفقات' : 'Deals',
+                    style: headerStyle,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    isAr ? 'الإيراد' : 'Revenue',
+                    style: headerStyle,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    isAr ? 'العمولة' : 'Commission',
+                    style: headerStyle,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+              ],
+            ),
           ),
-          columns: [
-            DataColumn(
-              label: Text(
-                isAr ? 'المصدر' : 'Source',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceBreakdownDataRow extends StatelessWidget {
+  const _SourceBreakdownDataRow({
+    required this.row,
+    required this.isAr,
+    required this.fmtKwd,
+    required this.isLast,
+  });
+
+  final SourceStats row;
+  final bool isAr;
+  final String Function(num) fmtKwd;
+  final bool isLast;
+
+  static const double _hPad = 16;
+  static const double _vPad = 12;
+
+  @override
+  Widget build(BuildContext context) {
+    final side = BorderSide(color: Colors.grey.shade200);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          left: side,
+          right: side,
+          bottom: side,
+        ),
+        borderRadius: isLast
+            ? const BorderRadius.only(
+                bottomLeft: Radius.circular(14),
+                bottomRight: Radius.circular(14),
+              )
+            : null,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: _hPad, vertical: _vPad),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Text(
+                isAr ? row.displayLabelAr : row.displayLabel,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            DataColumn(
-              label: Text(
-                isAr ? 'الصفقات' : 'Deals',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+            Expanded(
+              flex: 1,
+              child: Text(
+                '${row.dealCount}',
+                textAlign: TextAlign.end,
               ),
             ),
-            DataColumn(
-              label: Text(
-                isAr ? 'الإيراد' : 'Revenue',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+            Expanded(
+              flex: 2,
+              child: Text(
+                fmtKwd(row.totalRevenue),
+                textAlign: TextAlign.end,
               ),
             ),
-            DataColumn(
-              label: Text(
-                isAr ? 'العمولة' : 'Commission',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+            Expanded(
+              flex: 2,
+              child: Text(
+                fmtKwd(row.totalCommission),
+                textAlign: TextAlign.end,
               ),
             ),
           ],
-          rows: rows
-              .map(
-                (r) => DataRow(
-                  cells: [
-                    DataCell(Text(isAr ? r.displayLabelAr : r.displayLabel)),
-                    DataCell(Text('${r.dealCount}')),
-                    DataCell(Text(fmtKwd(r.totalRevenue))),
-                    DataCell(Text(fmtKwd(r.totalCommission))),
-                  ],
-                ),
-              )
-              .toList(),
         ),
       ),
     );
@@ -1055,87 +1368,90 @@ class _DealsOverTimeChart extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 20, 20, 12),
-        child: SizedBox(
-          height: 240,
-          child: LineChart(
-            LineChartData(
-              minX: 0,
-              // Single bucket: widen domain so the line renders visibly.
-              maxX: stats.length <= 1 ? 1 : (stats.length - 1).toDouble(),
-              minY: 0,
-              maxY: maxY,
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: false,
-                horizontalInterval: maxY > 5 ? maxY / 5 : 1,
-                getDrawingHorizontalLine: (v) =>
-                    FlLine(color: Colors.grey.shade200, strokeWidth: 1),
-              ),
-              titlesData: FlTitlesData(
-                topTitles: const AxisTitles(),
-                rightTitles: const AxisTitles(),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 36,
-                    interval: maxY > 5 ? maxY / 5 : 1,
-                    getTitlesWidget: (v, m) => Text(
-                      v.round().toString(),
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
+        child: RepaintBoundary(
+          child: SizedBox(
+            height: 220,
+            child: IgnorePointer(
+              child: LineChart(
+                LineChartData(
+                  minX: 0,
+                  // Single bucket: widen domain so the line renders visibly.
+                  maxX: stats.length <= 1 ? 1 : (stats.length - 1).toDouble(),
+                  minY: 0,
+                  maxY: maxY,
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: maxY > 5 ? maxY / 5 : 1,
+                    getDrawingHorizontalLine: (v) =>
+                        FlLine(color: Colors.grey.shade200, strokeWidth: 1),
                   ),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 28,
-                    interval: 1,
-                    getTitlesWidget: (v, m) {
-                      final i = v.round();
-                      if (i < 0 || i >= stats.length) {
-                        return const SizedBox.shrink();
-                      }
-                      if (i % labelEvery != 0 && i != stats.length - 1) {
-                        return const SizedBox.shrink();
-                      }
-                      final lb = stats[i].label;
-                      final short = lb.length > 8
-                          ? '${lb.substring(0, 7)}…'
-                          : lb;
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          short,
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(),
+                    rightTitles: const AxisTitles(),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 36,
+                        interval: maxY > 5 ? maxY / 5 : 1,
+                        getTitlesWidget: (v, m) => Text(
+                          v.round().toString(),
                           style: TextStyle(
-                            fontSize: 9,
+                            fontSize: 10,
                             color: Colors.grey.shade700,
                           ),
                         ),
-                      );
-                    },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 28,
+                        interval: 1,
+                        getTitlesWidget: (v, m) {
+                          final i = v.round();
+                          if (i < 0 || i >= stats.length) {
+                            return const SizedBox.shrink();
+                          }
+                          if (i % labelEvery != 0 && i != stats.length - 1) {
+                            return const SizedBox.shrink();
+                          }
+                          final lb = stats[i].label;
+                          final short = lb.length > 8
+                              ? '${lb.substring(0, 7)}…'
+                              : lb;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              short,
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: false,
+                      color: AppColors.navy,
+                      barWidth: 2,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: AppColors.navy.withValues(alpha: 0.08),
+                      ),
+                    ),
+                  ],
+                  lineTouchData: const LineTouchData(enabled: false),
                 ),
+                duration: Duration.zero,
               ),
-              borderData: FlBorderData(show: false),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  color: AppColors.navy,
-                  barWidth: 3,
-                  dotData: const FlDotData(show: true),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    color: AppColors.navy.withValues(alpha: 0.08),
-                  ),
-                ),
-              ],
-              // Disabled so chart touch does not compete with the parent ListView
-              // vertical scroll (gesture arena freezes / multi-swipe issues).
-              lineTouchData: const LineTouchData(enabled: false),
             ),
           ),
         ),
@@ -1231,27 +1547,15 @@ class _TypeBar extends StatelessWidget {
   }
 }
 
-/// Conversion + insights + alerts from streamed samples (no extra async work).
-class _IntelligenceBlock extends StatelessWidget {
-  const _IntelligenceBlock({
-    required this.global,
-    required this.dealDocs,
-    required this.viewDocs,
-    required this.isAr,
-  });
+/// Strings/helpers for the intelligence block (slivers built in [_DashboardStreamsState]).
+abstract final class _IntelligenceUi {
+  static String fmtConv(double r) => '${(r * 100).toStringAsFixed(2)}%';
 
-  final GlobalAnalyticsSnapshot global;
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> dealDocs;
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> viewDocs;
-  final bool isAr;
-
-  static String _fmtConv(double r) => '${(r * 100).toStringAsFixed(2)}%';
-
-  static bool _isPositiveInsight(String en) {
+  static bool isPositiveInsight(String en) {
     return en.contains('strongly') || en.contains('High conversion');
   }
 
-  static String _sourceLabel(String key, bool isAr) {
+  static String sourceLabel(String key, bool isAr) {
     if (isAr) {
       switch (key) {
         case DealLeadSource.aiChat:
@@ -1284,7 +1588,7 @@ class _IntelligenceBlock extends StatelessWidget {
     }
   }
 
-  static String? _intelAr(String en) {
+  static String? intelAr(String en) {
     const m = {
       'No closed deals yet — metrics will appear after your first approvals.':
           'لا توجد صفقات مغلقة بعد — تظهر المؤشرات بعد أول اعتمادات.',
@@ -1301,253 +1605,142 @@ class _IntelligenceBlock extends StatelessWidget {
     };
     return m[en];
   }
+}
+
+class _IntelligenceConversionTableHeader extends StatelessWidget {
+  const _IntelligenceConversionTableHeader({required this.isAr});
+
+  final bool isAr;
+
+  static const double _hPad = 16;
+  static const double _vPad = 12;
 
   @override
   Widget build(BuildContext context) {
-    final totalDealsGlobal = global.totalDeals.round();
-    final viewN = viewDocs.length;
-    // Headline: global closed deals vs recent view sample (documented in subtitle).
-    final overallConv = AdminIntelligenceService.calculateConversion(
-      viewN,
-      totalDealsGlobal,
-    );
-    final aiPct = global.aiDealShare ?? 0.0;
-
-    final insights = AdminIntelligenceService.generateInsights(
-      totalDeals: totalDealsGlobal,
-      aiPercentage: aiPct,
-      conversionRate: overallConv,
-    );
-
-    final day = AdminIntelligenceService.buildDaySampleMetrics(
-      deals: dealDocs,
-      views: viewDocs,
-    );
-
-    final alerts = AdminIntelligenceService.generateAlerts(
-      todayDeals: day.todayDeals,
-      yesterdayDeals: day.yesterdayDeals,
-      todayAiPercentage: day.todayAiShare,
-      yesterdayAiPercentage: day.yesterdayAiShare,
-      conversionToday: day.conversionTodaySample,
-      conversionYesterday: day.conversionYesterdaySample,
-    );
-
-    final vHist = AdminIntelligenceService.countByLeadSource(viewDocs);
-    final dHist = AdminIntelligenceService.countByLeadSource(dealDocs);
-    final convBySrc = AdminIntelligenceService.calculateConversionBySource(
-      dealDocs,
-      viewDocs,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionTitle(
-          isAr ? 'الذكاء التشغيلي' : 'Operational intelligence',
-          subtitle: isAr
-              ? 'تحويل، رؤى، وتنبيهات (عيّنة مشاهدات + عيّنة صفقات)'
-              : 'Conversion, insights & alerts (views sample + deals sample)',
+    final headerStyle = const TextStyle(fontWeight: FontWeight.bold);
+    final border = BorderSide(color: Colors.grey.shade200);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(14),
+          topRight: Radius.circular(14),
         ),
-        const SizedBox(height: 10),
-
-        // 1) Conversion card
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
+        border: Border(top: border, left: border, right: border),
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(13),
+          topRight: Radius.circular(13),
+        ),
+        child: ColoredBox(
+          color: AppColors.navy.withValues(alpha: 0.06),
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.symmetric(
+              horizontal: _hPad,
+              vertical: _vPad,
+            ),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.filter_alt_outlined, color: AppColors.navy),
-                    const SizedBox(width: 8),
-                    Text(
-                      isAr ? 'معدل التحويل' : 'Conversion rate',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isAr
-                      ? 'الصفقات (analytics) ÷ عيّنة المشاهدات الأخيرة'
-                      : 'Deals (analytics/global) ÷ latest views sample',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  isAr
-                      ? 'معدل التحويل: ${_fmtConv(overallConv)}'
-                      : 'Conversion rate: ${_fmtConv(overallConv)}',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.navy,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isAr
-                      ? 'صفقات: $totalDealsGlobal · مشاهدات (عينة): $viewN'
-                      : 'Deals: $totalDealsGlobal · Views (sample): $viewN',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
-                ),
-                const Divider(height: 20),
-                Text(
-                  isAr
-                      ? 'تحويل العينة حسب المصدر في الجدول أدناه (صفقات/مشاهدات ضمن نفس العيّنتين).'
-                      : 'Per-source table uses the same two samples (deals ÷ views per channel).',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 14),
-
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: Colors.grey.shade200),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            primary: false,
-            physics: const ClampingScrollPhysics(),
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(
-                AppColors.navy.withValues(alpha: 0.06),
-              ),
-              columns: [
-                DataColumn(
-                  label: Text(
+                Expanded(
+                  flex: 3,
+                  child: Text(
                     isAr ? 'المصدر' : 'Source',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: headerStyle,
                   ),
                 ),
-                DataColumn(
-                  numeric: true,
-                  label: Text(
+                Expanded(
+                  flex: 2,
+                  child: Text(
                     isAr ? 'مشاهدات' : 'Views',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: headerStyle,
+                    textAlign: TextAlign.end,
                   ),
                 ),
-                DataColumn(
-                  numeric: true,
-                  label: Text(
+                Expanded(
+                  flex: 2,
+                  child: Text(
                     isAr ? 'صفقات' : 'Deals',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: headerStyle,
+                    textAlign: TextAlign.end,
                   ),
                 ),
-                DataColumn(
-                  numeric: true,
-                  label: Text(
+                Expanded(
+                  flex: 2,
+                  child: Text(
                     isAr ? 'تحويل' : 'Conv.',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: headerStyle,
+                    textAlign: TextAlign.end,
                   ),
                 ),
               ],
-              rows: [
-                for (final s in AdminIntelligenceService.canonicalSources)
-                  DataRow(
-                    cells: [
-                      DataCell(Text(_sourceLabel(s, isAr))),
-                      DataCell(Text('${vHist[s] ?? 0}')),
-                      DataCell(Text('${dHist[s] ?? 0}')),
-                      DataCell(Text(_fmtConv(convBySrc[s] ?? 0))),
-                    ],
-                  ),
-              ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
 
-        const SizedBox(height: 20),
+class _IntelligenceConversionDataRow extends StatelessWidget {
+  const _IntelligenceConversionDataRow({
+    required this.sourceLabel,
+    required this.views,
+    required this.deals,
+    required this.convLabel,
+    required this.isLast,
+  });
 
-        Text(
-          isAr ? 'رؤى' : 'Insights',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppColors.navy,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ...insights.map((en) {
-          final text = isAr ? (_intelAr(en) ?? en) : en;
-          final positive = _isPositiveInsight(en);
-          return Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            elevation: 0,
-            color: positive ? Colors.green.shade50 : Colors.blue.shade50,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: positive ? Colors.green.shade200 : Colors.blue.shade100,
+  final String sourceLabel;
+  final String views;
+  final String deals;
+  final String convLabel;
+  final bool isLast;
+
+  static const double _hPad = 16;
+  static const double _vPad = 12;
+
+  @override
+  Widget build(BuildContext context) {
+    final side = BorderSide(color: Colors.grey.shade200);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(left: side, right: side, bottom: side),
+        borderRadius: isLast
+            ? const BorderRadius.only(
+                bottomLeft: Radius.circular(14),
+                bottomRight: Radius.circular(14),
+              )
+            : null,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: _hPad, vertical: _vPad),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Text(
+                sourceLabel,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            child: ListTile(
-              leading: Icon(
-                positive ? Icons.trending_up : Icons.lightbulb_outline,
-                color: positive ? Colors.green.shade800 : Colors.blue.shade800,
-              ),
-              title: Text('💡 $text'),
+            Expanded(
+              flex: 2,
+              child: Text(views, textAlign: TextAlign.end),
             ),
-          );
-        }),
-
-        const SizedBox(height: 12),
-
-        Text(
-          isAr ? 'تنبيهات' : 'Alerts',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: AppColors.navy,
-          ),
+            Expanded(
+              flex: 2,
+              child: Text(deals, textAlign: TextAlign.end),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(convLabel, textAlign: TextAlign.end),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        if (alerts.isEmpty)
-          Text(
-            isAr ? 'لا تنبيهات حالياً.' : 'No active alerts.',
-            style: TextStyle(color: Colors.grey.shade600),
-          )
-        else
-          ...alerts.map((line) {
-            final text = isAr ? (_intelAr(line) ?? line) : line;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              elevation: 0,
-              color: Colors.red.shade50,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.red.shade200),
-              ),
-              child: ListTile(
-                leading: Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.red.shade800,
-                ),
-                title: Text(
-                  text,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            );
-          }),
-      ],
+      ),
     );
   }
 }
