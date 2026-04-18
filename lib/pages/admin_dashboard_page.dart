@@ -29,6 +29,8 @@ import 'package:aqarai_app/widgets/admin_cashflow_ledger_section.dart';
 import 'package:aqarai_app/widgets/admin_commission_section.dart';
 import 'package:aqarai_app/widgets/admin_outstanding_section.dart';
 import 'package:aqarai_app/widgets/admin_priority_section.dart';
+import 'package:aqarai_app/widgets/admin_booking_analytics_section.dart';
+import 'package:aqarai_app/widgets/admin_system_issues_section.dart';
 import 'package:aqarai_app/widgets/admin_conversion_section.dart';
 import 'package:aqarai_app/widgets/admin_deal_pipeline_section.dart';
 import 'package:aqarai_app/widgets/admin_followup_section.dart';
@@ -629,6 +631,10 @@ class _DashboardStreamsState extends State<_DashboardStreams> {
     box(AdminPrioritySection(dealDocs: docs, fmtKwd: fmtKwd));
     box(const SizedBox(height: 20));
     box(AdminCashflowLedgerSection(fmtKwd: fmtKwd, isAr: isAr));
+    box(const SizedBox(height: 20));
+    box(AdminBookingAnalyticsSection(isAr: isAr, fmtKwd: fmtKwd));
+    box(const SizedBox(height: 20));
+    box(AdminSystemIssuesSection(isAr: isAr));
 
     box(const SizedBox(height: 16));
     box(

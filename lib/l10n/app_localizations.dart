@@ -4373,6 +4373,24 @@ abstract class AppLocalizations {
   /// **'Total pending transfers to owners (net KWD)'**
   String get adminChaletPayoutsTotalPending;
 
+  /// No description provided for @adminChaletPayoutsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No transfers right now'**
+  String get adminChaletPayoutsEmptyTitle;
+
+  /// No description provided for @adminChaletPayoutsEmptySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer requests will appear here when available.'**
+  String get adminChaletPayoutsEmptySubtitle;
+
+  /// No description provided for @adminChaletPayoutsEmptyCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Request transfer'**
+  String get adminChaletPayoutsEmptyCta;
+
   /// No description provided for @adminChaletRefundExecute.
   ///
   /// In en, this message translates to:
@@ -4468,6 +4486,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Processed'**
   String get adminChaletLedgerFinalizedBadge;
+
+  /// No description provided for @chaletTransactionGrossLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Gross booking (KWD)'**
+  String get chaletTransactionGrossLabel;
+
+  /// No description provided for @adminLedgerSourceChalet.
+  ///
+  /// In en, this message translates to:
+  /// **'Chalet (daily)'**
+  String get adminLedgerSourceChalet;
+
+  /// No description provided for @adminLedgerSourceSale.
+  ///
+  /// In en, this message translates to:
+  /// **'Property sale'**
+  String get adminLedgerSourceSale;
+
+  /// No description provided for @adminLedgerSourceRent.
+  ///
+  /// In en, this message translates to:
+  /// **'Property rent'**
+  String get adminLedgerSourceRent;
+
+  /// No description provided for @adminLedgerSourceOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get adminLedgerSourceOther;
+
+  /// No description provided for @adminLedgerUnknownProperty.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown property'**
+  String get adminLedgerUnknownProperty;
+
+  /// No description provided for @adminLedgerUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get adminLedgerUnknown;
+
+  /// No description provided for @adminLedgerIntegrityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check data: amount, source, or reference may be incomplete.'**
+  String get adminLedgerIntegrityHint;
+
+  /// No description provided for @adminLedgerPropertyNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Property'**
+  String get adminLedgerPropertyNameLabel;
+
+  /// No description provided for @adminLedgerPropertyIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing ID'**
+  String get adminLedgerPropertyIdLabel;
+
+  /// No description provided for @adminLedgerBookingRefLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking'**
+  String get adminLedgerBookingRefLabel;
+
+  /// No description provided for @adminLedgerDealRefLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Deal'**
+  String get adminLedgerDealRefLabel;
+
+  /// No description provided for @adminLedgerRecordIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Ledger doc'**
+  String get adminLedgerRecordIdLabel;
+
+  /// No description provided for @adminLedgerFilterSourceAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All sources'**
+  String get adminLedgerFilterSourceAll;
+
+  /// No description provided for @adminLedgerFilterSourceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Source type'**
+  String get adminLedgerFilterSourceLabel;
+
+  /// No description provided for @adminLedgerGroupByLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Group by'**
+  String get adminLedgerGroupByLabel;
+
+  /// No description provided for @adminLedgerGroupNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get adminLedgerGroupNone;
+
+  /// No description provided for @adminLedgerGroupSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get adminLedgerGroupSource;
+
+  /// No description provided for @adminLedgerGroupProperty.
+  ///
+  /// In en, this message translates to:
+  /// **'Property'**
+  String get adminLedgerGroupProperty;
+
+  /// No description provided for @adminLedgerDetailsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Technical details'**
+  String get adminLedgerDetailsSection;
+
+  /// No description provided for @adminLedgerAnalyticsHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get adminLedgerAnalyticsHeading;
+
+  /// No description provided for @adminLedgerAnalyticsRevenueTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform revenue'**
+  String get adminLedgerAnalyticsRevenueTitle;
+
+  /// No description provided for @adminLedgerAnalyticsVolumeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Total volume'**
+  String get adminLedgerAnalyticsVolumeTitle;
+
+  /// No description provided for @adminLedgerAnalyticsTransactionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} transactions'**
+  String adminLedgerAnalyticsTransactionsLabel(int count);
+
+  /// No description provided for @adminLedgerAnalyticsSourceBreakdown.
+  ///
+  /// In en, this message translates to:
+  /// **'By source'**
+  String get adminLedgerAnalyticsSourceBreakdown;
+
+  /// No description provided for @adminLedgerAnalyticsTopProperty.
+  ///
+  /// In en, this message translates to:
+  /// **'Top property'**
+  String get adminLedgerAnalyticsTopProperty;
+
+  /// No description provided for @adminLedgerAnalyticsTopPropertyEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No listing revenue in this month'**
+  String get adminLedgerAnalyticsTopPropertyEmpty;
+
+  /// No description provided for @adminLedgerAnalyticsDataNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Figures use loaded ledger rows (newest first, capped).'**
+  String get adminLedgerAnalyticsDataNote;
+
+  /// No description provided for @adminLedgerAnalyticsLimitWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Data may be incomplete due to limit (showing latest {limit} rows).'**
+  String adminLedgerAnalyticsLimitWarning(int limit);
+
+  /// No description provided for @adminLedgerAnalyticsUndatedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} rows had no date; excluded from totals for the current month.'**
+  String adminLedgerAnalyticsUndatedNote(int count);
 
   /// No description provided for @ownerDashboardTitle.
   ///

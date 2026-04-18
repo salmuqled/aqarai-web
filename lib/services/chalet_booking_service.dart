@@ -12,17 +12,23 @@
 //   "clientId": "clientFirebaseUid",
 //   "startDate": "Timestamp",
 //   "endDate": "Timestamp",
-//   "status": "pending",
+//   "status": "pending_payment",
 //   "pricePerNight": 100.0,
 //   "currency": "KWD",
 //   "totalPrice": 300.0,
 //   "daysCount": 3,
 //   "createdAt": "Timestamp",
+//   "expiresAt": "Timestamp (pending_payment payment window)",
 //   "confirmedAt": null until confirm
 // }
 // ```
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+
+import 'package:aqarai_app/config/chalet_booking_payment_mode.dart';
+import 'package:aqarai_app/models/chalet_booking.dart';
 
 /// Known `reason` strings from `checkBookingAvailability` (extend-only; unknown values are kept as [ChaletBookingAvailabilityResult.reason] for forward compatibility).
 abstract final class ChaletBookingAvailabilityReason {
@@ -71,23 +77,104 @@ class ChaletBookingAvailabilityResult {
   }
 }
 
-/// Result of [ChaletBookingService.createBooking].
+/// Result of [ChaletBookingService.createBooking] and other booking callables.
+///
+/// [totalPrice], [daysCount], and [pricePerNight] are set only when the server
+/// returns them (e.g. [createBooking] success).
 class ChaletBookingResult {
   const ChaletBookingResult._({
     required this.ok,
     this.bookingId,
     this.errorMessage,
+    this.totalPrice,
+    this.daysCount,
+    this.pricePerNight,
   });
 
   final bool ok;
   final String? bookingId;
   final String? errorMessage;
+  final double? totalPrice;
+  final int? daysCount;
+  final double? pricePerNight;
 
   factory ChaletBookingResult.success(String bookingId) =>
       ChaletBookingResult._(ok: true, bookingId: bookingId);
 
+  factory ChaletBookingResult.createSuccess({
+    required String bookingId,
+    required double totalPrice,
+    required int daysCount,
+    required double pricePerNight,
+  }) =>
+      ChaletBookingResult._(
+        ok: true,
+        bookingId: bookingId,
+        totalPrice: totalPrice,
+        daysCount: daysCount,
+        pricePerNight: pricePerNight,
+      );
+
   factory ChaletBookingResult.failure(String message) =>
       ChaletBookingResult._(ok: false, errorMessage: message);
+}
+
+/// MyFatoorah payment session for a `pending_payment` booking (server creates invoice URL).
+class ChaletBookingPaymentSessionResult {
+  const ChaletBookingPaymentSessionResult._({
+    required this.ok,
+    this.paymentUrl,
+    this.paymentId,
+    this.invoiceId,
+    this.errorMessage,
+  });
+
+  final bool ok;
+  final String? paymentUrl;
+  final String? paymentId;
+  final String? invoiceId;
+  final String? errorMessage;
+
+  factory ChaletBookingPaymentSessionResult.success({
+    required String paymentUrl,
+    required String paymentId,
+    String? invoiceId,
+  }) =>
+      ChaletBookingPaymentSessionResult._(
+        ok: true,
+        paymentUrl: paymentUrl,
+        paymentId: paymentId,
+        invoiceId: invoiceId,
+      );
+
+  factory ChaletBookingPaymentSessionResult.failure(String message) =>
+      ChaletBookingPaymentSessionResult._(ok: false, errorMessage: message);
+}
+
+/// Outcome of [ChaletBookingService.submitChaletBookingConfirmationPayment].
+enum ChaletBookingPayNowStatus {
+  fakeSucceeded,
+  myfatoorahSessionStarted,
+  failed,
+}
+
+/// Single entry point for "Pay now" on [BookingConfirmationPage].
+class ChaletBookingConfirmationPayResult {
+  const ChaletBookingConfirmationPayResult._({
+    required this.status,
+    required this.mode,
+    this.errorMessage,
+    this.paymentUrl,
+    this.paymentId,
+    this.invoiceId,
+  });
+
+  final ChaletBookingPayNowStatus status;
+  final PaymentMode mode;
+  final String? errorMessage;
+  final String? paymentUrl;
+  final String? paymentId;
+  final String? invoiceId;
 }
 
 /// Reads/callables for chalet reservations (Firestore rules block direct writes).
@@ -96,6 +183,59 @@ abstract final class ChaletBookingService {
 
   static FirebaseFunctions _functions() =>
       FirebaseFunctions.instanceFor(region: 'us-central1');
+
+  /// Strict availability check before creating a booking.
+  ///
+  /// Checks:
+  /// - Server callable `checkBookingAvailability` (authoritative for `bookings` overlap + bookability).
+  /// - Firestore `blocked_dates` overlap (external/manual blocks, no commission).
+  ///
+  /// Returns `true` only when both checks indicate availability.
+  static Future<bool> checkDateAvailability({
+    required String propertyId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    // 1) Server check (bookings + bookability)
+    final r = await checkBookingAvailability(
+      propertyId: propertyId,
+      startDate: startDate,
+      endDate: endDate,
+    );
+    if (r == null) return false; // strict: unknown => block
+    if (!r.available) return false;
+
+    // 2) External blocks (`blocked_dates`)
+    try {
+      final db = FirebaseFirestore.instance;
+      final reqStart = Timestamp.fromDate(startDate);
+      final reqEnd = Timestamp.fromDate(endDate);
+
+      // Fetch candidate blocks that start before (or on) the requested end.
+      // We filter final overlap in-memory using:
+      // (start <= existingEnd) && (end >= existingStart)
+      final snap = await db
+          .collection('blocked_dates')
+          .where('propertyId', isEqualTo: propertyId)
+          .where('startDate', isLessThanOrEqualTo: reqEnd)
+          .get();
+
+      bool overlaps(Timestamp aStart, Timestamp aEnd) {
+        return reqStart.compareTo(aEnd) <= 0 && reqEnd.compareTo(aStart) >= 0;
+      }
+
+      for (final d in snap.docs) {
+        final m = d.data();
+        final s = m['startDate'];
+        final e = m['endDate'];
+        if (s is! Timestamp || e is! Timestamp) continue;
+        if (overlaps(s, e)) return false;
+      }
+      return true;
+    } catch (_) {
+      return false; // strict: error => block
+    }
+  }
 
   /// Authoritative create. Server runs overlap check inside a transaction
   /// against bookings with `status == "confirmed"` only.
@@ -121,7 +261,33 @@ abstract final class ChaletBookingService {
         if (id.isEmpty) {
           return ChaletBookingResult.failure('Missing booking id');
         }
-        return ChaletBookingResult.success(id);
+        final tpRaw = data['totalPrice'];
+        final dcRaw = data['daysCount'];
+        final ppnRaw = data['pricePerNight'];
+        final totalPrice = tpRaw is num
+            ? tpRaw.toDouble()
+            : double.tryParse(tpRaw?.toString() ?? '');
+        final daysCount = dcRaw is num
+            ? dcRaw.toInt()
+            : int.tryParse(dcRaw?.toString() ?? '');
+        final pricePerNight = ppnRaw is num
+            ? ppnRaw.toDouble()
+            : double.tryParse(ppnRaw?.toString() ?? '');
+        if (totalPrice == null ||
+            !totalPrice.isFinite ||
+            totalPrice <= 0 ||
+            daysCount == null ||
+            daysCount < 1 ||
+            pricePerNight == null ||
+            !pricePerNight.isFinite) {
+          return ChaletBookingResult.failure('Invalid server response');
+        }
+        return ChaletBookingResult.createSuccess(
+          bookingId: id,
+          totalPrice: totalPrice,
+          daysCount: daysCount,
+          pricePerNight: pricePerNight,
+        );
       }
       return ChaletBookingResult.failure(
         data['message']?.toString() ?? 'Booking failed',
@@ -130,6 +296,44 @@ abstract final class ChaletBookingService {
       return ChaletBookingResult.failure(e.message ?? e.code);
     } catch (e) {
       return ChaletBookingResult.failure(e.toString());
+    }
+  }
+
+  /// Server-only busy intervals from `bookings` (milliseconds, no PII). Merge with Firestore `blocked_dates` in the client.
+  /// Returns null on failure; on repeated failures callers may keep the last successful list.
+  static Future<List<ChaletBookedRange>?> getChaletBusyDateRanges({
+    required String propertyId,
+  }) async {
+    try {
+      final callable = _functions().httpsCallable('getChaletBusyDateRanges');
+      final res = await callable.call<dynamic>({
+        'propertyId': propertyId,
+      });
+      final raw = res.data;
+      if (raw is! Map) return null;
+      final list = raw['ranges'];
+      if (list is! List) return null;
+      final out = <ChaletBookedRange>[];
+      for (final item in list) {
+        if (item is! Map) continue;
+        final sm = item['startMs'];
+        final em = item['endMs'];
+        if (sm is! num || em is! num) continue;
+        final start = DateTime.fromMillisecondsSinceEpoch(
+          sm.toInt(),
+          isUtc: true,
+        ).toLocal();
+        final end = DateTime.fromMillisecondsSinceEpoch(
+          em.toInt(),
+          isUtc: true,
+        ).toLocal();
+        out.add(ChaletBookedRange(start: start, end: end));
+      }
+      return out;
+    } on FirebaseFunctionsException {
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -215,6 +419,199 @@ abstract final class ChaletBookingService {
         return ChaletBookingResult.success(bookingId);
       }
       return ChaletBookingResult.failure('Reject failed');
+    } on FirebaseFunctionsException catch (e) {
+      return ChaletBookingResult.failure(e.message ?? e.code);
+    } catch (e) {
+      return ChaletBookingResult.failure(e.toString());
+    }
+  }
+
+  /// Server: InitiatePayment + ExecutePayment → payment URL for this booking.
+  static Future<ChaletBookingPaymentSessionResult> createBookingMyFatoorahPayment({
+    required String bookingId,
+    required String lang,
+  }) async {
+    try {
+      final callable = _functions().httpsCallable('createBookingMyFatoorahPayment');
+      final res = await callable.call<dynamic>({
+        'bookingId': bookingId,
+        'lang': lang,
+      });
+      final raw = res.data;
+      if (raw is! Map) {
+        return ChaletBookingPaymentSessionResult.failure('Invalid server response');
+      }
+      final data = Map<String, dynamic>.from(raw);
+      if (data['ok'] == true) {
+        final url = data['paymentUrl']?.toString().trim() ?? '';
+        final pid = data['paymentId']?.toString().trim() ?? '';
+        if (url.isEmpty || pid.isEmpty) {
+          return ChaletBookingPaymentSessionResult.failure('Missing payment session');
+        }
+        final inv = data['invoiceId']?.toString().trim();
+        return ChaletBookingPaymentSessionResult.success(
+          paymentUrl: url,
+          paymentId: pid,
+          invoiceId: inv != null && inv.isNotEmpty ? inv : null,
+        );
+      }
+      return ChaletBookingPaymentSessionResult.failure(
+        data['message']?.toString() ?? 'Payment session failed',
+      );
+    } on FirebaseFunctionsException catch (e) {
+      return ChaletBookingPaymentSessionResult.failure(e.message ?? e.code);
+    } catch (e) {
+      return ChaletBookingPaymentSessionResult.failure(e.toString());
+    }
+  }
+
+  /// Server: GetPaymentStatus → only if paid, sets booking to `confirmed`.
+  static Future<ChaletBookingResult> verifyBookingMyFatoorahPayment({
+    required String bookingId,
+    required String paymentId,
+  }) async {
+    try {
+      final callable = _functions().httpsCallable('verifyBookingMyFatoorahPayment');
+      final res = await callable.call<dynamic>({
+        'bookingId': bookingId,
+        'paymentId': paymentId,
+      });
+      final raw = res.data;
+      if (raw is! Map) {
+        return ChaletBookingResult.failure('Invalid server response');
+      }
+      if (Map<String, dynamic>.from(raw)['ok'] == true) {
+        return ChaletBookingResult.success(bookingId);
+      }
+      return ChaletBookingResult.failure('Verify failed');
+    } on FirebaseFunctionsException catch (e) {
+      return ChaletBookingResult.failure(e.message ?? e.code);
+    } catch (e) {
+      return ChaletBookingResult.failure(e.toString());
+    }
+  }
+
+  /// DEV/QA: server confirms `pending_payment` as `confirmed` when fake payment is enabled
+  /// (`ALLOW_CHALET_FAKE_PAYMENT=true`). Does not call MyFatoorah.
+  static Future<ChaletBookingResult> simulateChaletBookingPayment({
+    required String bookingId,
+  }) async {
+    try {
+      final callable = _functions().httpsCallable('simulateChaletBookingPayment');
+      final res = await callable.call<dynamic>({'bookingId': bookingId});
+      final raw = res.data;
+      if (raw is! Map) {
+        return ChaletBookingResult.failure('Invalid server response');
+      }
+      if (Map<String, dynamic>.from(raw)['ok'] == true) {
+        return ChaletBookingResult.success(bookingId);
+      }
+      return ChaletBookingResult.failure('Simulate confirm failed');
+    } on FirebaseFunctionsException catch (e) {
+      return ChaletBookingResult.failure(e.message ?? e.code);
+    } catch (e) {
+      return ChaletBookingResult.failure(e.toString());
+    }
+  }
+
+  /// DEV/QA: marks `pending_payment` as paid+confirmed and writes ledger rows (fake gateway).
+  ///
+  /// Requires Functions runtime: `ALLOW_CHALET_FAKE_PAYMENT=true`.
+  static Future<({bool ok, String? paymentId, String? errorMessage})> fakePayChaletBooking({
+    required String bookingId,
+  }) async {
+    try {
+      final callable = _functions().httpsCallable('fakePayChaletBooking');
+      final res = await callable.call<dynamic>({'bookingId': bookingId});
+      final raw = res.data;
+      if (raw is! Map) {
+        return (ok: false, paymentId: null, errorMessage: 'Invalid server response');
+      }
+      final data = Map<String, dynamic>.from(raw);
+      if (data['ok'] == true) {
+        final pid = data['paymentId']?.toString().trim();
+        return (ok: true, paymentId: (pid == null || pid.isEmpty) ? null : pid, errorMessage: null);
+      }
+      return (
+        ok: false,
+        paymentId: null,
+        errorMessage: data['message']?.toString() ?? 'Fake payment failed',
+      );
+    } on FirebaseFunctionsException catch (e) {
+      return (ok: false, paymentId: null, errorMessage: e.message ?? e.code);
+    } catch (e) {
+      return (ok: false, paymentId: null, errorMessage: e.toString());
+    }
+  }
+
+  /// Confirmation screen: routes to fake pay or MyFatoorah session creation per [getPaymentMode].
+  ///
+  /// Does not open a WebView; MyFatoorah path only calls [createBookingMyFatoorahPayment].
+  static Future<ChaletBookingConfirmationPayResult>
+      submitChaletBookingConfirmationPayment({
+    required String bookingId,
+    required String lang,
+  }) async {
+    final mode = getPaymentMode();
+    logChaletPaymentMode(mode);
+
+    switch (mode) {
+      case PaymentMode.fake:
+        final r = await fakePayChaletBooking(bookingId: bookingId);
+        if (r.ok) {
+          return ChaletBookingConfirmationPayResult._(
+            status: ChaletBookingPayNowStatus.fakeSucceeded,
+            mode: mode,
+          );
+        }
+        return ChaletBookingConfirmationPayResult._(
+          status: ChaletBookingPayNowStatus.failed,
+          mode: mode,
+          errorMessage:
+              r.errorMessage ?? 'Fake payment failed',
+        );
+      case PaymentMode.myfatoorah:
+        final session = await createBookingMyFatoorahPayment(
+          bookingId: bookingId,
+          lang: lang,
+        );
+        if (session.ok) {
+          debugPrint(
+            'MYFATOORAH_SESSION_READY bookingId=$bookingId '
+            'paymentId=${session.paymentId}',
+          );
+          return ChaletBookingConfirmationPayResult._(
+            status: ChaletBookingPayNowStatus.myfatoorahSessionStarted,
+            mode: mode,
+            paymentUrl: session.paymentUrl,
+            paymentId: session.paymentId,
+            invoiceId: session.invoiceId,
+          );
+        }
+        return ChaletBookingConfirmationPayResult._(
+          status: ChaletBookingPayNowStatus.failed,
+          mode: mode,
+          errorMessage:
+              session.errorMessage ?? 'Payment session failed',
+        );
+    }
+  }
+
+  /// Server: sets `cancelled` when booking is still `pending_payment`.
+  static Future<ChaletBookingResult> cancelBookingPendingPayment({
+    required String bookingId,
+  }) async {
+    try {
+      final callable = _functions().httpsCallable('cancelBookingPendingPayment');
+      final res = await callable.call<dynamic>({'bookingId': bookingId});
+      final raw = res.data;
+      if (raw is! Map) {
+        return ChaletBookingResult.failure('Invalid server response');
+      }
+      if (Map<String, dynamic>.from(raw)['ok'] == true) {
+        return ChaletBookingResult.success(bookingId);
+      }
+      return ChaletBookingResult.failure('Cancel failed');
     } on FirebaseFunctionsException catch (e) {
       return ChaletBookingResult.failure(e.message ?? e.code);
     } catch (e) {

@@ -4,6 +4,18 @@
 import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { isNormalListingMarketplaceVisible } from "./propertyVisibility";
 
+/** Exclude corrupt, missing, or non-positive prices from ranked agent results. */
+export function listingPricePositiveFinite(prop: Record<string, unknown>): boolean {
+  const raw = prop.price;
+  const n =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? Number(raw)
+        : Number(raw);
+  return typeof n === "number" && Number.isFinite(n) && n > 0;
+}
+
 function toMillis(v: unknown): number | null {
   if (v == null) return null;
   if (typeof v === "number" && !Number.isNaN(v)) return v;
@@ -178,7 +190,8 @@ export async function findSimilarProperties(
   }
   const docs = merged
     .filter((d) => isNormalListingMarketplaceVisible(d.data()))
-    .map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown>));
+    .map((d) => ({ id: d.id, ...d.data() } as Record<string, unknown>))
+    .filter(listingPricePositiveFinite);
 
   const budget = userBudget != null && userBudget > 0 ? userBudget : null;
   let filtered = docs;

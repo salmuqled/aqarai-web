@@ -9,7 +9,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:aqarai_app/widgets/search_box.dart';
 
 import 'package:aqarai_app/pages/add_property_page.dart';
-import 'package:aqarai_app/pages/chalets_page.dart';
 import 'package:aqarai_app/pages/my_ads_page.dart';
 import 'package:aqarai_app/pages/valuation_page.dart';
 import 'package:aqarai_app/pages/wanted_page.dart';
@@ -149,12 +148,10 @@ class _HomePageState extends State<HomePage> {
       showDragHandle: true,
       useSafeArea: true,
       builder: (sheetContext) {
-        return Padding(
+        return ListView(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+          shrinkWrap: true,
+          children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
                 child: Text(
@@ -253,8 +250,7 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
               ),
-            ],
-          ),
+          ],
         );
       },
     );
@@ -564,9 +560,9 @@ class _HomeFloatingBottomNav extends StatelessWidget {
                         children: [
                           Expanded(
                             child: _FloatingNavItem(
-                              icon: Icons.beach_access_outlined,
-                              label: loc.chalets,
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChaletsPage())),
+                              icon: Icons.gavel_outlined,
+                              label: loc.auctionsPageTitle,
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AuctionsPage())),
                             ),
                           ),
                           Expanded(

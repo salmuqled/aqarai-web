@@ -260,6 +260,25 @@ class _AssistantPageState extends State<AssistantPage>
         return;
       }
 
+      if (intent == 'top_demand_chalets') {
+        final composed = await aiBrain.composeMarketingReply(
+          top3Results: const [],
+          isAr: _isAr,
+          userAskedForMore: false,
+          isNearbyFallback: false,
+          requestedAreaLabel: '',
+          rawMessage: text,
+          intent: 'top_demand_chalets',
+          currentFilters: Map<String, dynamic>.from(_currentFilters),
+          last8Messages: lastMessages,
+        );
+        _appendReply(
+          composed.reply,
+          results: composed.results.isNotEmpty ? composed.results : null,
+        );
+        return;
+      }
+
       if (resetFilters) {
         if (!mounted) return;
         setState(() {
@@ -349,6 +368,7 @@ class _AssistantPageState extends State<AssistantPage>
             requestedAreaLabel: '',
             rawMessage: text,
           ))
+              .reply
               .trim();
         }
         if (top3ListRef.isNotEmpty && refReply.isEmpty) {

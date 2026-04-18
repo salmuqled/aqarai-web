@@ -16,12 +16,15 @@ import {
   normalizeKuwaitiIntent,
   resolveTop3ResultReference,
   normalizeTop3MemoryRows,
+  extractAreaFromText,
 } from "./intent_parser";
+import { resolveAreaCodeFromMessage } from "./resolve_area_code_text";
 import { mergeContextForTurn } from "./context_updater";
 import {
   rankPropertyResults,
   computePropertyLabels,
   findSimilarProperties,
+  listingPricePositiveFinite,
   type FindSimilarParams,
 } from "./ranking_engine";
 import { getMarketSignal } from "./insight_engine";
@@ -70,7 +73,7 @@ SEARCH FIRST — ASK LATER:
 
 Output ONLY valid JSON (no markdown, no \`\`\`):
 {
-  "intent": "search_property | greeting | follow_up | general_question | reference_listing",
+  "intent": "search_property | greeting | follow_up | general_question | reference_listing | top_demand_chalets",
   "params_patch": {
     "areaCode": "string|null",
     "type": "house|apartment|villa|chalet|land|office|shop|null",
@@ -90,7 +93,8 @@ Rules:
 - If area can be inferred from message or currentFilters -> is_complete=true, fill params_patch, clarifying_questions=[].
 - If area is missing -> is_complete=false, clarifying_questions=["في أي منطقة تبحث؟"] (one question only).
 - Never invent numbers. Merge with currentFilters on client. reset_filters only for "غير المنطقة" / change area.
-- referenced_property_id must be null unless intent is reference_listing and the id exists in top3LastResults.`;
+- referenced_property_id must be null unless intent is reference_listing and the id exists in top3LastResults.
+- If the user only wants trending / most-booked chalets (e.g. more demand, popular chalets, top chalets), set intent=top_demand_chalets, is_complete=true, clarifying_questions=[], params_patch can stay empty.`;
 
 const NO_RESULTS_AR = `ما لقيت نفس طلبك بالضبط حالياً، لكن أقدر أتابع لك أول ما ينزل عقار مناسب لك 👌
 
@@ -250,7 +254,8 @@ async function computeRankedTop3WithLabels(
   nearbyAreaCodes: string[],
   userBudget: number | null
 ): Promise<Record<string, unknown>[]> {
-  const top3 = rankPropertyResults(properties, {
+  const sane = properties.filter(listingPricePositiveFinite);
+  const top3 = rankPropertyResults(sane, {
     requestedAreaCode,
     nearbyAreaCodes,
     userBudget,
@@ -280,6 +285,503 @@ async function computeRankedTop3WithLabels(
   return top3;
 }
 
+// ---------------------------------------------------------------------------
+// Top-demand chalets (same Firestore rules as getTopDemandChalets; agent-only)
+// ---------------------------------------------------------------------------
+
+const TOP_DEMAND_INTENT = "top_demand_chalets";
+/** Confirmed bookings in rolling window at or above this count get the high-demand line + label. */
+const TOP_DEMAND_HIGH_BOOKINGS = 5;
+/** Fetch extra chalet candidates so post-filters (e.g. budget) still allow ranking + fallback. */
+const TOP_DEMAND_FETCH_POOL = 48;
+const TOP_DEMAND_REPLY_CAP = 10;
+
+function detectTopDemandChaletsIntent(message: string): boolean {
+  const t = (message || "").trim();
+  if (!t) return false;
+  const lower = t.toLowerCase();
+  if (lower.includes("popular chalets") || lower.includes("top chalets")) return true;
+  const n = lower
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+    .replace(/أ|إ|آ/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/\s+/g, " ");
+  return (
+    n.includes("الاكثر طلب") ||
+    n.includes("اكثر الشاليهات حجز") ||
+    n.includes("اكثر الشاليات حجز") ||
+    n.includes("شاليهات الاكثر") ||
+    n.includes("الشاليهات الاكثر طلبا") ||
+    n.includes("الاكثر طلبا من الشاليهات")
+  );
+}
+
+function buildTopDemandPropertyTitle(data: admin.firestore.DocumentData | undefined): string {
+  if (!data) return "";
+  const tit = typeof data.title === "string" ? data.title.trim() : "";
+  if (tit) return tit;
+  const area = String(data.areaAr ?? data.area ?? data.areaEn ?? "").trim();
+  const typ = String(data.type ?? "").trim();
+  if (area && typ) return `${area} • ${typ}`;
+  return area || typ || "";
+}
+
+function isChaletPropertyDoc(data: admin.firestore.DocumentData | undefined): boolean {
+  return String(data?.type ?? "")
+    .trim()
+    .toLowerCase() === "chalet";
+}
+
+interface TopDemandAgentRow {
+  propertyId: string;
+  title: string;
+  price: number;
+  /** `daily` | `monthly` | `yearly` | `full` — from Firestore or inferred. */
+  priceType: string;
+  bookingsCount: number;
+  cardData: Record<string, unknown>;
+}
+
+interface TopDemandUserContext {
+  budget?: number;
+  nights?: number;
+  areaCode?: string;
+}
+
+function readBudgetFromFiltersRecord(f: Record<string, unknown>): number | undefined {
+  const b = f.budget;
+  const n = typeof b === "number" ? b : typeof b === "string" ? Number(String(b).replace(/,/g, "")) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function readAreaCodeFromFiltersRecord(f: Record<string, unknown>): string | undefined {
+  const a = f.areaCode;
+  const s = a != null ? String(a).trim().toLowerCase() : "";
+  return s !== "" ? s : undefined;
+}
+
+function topDemandConversationBlob(rawMessage: string, last8Messages: unknown[]): string {
+  const parts: string[] = [];
+  const r = rawMessage.trim();
+  if (r) parts.push(r);
+  for (const row of last8Messages) {
+    if (!row || typeof row !== "object") continue;
+    const rec = row as Record<string, unknown>;
+    const c = rec.content;
+    if (typeof c === "string" && c.trim()) parts.push(c.trim());
+  }
+  return parts.join("\n");
+}
+
+/** Budget / nights / area from filters + recent messages (compose-side only). */
+function extractTopDemandUserContext(
+  rawMessage: string,
+  last8Messages: unknown[],
+  currentFilters: Record<string, unknown>
+): TopDemandUserContext {
+  const blob = topDemandConversationBlob(rawMessage, last8Messages);
+  const ctxFromFilters = getSearchContextFromFilters(currentFilters);
+  let budget = ctxFromFilters.budget ?? readBudgetFromFiltersRecord(currentFilters);
+  let areaCode = ctxFromFilters.areaCode?.trim().toLowerCase() ?? readAreaCodeFromFiltersRecord(currentFilters);
+
+  if (budget == null) budget = parseBudgetFromConversationBlob(blob);
+  if (!areaCode) {
+    areaCode =
+      resolveAreaCodeFromMessage(blob)?.trim().toLowerCase() ??
+      extractAreaFromText(blob)?.trim().toLowerCase() ??
+      undefined;
+  }
+  const nightsRaw = parseNightsFromConversationBlob(blob);
+  const out: TopDemandUserContext = {};
+  if (budget != null && budget > 0) out.budget = budget;
+  if (areaCode != null && areaCode !== "") out.areaCode = areaCode;
+  if (nightsRaw != null) {
+    const ni = Math.round(Number(nightsRaw));
+    if (Number.isInteger(ni) && ni > 0 && ni <= 30) out.nights = ni;
+  }
+  return out;
+}
+
+function parseBudgetFromConversationBlob(text: string): number | undefined {
+  const t = text.replace(/\s+/g, " ");
+  const mill = /(\d{1,4})\s*(مليون|ملايين)/i.exec(t);
+  if (mill) {
+    const n = Number(mill[1]);
+    if (Number.isFinite(n)) return n * 1_000_000;
+  }
+  const athousand = /(\d{1,4})\s*(ألف|الف|الآلف)\b/i.exec(t);
+  if (athousand) {
+    const n = Number(athousand[1]);
+    if (Number.isFinite(n)) return n * 1000;
+  }
+  const k = /(\d{1,4})\s*k\b/i.exec(t.toLowerCase());
+  if (k) {
+    const n = Number(k[1]);
+    if (Number.isFinite(n)) return n * 1000;
+  }
+  const hudud = /(?:حدود|بحدود|ميزانية|تحت|دون|less than|under|around|~)\s*(\d{2,7})\b/i.exec(t);
+  if (hudud) {
+    const n = Number(hudud[1]);
+    if (Number.isFinite(n)) return n;
+  }
+  const big = /\b(\d{5,7})\b/.exec(t);
+  if (big) {
+    const n = Number(big[1]);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+function parseNightsFromConversationBlob(text: string): number | undefined {
+  const n = normalizeArabicForTopDemand(text);
+  if (/ليلتين|ليليتين/.test(n)) return 2;
+  if (/ليله واحده|ليلة واحدة|ليله وحده/.test(n)) return 1;
+  const m = /(\d{1,2})\s*(ليالي|ليلة|nights?)\b/i.exec(text);
+  if (m) {
+    const v = parseInt(m[1], 10);
+    if (Number.isFinite(v) && v > 0) return Math.min(30, v);
+  }
+  return undefined;
+}
+
+function normalizeArabicForTopDemand(text: string): string {
+  return String(text || "")
+    .replace(/[\u0622\u0623\u0625]/g, "\u0627")
+    .replace(/\u0629/g, "\u0647")
+    .replace(/\u0649/g, "\u064A")
+    .replace(/[\u064B-\u0652\u0670]/g, "");
+}
+
+/** Must match `PropertyPriceType.legacyMonthlyTypes` in Dart. */
+const LEGACY_MONTHLY_TYPES = new Set([
+  "apartment",
+  "house",
+  "villa",
+  "office",
+  "shop",
+  "building",
+]);
+
+function inferPriceTypeMissingFromListingType(propertyType: string): string {
+  const p = String(propertyType ?? "")
+    .trim()
+    .toLowerCase();
+  if (p === "chalet") return "daily";
+  if (LEGACY_MONTHLY_TYPES.has(p)) return "monthly";
+  return "full";
+}
+
+function normalizePriceTypeFromDoc(raw: unknown, propertyType: string): string {
+  const t = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (t === "daily" || t === "monthly" || t === "yearly" || t === "full") return t;
+  return inferPriceTypeMissingFromListingType(propertyType);
+}
+
+/** Valid listing price for nights / budget math (per-item safety). */
+function topDemandRowPriceOk(row: TopDemandAgentRow): boolean {
+  const p = row.price;
+  return typeof p === "number" && Number.isFinite(p) && p > 0;
+}
+
+/** User nights: only when positive integer in context. */
+function topDemandUserNights(ctx: TopDemandUserContext): number | undefined {
+  const n = ctx.nights;
+  if (n == null || !Number.isInteger(n) || n <= 0) return undefined;
+  return n;
+}
+
+/**
+ * Cost vs budget: (price * nights) only when `priceType === 'daily'` and user nights + price OK; else price; invalid price → +∞.
+ */
+function stayCostForBudgetCompare(row: TopDemandAgentRow, ctx: TopDemandUserContext): number {
+  const nights = topDemandUserNights(ctx);
+  const priceOk = topDemandRowPriceOk(row);
+  const pt = (row.priceType ?? "").trim().toLowerCase();
+  if (pt === "daily" && nights != null && priceOk) return row.price * nights;
+  if (priceOk) return row.price;
+  return Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Boost `daily` priceType in ranking only for explicit chalet intent or strong
+ * chalet + stay-length signals — not for generic rent / apartment context.
+ */
+function topDemandPrioritizeDailyPriceType(
+  ctx: TopDemandUserContext,
+  filters: Record<string, unknown>,
+  rawMessage: string,
+  last8: unknown[]
+): boolean {
+  const type = typeof filters.type === "string" ? filters.type.trim().toLowerCase() : "";
+  if (type === "chalet") return true;
+  if (LEGACY_MONTHLY_TYPES.has(type)) return false;
+
+  const blob = topDemandConversationBlob(rawMessage, last8);
+  const k = normalizeKuwaitiIntent(blob);
+  const hasChaletPhrase = k.propertyType === "chalet";
+  const nightsInBlob = parseNightsFromConversationBlob(blob) != null;
+  const nightsCtx = topDemandUserNights(ctx) != null;
+  return hasChaletPhrase && (nightsInBlob || nightsCtx);
+}
+
+/** 1) area match, 2) [optional] daily priceType first, 3) distance |(stay cost) - budget|, 4) bookingsCount (desc). */
+function rankTopDemandRows(
+  rows: TopDemandAgentRow[],
+  ctx: TopDemandUserContext,
+  prioritizeDailyPriceType: boolean
+): TopDemandAgentRow[] {
+  const wantArea = ctx.areaCode?.trim().toLowerCase() ?? "";
+  const budget = ctx.budget;
+  return [...rows].sort((a, b) => {
+    const aAc = String(a.cardData.areaCode ?? "")
+      .trim()
+      .toLowerCase();
+    const bAc = String(b.cardData.areaCode ?? "")
+      .trim()
+      .toLowerCase();
+    const aMatch = wantArea && aAc === wantArea ? 1 : 0;
+    const bMatch = wantArea && bAc === wantArea ? 1 : 0;
+    if (bMatch !== aMatch) return bMatch - aMatch;
+    if (prioritizeDailyPriceType) {
+      const aDaily = (a.priceType ?? "").trim().toLowerCase() === "daily" ? 1 : 0;
+      const bDaily = (b.priceType ?? "").trim().toLowerCase() === "daily" ? 1 : 0;
+      if (bDaily !== aDaily) return bDaily - aDaily;
+    }
+    if (budget != null && budget > 0) {
+      const da = Math.abs(stayCostForBudgetCompare(a, ctx) - budget);
+      const db = Math.abs(stayCostForBudgetCompare(b, ctx) - budget);
+      if (da !== db) return da - db;
+    }
+    return b.bookingsCount - a.bookingsCount;
+  });
+}
+
+/**
+ * Mirrors getTopDemandChalets booking aggregation + chalet-only property filter
+ * (callable file is unchanged; logic kept in sync here for compose).
+ */
+async function fetchTopDemandChaletsForAgent(): Promise<TopDemandAgentRow[]> {
+  const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const snap = await db
+    .collection("bookings")
+    .where("status", "==", "confirmed")
+    .where("confirmedAt", ">=", cutoff)
+    .get();
+
+  const counts = new Map<string, number>();
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const pid = typeof d.propertyId === "string" ? d.propertyId.trim() : "";
+    if (!pid) continue;
+    counts.set(pid, (counts.get(pid) ?? 0) + 1);
+  }
+
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const out: TopDemandAgentRow[] = [];
+
+  for (const [propertyId, bookingsCount] of sorted) {
+    if (out.length >= TOP_DEMAND_FETCH_POOL) break;
+    const pSnap = await db.collection("properties").doc(propertyId).get();
+    if (!pSnap.exists) continue;
+    const pd = pSnap.data()!;
+    if (!isChaletPropertyDoc(pd)) continue;
+
+    const priceRaw = pd.price;
+    const priceNum =
+      typeof priceRaw === "number"
+        ? priceRaw
+        : typeof priceRaw === "string"
+          ? Number(priceRaw)
+          : Number(priceRaw);
+    const price = Number.isFinite(priceNum) ? priceNum : 0;
+    if (!(typeof price === "number" && Number.isFinite(price) && price > 0)) {
+      continue;
+    }
+    const priceType = normalizePriceTypeFromDoc(pd.priceType, String(pd.type ?? ""));
+
+    const cardData: Record<string, unknown> = {
+      id: propertyId,
+      price,
+      priceType,
+      type: pd.type != null ? String(pd.type) : "chalet",
+      areaAr: pd.areaAr ?? "",
+      areaEn: pd.areaEn ?? "",
+      areaCode: pd.areaCode ?? "",
+      title: typeof pd.title === "string" ? pd.title : "",
+      images: Array.isArray(pd.images) ? pd.images : [],
+      coverUrl: pd.coverUrl ?? "",
+      thumbnails: Array.isArray(pd.thumbnails) ? pd.thumbnails : [],
+      size: pd.size,
+    };
+
+    out.push({
+      propertyId,
+      title: buildTopDemandPropertyTitle(pd),
+      price,
+      priceType,
+      bookingsCount,
+      cardData,
+    });
+  }
+
+  return out;
+}
+
+async function buildTopDemandChaletsCompose(
+  locale: "ar" | "en",
+  opts?: {
+    currentFilters?: Record<string, unknown>;
+    last8Messages?: unknown[];
+    rawMessage?: string;
+  }
+): Promise<{
+  reply: string;
+  results: Record<string, unknown>[];
+}> {
+  const rows = (await fetchTopDemandChaletsForAgent()).filter((r) => topDemandRowPriceOk(r));
+  if (rows.length === 0) {
+    return {
+      reply:
+        locale === "ar"
+          ? "حالياً لا توجد بيانات كافية، جرب لاحقاً"
+          : "Not enough data right now — try again later.",
+      results: [],
+    };
+  }
+
+  const currentFilters =
+    opts?.currentFilters && typeof opts.currentFilters === "object"
+      ? (opts.currentFilters as Record<string, unknown>)
+      : {};
+  const last8 = Array.isArray(opts?.last8Messages) ? opts!.last8Messages! : [];
+  const rawMessage = typeof opts?.rawMessage === "string" ? opts.rawMessage.trim() : "";
+
+  const userCtx = extractTopDemandUserContext(rawMessage, last8, currentFilters);
+  const hasBudgetCtx = userCtx.budget != null && userCtx.budget > 0;
+  const hasAreaCtx = userCtx.areaCode != null && userCtx.areaCode !== "";
+  const hasPersonalization = hasBudgetCtx || hasAreaCtx;
+
+  const budgetMax = hasBudgetCtx ? userCtx.budget! : null;
+  let usedBudgetFallback = false;
+  let working = [...rows];
+  if (budgetMax != null) {
+    const within = working.filter((r) => stayCostForBudgetCompare(r, userCtx) <= budgetMax);
+    if (within.length > 0) {
+      working = within;
+    } else {
+      usedBudgetFallback = true;
+    }
+  }
+
+  const prioritizeDaily = topDemandPrioritizeDailyPriceType(
+    userCtx,
+    currentFilters,
+    rawMessage,
+    last8
+  );
+  const ranked = rankTopDemandRows(working, userCtx, prioritizeDaily);
+  const displayRows = ranked.slice(0, TOP_DEMAND_REPLY_CAP);
+
+  const lines: string[] = [];
+  if (usedBudgetFallback) {
+    if (locale === "ar") {
+      lines.push("ما لقيت شاليهات بنفس المواصفات،", "لكن هذه أقرب الخيارات 👇", "");
+    } else {
+      lines.push(
+        "I couldn't find chalets that match those specs exactly,",
+        "but here are the closest options 👇",
+        ""
+      );
+    }
+  } else if (hasPersonalization) {
+    if (locale === "ar") {
+      lines.push("هذه أكثر الشاليهات طلباً المناسبة لك 👇", "");
+    } else {
+      lines.push("Here are the most in-demand chalets that fit what you asked for 👇", "");
+    }
+  } else {
+    if (locale === "ar") {
+      lines.push("هذه أكثر الشاليهات طلباً حالياً 👇", "");
+    } else {
+      lines.push("Here are the chalets with the most bookings right now 👇", "");
+    }
+  }
+
+  const wantArea = userCtx.areaCode?.trim().toLowerCase() ?? "";
+  const userNights = topDemandUserNights(userCtx);
+
+  for (let i = 0; i < displayRows.length; i++) {
+    const r = displayRows[i];
+    const idx = i + 1;
+    const high = r.bookingsCount >= TOP_DEMAND_HIGH_BOOKINGS;
+    const propArea = String(r.cardData.areaCode ?? "")
+      .trim()
+      .toLowerCase();
+    const areaMatched = Boolean(wantArea && propArea === wantArea);
+    const stayCost = stayCostForBudgetCompare(r, userCtx);
+    const withinBudget =
+      Boolean(
+        budgetMax != null &&
+          Number.isFinite(stayCost) &&
+          stayCost !== Number.POSITIVE_INFINITY &&
+          stayCost <= budgetMax
+      ) && !usedBudgetFallback;
+    const showNightsBreakdown =
+      userNights != null &&
+      topDemandRowPriceOk(r) &&
+      (r.priceType ?? "").trim().toLowerCase() === "daily" &&
+      Number.isFinite(r.price * userNights);
+    const budgetReasonAr = withinBudget
+      ? showNightsBreakdown
+        ? "إجمالي السعر ضمن ميزانيتك"
+        : "ضمن ميزانيتك"
+      : null;
+    const budgetReasonEn = withinBudget
+      ? showNightsBreakdown
+        ? "Total for your stay is within your budget"
+        : "Within your budget"
+      : null;
+
+    if (locale === "ar") {
+      lines.push(
+        `${idx}) ${r.title}`,
+        `السعر: ${r.price} د.ك — عدد الحجوزات المؤكدة (آخر ٧ أيام): ${r.bookingsCount}`
+      );
+      if (showNightsBreakdown) {
+        const total = r.price * userNights!;
+        lines.push(`${r.price} × ${userNights} ليالي = ${total} د.ك`);
+      }
+      if (budgetReasonAr != null) lines.push(budgetReasonAr);
+      if (areaMatched) lines.push("قريب من المنطقة المطلوبة");
+      if (high) lines.push("🔥 عليه طلب عالي");
+      lines.push("عرض الشاليه", "");
+    } else {
+      lines.push(
+        `${idx}) ${r.title}`,
+        `Price: KWD ${r.price} — confirmed bookings (last 7 days): ${r.bookingsCount}`
+      );
+      if (showNightsBreakdown) {
+        const total = r.price * userNights!;
+        lines.push(`${r.price} × ${userNights} nights = KWD ${total}`);
+      }
+      if (budgetReasonEn != null) lines.push(budgetReasonEn);
+      if (areaMatched) lines.push("Near your preferred area");
+      if (high) lines.push("🔥 High demand");
+      lines.push("View chalet", "");
+    }
+  }
+
+  const reply = lines.join("\n").trimEnd();
+  const results = displayRows.map((r) => {
+    const labels = r.bookingsCount >= TOP_DEMAND_HIGH_BOOKINGS ? ["high_demand"] : [];
+    return { ...r.cardData, labels } as Record<string, unknown>;
+  });
+  return { reply, results };
+}
+
 async function composeAgentReply(
   data: Record<string, unknown>
 ): Promise<{ reply: string; results?: Record<string, unknown>[] }> {
@@ -294,6 +796,41 @@ async function composeAgentReply(
       : typeof data.message === "string"
         ? data.message.trim()
         : "";
+  const intentFromClient =
+    typeof data.intent === "string" ? data.intent.trim().toLowerCase() : "";
+  const topDemandCompose =
+    intentFromClient === TOP_DEMAND_INTENT || detectTopDemandChaletsIntent(rawMessage);
+
+  if (topDemandCompose) {
+    try {
+      const currentFilters =
+        data.currentFilters && typeof data.currentFilters === "object"
+          ? (data.currentFilters as Record<string, unknown>)
+          : {};
+      const last8Messages = Array.isArray(data.last8Messages) ? data.last8Messages : [];
+      const pack = await buildTopDemandChaletsCompose(locale, {
+        currentFilters,
+        last8Messages,
+        rawMessage,
+      });
+      return { reply: pack.reply, results: pack.results };
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          tag: "TOP_DEMAND_COMPOSE_ERROR",
+          message: err instanceof Error ? err.message : String(err),
+        })
+      );
+      return {
+        reply:
+          locale === "ar"
+            ? "حالياً لا توجد بيانات كافية، جرب لاحقاً"
+            : "Not enough data right now — try again later.",
+        results: [],
+      };
+    }
+  }
+
   const areaCode =
     typeof data.areaCode === "string"
       ? data.areaCode.trim()
@@ -515,6 +1052,16 @@ export const aqaraiAgentAnalyze = onCall(
       };
     }
 
+    if (detectTopDemandChaletsIntent(rawMessage)) {
+      return {
+        intent: TOP_DEMAND_INTENT,
+        params_patch: {},
+        reset_filters: false,
+        is_complete: true,
+        clarifying_questions: [],
+      };
+    }
+
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return {
@@ -593,6 +1140,11 @@ export const aqaraiAgentAnalyze = onCall(
       }
       if (referencedPropertyId) {
         intent = "reference_listing";
+        isCompleteFinal = true;
+        clarifyingQuestionsFinal = [];
+      }
+
+      if (!referencedPropertyId && intent === TOP_DEMAND_INTENT) {
         isCompleteFinal = true;
         clarifyingQuestionsFinal = [];
       }

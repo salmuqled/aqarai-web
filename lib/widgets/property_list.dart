@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,7 @@ import 'package:aqarai_app/data/kuwait_areas.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/utils/property_area_display.dart';
 import 'package:aqarai_app/utils/property_listing_cover.dart';
+import 'package:aqarai_app/utils/property_price_type.dart';
 import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 
 bool isValidAreaLabel(String? value) {
@@ -43,6 +45,9 @@ class PropertyList extends StatelessWidget {
   /// Passed through to property details (search results list).
   final String leadSource;
 
+  /// Optional: when set with daily [priceType], show total (price × nights) under list price.
+  final int? nightsForTotalHint;
+
   String _serviceTypeLabel(AppLocalizations loc, String raw) {
     switch (raw.toLowerCase().trim()) {
       case 'sale':
@@ -73,6 +78,7 @@ class PropertyList extends StatelessWidget {
     this.typeFilter,
     this.serviceType,
     this.leadSource = DealLeadSource.search,
+    this.nightsForTotalHint,
   });
 
   @override
@@ -87,12 +93,23 @@ class PropertyList extends StatelessWidget {
     final bool chaletMode =
         governorateCode == 'chalet' || (typeFilter != null && typeFilter == 'chalet');
 
+    if (kDebugMode) {
+      debugPrint(
+        '[PropertyList] serviceType=$serviceType typeFilter=$typeFilter '
+        'governorateCode=$governorateCode areaCode=$areaCode',
+      );
+      debugPrint(
+        chaletMode
+            ? '[PropertyList] QUERY MODE = CHALET'
+            : '[PropertyList] QUERY MODE = NORMAL',
+      );
+    }
+
     Query query = FirebaseFirestore.instance.collection('properties');
 
     if (chaletMode) {
       query = query
           .where('approved', isEqualTo: true)
-          .where('listingCategory', isEqualTo: ListingCategory.chalet)
           .where('hiddenFromPublic', isEqualTo: false);
       if (serviceType != null && serviceType!.isNotEmpty) {
         query = query.where('serviceType', isEqualTo: serviceType);
@@ -104,6 +121,8 @@ class PropertyList extends StatelessWidget {
           : null;
       if (typeForQuery != null) {
         query = query.where('type', isEqualTo: typeForQuery);
+      } else {
+        query = query.where('type', isEqualTo: 'chalet');
       }
       if (governorateCode.isNotEmpty && governorateCode != 'chalet') {
         query = query.where('governorateCode', isEqualTo: governorateCode);
@@ -153,6 +172,21 @@ class PropertyList extends StatelessWidget {
                 ),
               ),
             );
+          }
+
+          if (kDebugMode && snapshot.hasData && snapshot.data != null) {
+            final snapDocs = snapshot.data!.docs;
+            debugPrint('[PropertyList snapshot] docCount=${snapDocs.length}');
+            for (final doc in snapDocs) {
+              final d = doc.data() as Map<String, dynamic>;
+              final visible = listingDataIsPubliclyDiscoverable(d);
+              debugPrint(
+                '[PropertyList snapshot] id=${doc.id} approved=${d['approved']} '
+                'serviceType=${d['serviceType']} type=${d['type']} '
+                'listingCategory=${d['listingCategory']} governorateCode=${d['governorateCode']} '
+                'areaCode=${d['areaCode']} | VISIBLE=$visible',
+              );
+            }
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -239,6 +273,16 @@ class PropertyList extends StatelessWidget {
               final priceText = NumberFormat.decimalPattern(
                 locale,
               ).format(price);
+              final pt = PropertyPriceType.infer(
+                stored: data['priceType']?.toString(),
+                listingType: typeEn,
+              );
+              final priceUnit = PropertyPriceType.suffixForLocale(
+                pt,
+                isArabic: locale.startsWith('ar'),
+              );
+              final num? priceNum = price is num ? price : num.tryParse('$price');
+              final nh = nightsForTotalHint;
               const spacing = 8.0;
 
               final isRtl = Directionality.of(context) == ui.TextDirection.rtl;
@@ -315,7 +359,7 @@ class PropertyList extends StatelessWidget {
                               ),
                               const SizedBox(height: spacing),
                               Text(
-                                'KWD $priceText',
+                                'KWD $priceText$priceUnit',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -323,6 +367,24 @@ class PropertyList extends StatelessWidget {
                                   height: 1.2,
                                 ),
                               ),
+                              if (pt == 'daily' &&
+                                  nh != null &&
+                                  nh > 0 &&
+                                  priceNum != null &&
+                                  priceNum > 0) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  locale == 'ar'
+                                      ? 'الإجمالي: ${NumberFormat.decimalPattern(locale).format(priceNum * nh)} د.ك'
+                                      : 'Total: ${NumberFormat.decimalPattern(locale).format(priceNum * nh)} KWD',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey[700],
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: spacing),
                               Text(
                                 serviceLabel,

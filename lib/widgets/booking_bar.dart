@@ -8,7 +8,7 @@ import 'package:aqarai_app/widgets/chalet_booking_widget.dart';
 /// Full-screen sticky booking bar (Airbnb-style) meant for `Scaffold.bottomNavigationBar`.
 ///
 /// Rebuilds are scoped with [ValueListenableBuilder] / [ListenableBuilder] so the
-/// shell (Material, padding, per-night label) is not rebuilt on every calendar tick.
+/// shell (Material, padding) is not rebuilt on every calendar tick.
 class BookingBar extends StatelessWidget {
   const BookingBar({
     super.key,
@@ -26,7 +26,11 @@ class BookingBar extends StatelessWidget {
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
     final fmt = NumberFormat.decimalPattern(isAr ? 'ar' : 'en');
     final cs = Theme.of(context).colorScheme;
-    final perNightLabel = '${fmt.format(pricePerNight)} $currencyCode';
+    final currencyLabel = isAr ? 'د.ك' : currencyCode;
+    final perNightLabel = '${fmt.format(pricePerNight)} $currencyLabel';
+
+    String? breakdownForNights(int nights) =>
+        nights > 0 ? '$perNightLabel × $nights' : null;
 
     return Material(
       elevation: 18,
@@ -47,44 +51,68 @@ class BookingBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _BarMetric(
-                      label: isAr ? 'لليلة' : 'Per night',
-                      value: perNightLabel,
-                      align: TextAlign.start,
-                    ),
-                  ),
-                  Expanded(
-                    child: ValueListenableBuilder<int>(
-                      valueListenable: controller.nightsVN,
-                      builder: (context, nights, _) {
-                        return _AnimatedBarMetric(
-                          label: isAr ? 'ليالي' : 'Nights',
-                          value: '$nights',
-                          valueKey: nights,
-                          align: TextAlign.center,
-                        );
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: ValueListenableBuilder<double>(
-                      valueListenable: controller.totalPriceVN,
-                      builder: (context, total, _) {
-                        final totalLabel = '${fmt.format(total)} $currencyCode';
-                        return _AnimatedBarMetric(
-                          label: isAr ? 'الإجمالي' : 'Total',
-                          value: totalLabel,
-                          valueKey: totalLabel,
-                          align: TextAlign.end,
-                        );
-                      },
-                    ),
-                  ),
-                ],
+              ValueListenableBuilder<int>(
+                valueListenable: controller.nightsVN,
+                builder: (context, nights, _) {
+                  return ValueListenableBuilder<double>(
+                    valueListenable: controller.totalPriceVN,
+                    builder: (context, total, _) {
+                      return ValueListenableBuilder<String?>(
+                        valueListenable: controller.barBreakdownLineVN,
+                        builder: (context, breakdownOverride, _) {
+                      final totalLabel = '${fmt.format(total)} $currencyLabel';
+                      final breakdown =
+                          breakdownOverride ?? breakdownForNights(nights);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _AnimatedBarMetric(
+                                  label: isAr ? 'عدد الأيام' : 'Nights',
+                                  value: '$nights',
+                                  valueKey: nights,
+                                  align: TextAlign.start,
+                                ),
+                              ),
+                              Expanded(
+                                child: _AnimatedBarMetric(
+                                  label: isAr
+                                      ? 'السعر الإجمالي'
+                                      : 'Total price',
+                                  value: totalLabel,
+                                  valueKey: totalLabel,
+                                  align: TextAlign.end,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (breakdown != null && breakdown.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              breakdown,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: cs.onSurface.withValues(
+                                      alpha: 0.62,
+                                    ),
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.3,
+                                  ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ],
+                      );
+                        },
+                      );
+                    },
+                  );
+                },
               ),
               ValueListenableBuilder<bool>(
                 valueListenable: controller.isProvisionalVN,
@@ -117,6 +145,7 @@ class BookingBar extends StatelessWidget {
                     builder: (context, _) {
                       final canBook = controller.canBookVN.value;
                       final submitting = controller.submittingVN.value;
+                      final hasSelectedDates = controller.nightsVN.value > 0;
                       final canAct = loggedIn && canBook && !submitting;
 
                       Widget label;
@@ -137,9 +166,25 @@ class BookingBar extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                         );
-                      } else {
+                      } else if (!hasSelectedDates) {
                         label = Text(
-                          isAr ? 'احجز الآن' : 'Book now',
+                          'اختر التواريخ للحجز',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        );
+                      } else {
+                        final total = controller.totalPriceVN.value;
+                        final totalLabel = '${fmt.format(total)} $currencyLabel';
+                        final omitPrice =
+                            controller.nightsVN.value > 0 && total <= 0;
+                        label = Text(
+                          omitPrice
+                              ? (isAr ? 'احجز الآن' : 'Book now')
+                              : (isAr
+                                  ? 'احجز الآن - $totalLabel'
+                                  : 'Book now - $totalLabel'),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -158,7 +203,9 @@ class BookingBar extends StatelessWidget {
                                         ),
                                       );
                                     }
-                                  : (canBook ? controller.submit : null)),
+                                  : (hasSelectedDates && canBook
+                                        ? controller.submit
+                                        : null)),
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
@@ -176,52 +223,6 @@ class BookingBar extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _BarMetric extends StatelessWidget {
-  const _BarMetric({
-    required this.label,
-    required this.value,
-    required this.align,
-  });
-
-  final String label;
-  final String value;
-  final TextAlign align;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final labelStyle = theme.textTheme.labelSmall?.copyWith(
-      color: cs.onSurface.withValues(alpha: 0.55),
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.2,
-    );
-    final valueStyle = theme.textTheme.titleSmall?.copyWith(
-      fontWeight: FontWeight.w800,
-      letterSpacing: -0.2,
-    );
-
-    return Column(
-      crossAxisAlignment: align == TextAlign.end
-          ? CrossAxisAlignment.end
-          : align == TextAlign.center
-          ? CrossAxisAlignment.center
-          : CrossAxisAlignment.start,
-      children: [
-        Text(label, style: labelStyle, textAlign: align),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: valueStyle?.copyWith(
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-          textAlign: align,
-        ),
-      ],
     );
   }
 }

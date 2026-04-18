@@ -19,6 +19,7 @@ import {
   resolveInvoiceSmtp,
 } from "./invoice/invoiceSmtpRuntime";
 import { sendInvoiceEmails } from "./invoice/sendInvoiceEmail";
+import { writeExceptionLog } from "./exceptionLogs";
 
 const invoiceSmtpPass = defineSecret("INVOICE_SMTP_PASS");
 const invoiceSmtpHost = defineString("INVOICE_SMTP_HOST", {
@@ -187,6 +188,12 @@ export const onCompanyPaymentConfirmedInvoice = onDocumentWritten(
         paymentId,
         err
       );
+      void writeExceptionLog({
+        type: "invoice_pdf_failed",
+        relatedId: paymentId,
+        message: `company payment: ${str((err as Error)?.message) || "pdf_or_email_failed"}`,
+        severity: "high",
+      });
       await invoiceRef.update({
         pdfError: str((err as Error)?.message) || "pdf_or_email_failed",
         pdfErrorAt: FieldValue.serverTimestamp(),

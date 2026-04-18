@@ -77,7 +77,11 @@ async function main() {
           skipped++;
           continue;
         }
-        await createTransactionFromConfirmedBooking(bookingId);
+        const r = await createTransactionFromConfirmedBooking(bookingId);
+        if (!r.ok) {
+          failures.push({ bookingId, error: r.reason || "ledger_failed" });
+          continue;
+        }
         const check = await db.collection("transactions").doc(bookingId).get();
         if (check.exists) created++;
         else skipped++;

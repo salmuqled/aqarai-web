@@ -1479,6 +1479,9 @@
   "adminChaletPayoutsFilterPending": "Pending payouts",
   "adminChaletPayoutsFilterAll": "All records",
   "adminChaletPayoutsTotalPending": "Total pending transfers to owners (net KWD)",
+  "adminChaletPayoutsEmptyTitle": "No transfers right now",
+  "adminChaletPayoutsEmptySubtitle": "Transfer requests will appear here when available.",
+  "adminChaletPayoutsEmptyCta": "Request transfer",
   "adminChaletRefundExecute": "Record guest refund",
   "adminChaletRefundConfirmTitle": "Record refund on ledger?",
   "adminChaletRefundConfirmBody": "This updates the financial record only (no booking change). Refund amount follows server cancellation policy.",
@@ -1495,6 +1498,51 @@
   "adminChaletLedgerOwnerUnknown": "Unknown owner",
   "adminChaletLedgerHasIssueBadge": "Transaction has an issue",
   "adminChaletLedgerFinalizedBadge": "Processed",
+  "chaletTransactionGrossLabel": "Gross booking (KWD)",
+  "adminLedgerSourceChalet": "Chalet (daily)",
+  "adminLedgerSourceSale": "Property sale",
+  "adminLedgerSourceRent": "Property rent",
+  "adminLedgerSourceOther": "Other",
+  "adminLedgerUnknownProperty": "Unknown property",
+  "adminLedgerUnknown": "Unknown",
+  "adminLedgerIntegrityHint": "Check data: amount, source, or reference may be incomplete.",
+  "adminLedgerPropertyNameLabel": "Property",
+  "adminLedgerPropertyIdLabel": "Listing ID",
+  "adminLedgerBookingRefLabel": "Booking",
+  "adminLedgerDealRefLabel": "Deal",
+  "adminLedgerRecordIdLabel": "Ledger doc",
+  "adminLedgerFilterSourceAll": "All sources",
+  "adminLedgerFilterSourceLabel": "Source type",
+  "adminLedgerGroupByLabel": "Group by",
+  "adminLedgerGroupNone": "None",
+  "adminLedgerGroupSource": "Source",
+  "adminLedgerGroupProperty": "Property",
+  "adminLedgerDetailsSection": "Technical details",
+  "adminLedgerAnalyticsHeading": "This month",
+  "adminLedgerAnalyticsRevenueTitle": "Platform revenue",
+  "adminLedgerAnalyticsVolumeTitle": "Total volume",
+  "adminLedgerAnalyticsTransactionsLabel": "{count} transactions",
+  "@adminLedgerAnalyticsTransactionsLabel": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "adminLedgerAnalyticsSourceBreakdown": "By source",
+  "adminLedgerAnalyticsTopProperty": "Top property",
+  "adminLedgerAnalyticsTopPropertyEmpty": "No listing revenue in this month",
+  "adminLedgerAnalyticsDataNote": "Figures use loaded ledger rows (newest first, capped).",
+  "adminLedgerAnalyticsLimitWarning": "Data may be incomplete due to limit (showing latest {limit} rows).",
+  "@adminLedgerAnalyticsLimitWarning": {
+    "placeholders": {
+      "limit": {"type": "int"}
+    }
+  },
+  "adminLedgerAnalyticsUndatedNote": "{count} rows had no date; excluded from totals for the current month.",
+  "@adminLedgerAnalyticsUndatedNote": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "ownerDashboardTitle": "Chalet dashboard",
   "ownerDashboardSubtitle": "Revenue, occupancy, and booking insights",
   "ownerDashboardMetricPaid": "Paid to you",

@@ -2220,6 +2220,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminChaletPayoutsTotalPending => 'Total pending transfers to owners (net KWD)';
 
   @override
+  String get adminChaletPayoutsEmptyTitle => 'No transfers right now';
+
+  @override
+  String get adminChaletPayoutsEmptySubtitle => 'Transfer requests will appear here when available.';
+
+  @override
+  String get adminChaletPayoutsEmptyCta => 'Request transfer';
+
+  @override
   String get adminChaletRefundExecute => 'Record guest refund';
 
   @override
@@ -2266,6 +2275,102 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminChaletLedgerFinalizedBadge => 'Processed';
+
+  @override
+  String get chaletTransactionGrossLabel => 'Gross booking (KWD)';
+
+  @override
+  String get adminLedgerSourceChalet => 'Chalet (daily)';
+
+  @override
+  String get adminLedgerSourceSale => 'Property sale';
+
+  @override
+  String get adminLedgerSourceRent => 'Property rent';
+
+  @override
+  String get adminLedgerSourceOther => 'Other';
+
+  @override
+  String get adminLedgerUnknownProperty => 'Unknown property';
+
+  @override
+  String get adminLedgerUnknown => 'Unknown';
+
+  @override
+  String get adminLedgerIntegrityHint => 'Check data: amount, source, or reference may be incomplete.';
+
+  @override
+  String get adminLedgerPropertyNameLabel => 'Property';
+
+  @override
+  String get adminLedgerPropertyIdLabel => 'Listing ID';
+
+  @override
+  String get adminLedgerBookingRefLabel => 'Booking';
+
+  @override
+  String get adminLedgerDealRefLabel => 'Deal';
+
+  @override
+  String get adminLedgerRecordIdLabel => 'Ledger doc';
+
+  @override
+  String get adminLedgerFilterSourceAll => 'All sources';
+
+  @override
+  String get adminLedgerFilterSourceLabel => 'Source type';
+
+  @override
+  String get adminLedgerGroupByLabel => 'Group by';
+
+  @override
+  String get adminLedgerGroupNone => 'None';
+
+  @override
+  String get adminLedgerGroupSource => 'Source';
+
+  @override
+  String get adminLedgerGroupProperty => 'Property';
+
+  @override
+  String get adminLedgerDetailsSection => 'Technical details';
+
+  @override
+  String get adminLedgerAnalyticsHeading => 'This month';
+
+  @override
+  String get adminLedgerAnalyticsRevenueTitle => 'Platform revenue';
+
+  @override
+  String get adminLedgerAnalyticsVolumeTitle => 'Total volume';
+
+  @override
+  String adminLedgerAnalyticsTransactionsLabel(int count) {
+    return '$count transactions';
+  }
+
+  @override
+  String get adminLedgerAnalyticsSourceBreakdown => 'By source';
+
+  @override
+  String get adminLedgerAnalyticsTopProperty => 'Top property';
+
+  @override
+  String get adminLedgerAnalyticsTopPropertyEmpty => 'No listing revenue in this month';
+
+  @override
+  String get adminLedgerAnalyticsDataNote => 'Figures use loaded ledger rows (newest first, capped).';
+
+  @override
+  String adminLedgerAnalyticsLimitWarning(int limit) {
+    return 'Data may be incomplete due to limit (showing latest $limit rows).';
+  }
+
+  @override
+  String adminLedgerAnalyticsUndatedNote(int count) {
+    return '$count rows had no date; excluded from totals for the current month.';
+  }
 
   @override
   String get ownerDashboardTitle => 'Chalet dashboard';

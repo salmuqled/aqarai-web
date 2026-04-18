@@ -63,6 +63,14 @@ class AgentRankAndComposeResult {
   AgentRankAndComposeResult({required this.top3, required this.reply});
 }
 
+/// Reply text plus optional listing payloads from `aqaraiAgentCompose` (e.g. top-demand chalets).
+class ComposeMarketingOutput {
+  final String reply;
+  final List<Map<String, dynamic>> results;
+
+  const ComposeMarketingOutput({required this.reply, this.results = const []});
+}
+
 /// Service that calls backend (GPT-4o mini) for intent analysis and marketing reply.
 ///
 /// Backend uses OpenAI gpt-4o-mini with a Kuwaiti real estate expert system prompt.
@@ -291,13 +299,18 @@ class AiBrainService {
   /// When [userAskedForMore] is true and there is only one result, backend returns
   /// a message offering to search nearby areas instead of repeating the property.
   /// [rawMessage] is the user's last message, used for buyer intent (investment vs residential).
-  Future<String> composeMarketingReply({
+  /// When [intent] is `top_demand_chalets`, the backend loads trending chalets and returns [ComposeMarketingOutput.results].
+  /// Pass [currentFilters] and [last8Messages] for personalized ranking (budget / area from chat).
+  Future<ComposeMarketingOutput> composeMarketingReply({
     required List<Map<String, dynamic>> top3Results,
     bool isAr = true,
     bool userAskedForMore = false,
     bool isNearbyFallback = false,
     String requestedAreaLabel = '',
     String rawMessage = '',
+    String? intent,
+    Map<String, dynamic>? currentFilters,
+    List<Map<String, String>>? last8Messages,
   }) async {
     try {
       final callable = _callable('aqaraiAgentCompose');
@@ -308,11 +321,18 @@ class AiBrainService {
         'isNearbyFallback': isNearbyFallback,
         'requestedAreaLabel': requestedAreaLabel,
         if (rawMessage.isNotEmpty) 'rawMessage': rawMessage,
+        if (intent != null && intent.isNotEmpty) 'intent': intent,
+        if (currentFilters != null && currentFilters.isNotEmpty) 'currentFilters': currentFilters,
+        if (last8Messages != null && last8Messages.isNotEmpty) 'last8Messages': last8Messages,
       };
       final res = await callable.call(payload).timeout(const Duration(seconds: 25));
       final data = _asMap(res.data);
-      final reply = data['reply'] ?? '';
-      return reply.toString().trim();
+      final reply = (data['reply'] ?? '').toString().trim();
+      final resultsRaw = data['results'];
+      final results = resultsRaw is List
+          ? resultsRaw.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+          : <Map<String, dynamic>>[];
+      return ComposeMarketingOutput(reply: reply, results: results);
     } on FirebaseFunctionsException catch (e) {
       _logCallableFailure('aqaraiAgentCompose', e);
       rethrow;

@@ -42,7 +42,7 @@ class OwnerChaletFinancePage extends StatelessWidget {
           var commSum = 0.0;
           final rows = <ChaletBookingTransaction>[];
           for (final d in docs) {
-            final row = ChaletBookingTransaction.tryParse(d.id, d.data());
+            final row = TransactionModel.parse(d.id, d.data());
             if (row == null || row.isDeleted) continue;
             rows.add(row);
             netSum += row.ownerPayoutAmount;

@@ -25,6 +25,7 @@ import 'package:aqarai_app/services/payment/payment_service_provider.dart';
 import 'package:aqarai_app/services/ai_suggestions_auto_config_service.dart';
 import 'package:aqarai_app/pages/video_page.dart';
 import 'package:aqarai_app/utils/video_embed_url.dart';
+import 'package:aqarai_app/utils/property_price_type.dart';
 
 /// Human-friendly featured expiry line for owner CTA (Arabic / English).
 String formatRemainingTime(DateTime featuredUntil, {bool isArabic = true}) {
@@ -403,6 +404,29 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
           final String type = data['type'] ?? '';
           final String serviceType = data['serviceType'] ?? '';
           final num price = (data['price'] ?? 0) as num;
+          final num? weekendPriceRaw =
+              data['chaletWeekendPricePerNight'] ?? data['weekendPricePerNight'];
+          final double? chaletWeekendPrice =
+              (weekendPriceRaw != null &&
+                      weekendPriceRaw > price &&
+                      weekendPriceRaw > 0)
+                  ? weekendPriceRaw.toDouble()
+                  : null;
+          List<int>? chaletPeakWeekdays;
+          final rawPeakDays =
+              data['chaletWeekendWeekdays'] ?? data['weekendWeekdays'];
+          if (rawPeakDays is List && rawPeakDays.isNotEmpty) {
+            chaletPeakWeekdays = rawPeakDays
+                .map((e) {
+                  if (e is int) return e;
+                  if (e is num) return e.toInt();
+                  return null;
+                })
+                .whereType<int>()
+                .where((e) => e >= 1 && e <= 7)
+                .toList();
+            if (chaletPeakWeekdays.isEmpty) chaletPeakWeekdays = null;
+          }
           final String governorate =
               data['governorate'] ??
               data['governorateAr'] ??
@@ -441,13 +465,10 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
           final bool hasLaundryRoom = data['hasLaundryRoom'] ?? false;
           final bool hasGarden = data['hasGarden'] ?? false;
 
-          final String listingCategory =
-              (data['listingCategory'] ?? ListingCategory.normal)
-                  .toString()
-                  .trim();
           final bool showChaletBooking =
               !widget.isAdminView &&
-              listingCategory == ListingCategory.chalet &&
+              listingDataIsChalet(data) &&
+              serviceType == 'rent' &&
               listingDataChaletAllowsDailyBooking(data) &&
               listingDataIsPubliclyDiscoverable(data) &&
               FirebaseAuth.instance.currentUser?.uid != ownerId;
@@ -476,12 +497,31 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   )
                 : null,
             body: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                showChaletBooking ? 100 : 16,
+              ),
               children: [
                 _buildImageSlider(context, images),
                 if (videoEmbed != null) ...[
                   const SizedBox(height: 12),
                   _PropertyVideoPreviewCard(videoUrl: videoUrlRaw),
+                ],
+                if (showChaletBooking) ...[
+                  const SizedBox(height: 16),
+                  _buildChaletBookingConversionCard(
+                    context: context,
+                    isAr: isAr,
+                    price: price,
+                    chaletWeekendPrice: chaletWeekendPrice,
+                    chaletPeakWeekdays: chaletPeakWeekdays,
+                    propertyId: widget.propertyId,
+                    area: area,
+                    typeLabel: _translateType(context, type),
+                    imageUrl: images.isNotEmpty ? images.first.toString() : '',
+                  ),
                 ],
                 const SizedBox(height: 16),
 
@@ -493,6 +533,20 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   _translateType(context, type),
                   _translateService(context, serviceType),
                   _translateStatus(context, status),
+                  listingTypeSlug: type,
+                  priceTypeRaw: data['priceType']?.toString(),
+                  bookingForTotalLine:
+                      listingDataIsChalet(data) &&
+                              serviceType == 'rent' &&
+                              PropertyPriceType.infer(
+                                    stored: data['priceType']?.toString(),
+                                    listingType: type,
+                                  ) ==
+                                  'daily'
+                          ? _bookingController
+                          : null,
+                  hideHeroPrice: showChaletBooking,
+                  chaletPerNightPrice: showChaletBooking,
                 ),
 
                 if (!widget.isAdminView && isOwner) ...[
@@ -662,14 +716,11 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   ),
                 ],
 
-                if (showChaletBooking) ...[
+                if ((isOwner || widget.isAdminView) &&
+                    listingDataIsChalet(data) &&
+                    listingDataChaletAllowsDailyBooking(data)) ...[
                   const SizedBox(height: 16),
-                  ChaletBookingWidget(
-                    propertyId: widget.propertyId,
-                    pricePerNight: price.toDouble(),
-                    controller: _bookingController,
-                    useExternalBookingBar: true,
-                  ),
+                  ChaletOwnerAvailabilityTools(propertyId: widget.propertyId),
                 ],
 
                 if (!widget.isAdminView &&
@@ -924,6 +975,349 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     );
   }
 
+  String _formatKwdDisplayAmount(num value, {required bool isAr}) {
+    final d = value.toDouble();
+    final r = d.round();
+    final useInt = (d - r).abs() < 1e-9;
+    final fmt = NumberFormat.decimalPattern(isAr ? 'ar' : 'en');
+    return useInt ? fmt.format(r) : fmt.format(d);
+  }
+
+  String _perNightPriceLine(num price, bool isAr) {
+    final a = _formatKwdDisplayAmount(price, isAr: isAr);
+    return isAr ? '$a د.ك / الليلة' : '$a KWD / night';
+  }
+
+  String _heroPriceWithUnit(num price, bool isAr, String priceType) {
+    final core = _formatKwdDisplayAmount(price, isAr: isAr);
+    final suffix = PropertyPriceType.suffixForLocale(priceType, isArabic: isAr);
+    return isAr ? '$core د.ك$suffix' : '$core KWD$suffix';
+  }
+
+  void _onChaletPrimaryCtaTap(BuildContext context, bool isAr) {
+    if (!_bookingController.canBook) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            isAr
+                ? 'يرجى اختيار تواريخ الوصول والمغادرة'
+                : 'Please select check-in and check-out dates',
+          ),
+        ),
+      );
+      return;
+    }
+    if (_bookingController.submitting) return;
+    _bookingController.submit();
+  }
+
+  Widget _buildChaletBookingConversionCard({
+    required BuildContext context,
+    required bool isAr,
+    required num price,
+    required double? chaletWeekendPrice,
+    required List<int>? chaletPeakWeekdays,
+    required String propertyId,
+    required String area,
+    required String typeLabel,
+    required String imageUrl,
+  }) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final locale = isAr ? 'ar' : 'en_US';
+    final dateFmt = DateFormat.yMMMEd(locale);
+    final double? peakNightly = chaletWeekendPrice;
+
+    return Material(
+      elevation: 4,
+      shadowColor: Colors.black.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(18),
+      color: cs.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.verified_outlined,
+                  size: 18,
+                  color: cs.primary.withValues(alpha: 0.85),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isAr ? 'متاح الآن' : 'Available now',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: cs.primary.withValues(alpha: 0.9),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isAr
+                  ? 'الحجز يتم فوراً بعد الدفع'
+                  : 'Booking completes right after payment',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.62),
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              _perNightPriceLine(price, isAr),
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: cs.primary,
+              ),
+            ),
+            if (peakNightly != null && peakNightly > price.toDouble()) ...[
+              const SizedBox(height: 6),
+              Text(
+                isAr
+                    ? 'ذروة ليالي محدّدة: ${_perNightPriceLine(peakNightly, isAr)}'
+                    : 'Peak nights: ${_perNightPriceLine(peakNightly, isAr)}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurface.withValues(alpha: 0.68),
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+            Divider(height: 1, color: cs.outline.withValues(alpha: 0.2)),
+            const SizedBox(height: 16),
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                _bookingController.nightsVN,
+                _bookingController.totalPriceVN,
+                _bookingController.canBookVN,
+                _bookingController.submittingVN,
+                _bookingController.isProvisionalVN,
+              ]),
+              builder: (context, _) {
+                final s = _bookingController.startDate;
+                final e = _bookingController.endDate;
+                final nights = _bookingController.nights;
+                final total = _bookingController.totalPrice;
+                final fmt = NumberFormat.decimalPattern(isAr ? 'ar' : 'en');
+                final cur = isAr ? 'د.ك' : 'KWD';
+                final checkoutMorning = e != null
+                    ? DateTime(e.year, e.month, e.day)
+                        .add(const Duration(days: 1))
+                    : null;
+                final ppn = price.toDouble();
+                final breakdownLine = nights > 0
+                    ? (isAr
+                        ? '${fmt.format(ppn)} × $nights ليالي = ${fmt.format(ppn * nights)} $cur'
+                        : '${fmt.format(ppn)} × $nights nights = ${fmt.format(ppn * nights)} $cur')
+                    : null;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isAr ? 'الوصول' : 'Check-in',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.55),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                s != null ? dateFmt.format(s) : '—',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isAr ? 'المغادرة' : 'Check-out',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.55),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                checkoutMorning != null
+                                    ? dateFmt.format(checkoutMorning)
+                                    : '—',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      isAr ? 'عدد الليالي: $nights' : 'Nights: $nights',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 240),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, anim) {
+                        return FadeTransition(
+                          opacity: anim,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.98, end: 1).animate(
+                              CurvedAnimation(
+                                parent: anim,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: KeyedSubtree(
+                        key: ValueKey<String>('${total}_$nights'),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              isAr
+                                  ? 'الإجمالي: ${fmt.format(total)} $cur'
+                                  : 'Total: ${fmt.format(total)} $cur',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: isAr ? 0 : -0.2,
+                                height: 1.2,
+                              ),
+                            ),
+                            if (breakdownLine != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                breakdownLine,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.68),
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            ChaletBookingWidget(
+              propertyId: propertyId,
+              pricePerNight: price.toDouble(),
+              propertyTitle: '$area • $typeLabel',
+              imageUrl: imageUrl,
+              controller: _bookingController,
+              useExternalBookingBar: true,
+              minNights: 2,
+              weekendPricePerNight: chaletWeekendPrice,
+              peakNightWeekdays: chaletPeakWeekdays,
+              compactLayoutForPropertyDetails: true,
+            ),
+            const SizedBox(height: 18),
+            Text(
+              isAr ? 'متاح الآن — الحجز يتم فوراً' : 'Available now — book instantly',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: cs.primary.withValues(alpha: 0.92),
+                fontWeight: FontWeight.w800,
+                height: 1.25,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                _bookingController.canBookVN,
+                _bookingController.submittingVN,
+              ]),
+              builder: (context, _) {
+                final busy = _bookingController.submitting;
+                return SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: busy
+                        ? null
+                        : () => _onChaletPrimaryCtaTap(context, isAr),
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: busy
+                        ? SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: cs.onPrimary,
+                            ),
+                          )
+                        : Text(
+                            isAr
+                                ? 'احجز الآن • الدفع فوري'
+                                : 'Book now • Instant payment',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 14),
+            Text(
+              isAr ? 'الدفع آمن 100%' : '100% secure payment',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.62),
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isAr ? 'تأكيد فوري للحجز' : 'Instant booking confirmation',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.62),
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildImageSlider(BuildContext context, List<String> images) {
     if (images.isEmpty) {
       final isAr = Localizations.localeOf(context).languageCode == 'ar';
@@ -978,9 +1372,22 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     String area,
     String type,
     String serviceType,
-    String status,
-  ) {
+    String status, {
+    required String listingTypeSlug,
+    String? priceTypeRaw,
+    ChaletBookingController? bookingForTotalLine,
+    bool hideHeroPrice = false,
+    bool chaletPerNightPrice = false,
+  }) {
     final loc = AppLocalizations.of(context)!;
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    final inferredPt = PropertyPriceType.infer(
+      stored: priceTypeRaw,
+      listingType: listingTypeSlug,
+    );
+    final heroPriceText = chaletPerNightPrice
+        ? _perNightPriceLine(price, isAr)
+        : _heroPriceWithUnit(price, isAr, inferredPt);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -988,15 +1395,44 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "KWD $price",
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.green,
+          if (!hideHeroPrice) ...[
+            Text(
+              heroPriceText,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
+            if (bookingForTotalLine != null &&
+                inferredPt == 'daily' &&
+                price > 0) ...[
+              ListenableBuilder(
+                listenable: bookingForTotalLine.nightsVN,
+                builder: (context, _) {
+                  final n = bookingForTotalLine.nights;
+                  if (n <= 0) return const SizedBox.shrink();
+                  final fmt = NumberFormat.decimalPattern(isAr ? 'ar' : 'en');
+                  final total = price * n;
+                  final line = isAr
+                      ? 'الإجمالي: ${fmt.format(total)} د.ك'
+                      : 'Total: ${fmt.format(total)} KWD';
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      line,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+            const SizedBox(height: 12),
+          ],
 
           Text("$governorate - $area", style: const TextStyle(fontSize: 18)),
 

@@ -8,6 +8,12 @@ abstract final class ListingCategory {
   static const String chalet = 'chalet';
 }
 
+/// Write-time alignment: when Firestore `type` is [chalet], [listingCategory] must be [ListingCategory.chalet].
+String listingCategoryForPropertyType(String? firestoreType) {
+  final t = (firestoreType ?? '').toString().trim().toLowerCase();
+  return t == ListingCategory.chalet ? ListingCategory.chalet : ListingCategory.normal;
+}
+
 /// `properties.chaletMode` — only when [listingCategory] is [ListingCategory.chalet].
 ///
 /// Missing/unknown values are treated as [daily] for backward compatibility.
@@ -135,16 +141,18 @@ abstract final class DealLeadSource {
   }
 }
 
-/// Chalet listing — **only** [listingCategory] (no `type` fallback).
+/// Chalet listing: [listingCategory] **or** Firestore `type == chalet` (compat).
 bool listingDataIsChalet(Map<String, dynamic> d) {
   final cat = (d['listingCategory'] ?? '').toString().trim();
-  return cat == ListingCategory.chalet;
+  if (cat == ListingCategory.chalet) return true;
+  final propType = (d['type'] ?? '').toString().trim().toLowerCase();
+  return propType == 'chalet';
 }
 
 /// Public marketplace discovery — **must match** [propertyPublicDiscovery] in Firestore rules.
 ///
-/// Uses: [approved], [status] (blocks [ListingStatus.pendingUpload]), [listingCategory],
-/// [isActive] (normal only), [hiddenFromPublic]. Does **not** use [type].
+/// Chalet slice: `type == chalet` **or** legacy `listingCategory == chalet`.
+/// Normal slice: `listingCategory == normal` and `isActive == true`.
 bool listingDataIsPubliclyDiscoverable(Map<String, dynamic> d) {
   if (d['approved'] != true) return false;
   final lifecycle = (d['status'] ?? ListingStatus.active).toString().trim();
@@ -154,7 +162,10 @@ bool listingDataIsPubliclyDiscoverable(Map<String, dynamic> d) {
   }
   if (d['hiddenFromPublic'] != false) return false;
   final cat = (d['listingCategory'] ?? '').toString().trim();
-  if (cat == ListingCategory.chalet) return true;
+  final propType = (d['type'] ?? '').toString().trim().toLowerCase();
+  if (propType == ListingCategory.chalet || cat == ListingCategory.chalet) {
+    return true;
+  }
   if (cat == ListingCategory.normal) {
     return d['isActive'] == true;
   }

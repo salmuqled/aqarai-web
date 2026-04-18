@@ -307,7 +307,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _chalets() => firestore
       .collection('properties')
-      .where('listingCategory', isEqualTo: ListingCategory.chalet)
+      .where('type', isEqualTo: 'chalet')
       .orderBy('createdAt', descending: true)
       .limit(100)
       .snapshots();

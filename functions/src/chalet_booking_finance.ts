@@ -8,6 +8,7 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
+import { writeExceptionLog } from "./exceptionLogs";
 import { formatKwdForNotification, sendNotificationToUser } from "./sendUserNotification";
 
 const db = admin.firestore();
@@ -223,7 +224,11 @@ function buildLedgerPayload(
   const currency =
     typeof b.currency === "string" && b.currency.trim() ? b.currency.trim() : "KWD";
 
-  const commissionRate = COMMISSION_RATE;
+  const commissionRateRaw = typeof b.commissionRate === "number" ? b.commissionRate : Number(b.commissionRate);
+  const commissionRate =
+    Number.isFinite(commissionRateRaw) && commissionRateRaw > 0 && commissionRateRaw < 1
+      ? commissionRateRaw
+      : COMMISSION_RATE;
   const commissionAmount = roundKwd3(amount * commissionRate);
   const netAmount = roundKwd3(amount - commissionAmount);
 
@@ -288,46 +293,54 @@ function buildLedgerPayload(
     bookingVersion,
     payoutMethod: "bank",
     notes: "",
-    paymentReference: "",
+    paymentReference: typeof b.paymentId === "string" ? b.paymentId.trim() : "",
     payoutReference: "",
   };
 }
 
+/** Result of [createTransactionFromConfirmedBooking] (idempotent; safe to retry). */
+export type CreateChaletLedgerResult =
+  | { ok: true; kind: "already_existed" | "created" }
+  | { ok: false; reason: string };
+
 /**
  * Idempotent under concurrency: `transactions/{bookingId}` atomically create-if-absent.
- * Does not query by `bookingId` field (unsafe under races). Document ID is canonical.
- * Logs failures without throwing (booking confirm flow must not depend on ledger).
+ * Document ID === bookingId is the unique key (no duplicate rows for the same booking).
  */
-export async function createTransactionFromConfirmedBooking(bookingId: string): Promise<void> {
+export async function createTransactionFromConfirmedBooking(
+  bookingId: string
+): Promise<CreateChaletLedgerResult> {
   const bid = bookingId?.trim();
-  if (!bid) return;
+  if (!bid) {
+    return { ok: false, reason: "missing_booking_id" };
+  }
 
   try {
-    const bookingRef = db.collection("bookings").doc(bid);
-    const txRef = db.collection("transactions").doc(bid);
+    const result = await db.runTransaction(async (tx) => {
+      const bookingRef = db.collection("bookings").doc(bid);
+      const txRef = db.collection("transactions").doc(bid);
 
-    await db.runTransaction(async (tx) => {
       const [existingTx, bookingSnap] = await Promise.all([
         tx.get(txRef),
         tx.get(bookingRef),
       ]);
 
       if (existingTx.exists) {
-        return;
+        return { ok: true as const, kind: "already_existed" as const };
       }
 
       if (!bookingSnap.exists) {
-        return;
+        return { ok: false as const, reason: "booking_not_found" };
       }
 
       const b = bookingSnap.data()!;
       if (b.status !== "confirmed") {
-        return;
+        return { ok: false as const, reason: "booking_not_confirmed" };
       }
 
       const propertyId = typeof b.propertyId === "string" ? b.propertyId.trim() : "";
       if (!propertyId) {
-        return;
+        return { ok: false as const, reason: "missing_propertyId" };
       }
 
       const propertyRef = db.collection("properties").doc(propertyId);
@@ -343,20 +356,74 @@ export async function createTransactionFromConfirmedBooking(bookingId: string): 
 
       const payload = buildLedgerPayload(bid, b, propertyData, ownerUserData);
       if (!payload) {
-        return;
+        return { ok: false as const, reason: "ledger_payload_invalid" };
       }
 
       tx.set(txRef, payload);
+      return { ok: true as const, kind: "created" as const };
     });
+    return result;
   } catch (err: unknown) {
     const e = err instanceof Error ? err : null;
+    const msg = e?.message ?? String(err);
     console.error({
       event: "finance.transaction.create.failed",
       bookingId: bid,
-      error: e?.message ?? String(err),
+      error: msg,
       stack: e?.stack,
     });
+    return { ok: false, reason: msg };
   }
+}
+
+async function markBookingNeedsLedgerReconciliation(
+  bookingId: string,
+  reason: string
+): Promise<void> {
+  const bid = bookingId?.trim();
+  if (!bid) return;
+  const trimmed = reason.trim().slice(0, 500);
+  try {
+    await db.collection("bookings").doc(bid).update({
+      needsLedgerReconciliation: true,
+      ledgerReconciliationError: trimmed.length > 0 ? trimmed : "unknown",
+      ledgerReconciliationAt: FieldValue.serverTimestamp(),
+    });
+  } catch (markErr: unknown) {
+    const me = markErr instanceof Error ? markErr : null;
+    console.error({
+      event: "finance.reconciliation.mark_failed",
+      bookingId: bid,
+      error: me?.message ?? String(markErr),
+      stack: me?.stack,
+    });
+  }
+}
+
+/**
+ * After any path sets `bookings.status` to `confirmed`, call this so `transactions/{bookingId}` exists.
+ * On failure: logs, sets `needsLedgerReconciliation` on the booking for ops backfill.
+ */
+export async function ensureChaletLedgerForConfirmedBooking(bookingId: string): Promise<void> {
+  const result = await createTransactionFromConfirmedBooking(bookingId);
+  if (result.ok) {
+    if (result.kind === "created") {
+      console.info({ event: "finance.transaction.created", bookingId: bookingId.trim() });
+    }
+    return;
+  }
+  console.error({
+    event: "finance.transaction.ensure_failed",
+    bookingId: bookingId.trim(),
+    reason: result.reason,
+  });
+  void writeExceptionLog({
+    type: "ledger_error",
+    relatedId: bookingId.trim(),
+    message: `transactions ledger: ${String(result.reason)}`,
+    severity: "high",
+  });
+  await markBookingNeedsLedgerReconciliation(bookingId, result.reason);
 }
 
 /**

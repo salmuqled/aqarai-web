@@ -8,10 +8,12 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import 'package:aqarai_app/app/app_theme.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
 // 🔥 التحويل الرسمي AR → EN (الاستخدام داخل صفحة الإضافة)
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
+import 'package:aqarai_app/data/kuwait_areas.dart';
 
 import 'package:aqarai_app/pages/my_ads_page.dart';
 import 'package:aqarai_app/pages/terms_conditions_page.dart';
@@ -21,6 +23,7 @@ import 'package:aqarai_app/utils/video_embed_url.dart';
 import 'package:aqarai_app/services/seller_radar_service.dart';
 import 'package:aqarai_app/services/user_ban_service.dart';
 import 'package:aqarai_app/utils/property_form_parsing.dart';
+import 'package:aqarai_app/utils/property_price_type.dart';
 import 'package:aqarai_app/widgets/property_area_search_sheet.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 
@@ -210,27 +213,36 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
 
   void _showPublishSuccessSnackBar(AppLocalizations loc) {
     if (!mounted) return;
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         duration: const Duration(milliseconds: 2600),
         dismissDirection: DismissDirection.horizontal,
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        backgroundColor: AppColors.navy.withValues(alpha: 0.85),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         content: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
+            const Icon(
               Icons.check_circle_rounded,
-              size: 22,
-              color: scheme.primary,
+              size: 24,
+              color: Colors.white,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Text(
                 loc.publishSuccessBlessing,
-                style: theme.textTheme.bodyMedium?.copyWith(
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
                   height: 1.35,
                 ),
               ),
@@ -296,6 +308,18 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     return (price: price, priceAutoCorrected: priceAutoCorrected);
   }
 
+  /// Same resolution as [AqarSearchBox] / chalet search: canonical [kuwaitAreas]
+  /// code when possible, else [propertyLocationCode] slug.
+  String _resolvedAreaCode(String areaAr, String areaEn) {
+    final String rawInput = areaAr.isNotEmpty
+        ? areaAr
+        : (areaEn.isNotEmpty ? areaEn : '');
+    return getUnifiedAreaCode(
+      rawInput,
+      fallbackSlugSource: areaEn.isNotEmpty ? areaEn : areaAr,
+    );
+  }
+
   void _openTermsFullPage() {
     if (!mounted) return;
     Navigator.of(context).push<void>(
@@ -310,7 +334,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     }
     final areaAr = selectedArea!;
     final areaEn = areaArToEn[areaAr] ?? '';
-    final areaCode = propertyLocationCode(areaEn.isNotEmpty ? areaEn : areaAr);
+    final areaCode = _resolvedAreaCode(areaAr, areaEn);
     try {
       final count = await SellerRadarService().getInterestedBuyersCount(
         areaCode: areaCode,
@@ -349,6 +373,13 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     }
     if (normalizeDigitsForPropertyForm(priceController.text).isEmpty) {
       _toast(loc.propertyPrice);
+      return false;
+    }
+    final parsedPrice = parsePropertyDouble(priceController.text);
+    if (!parsedPrice.isFinite || parsedPrice <= 0) {
+      _toast(
+        isAr ? 'السعر يجب أن يكون رقماً أكبر من صفر.' : 'Price must be a number greater than zero.',
+      );
       return false;
     }
     if (!_acceptedTerms) {
@@ -453,11 +484,23 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       final governorateCode = propertyLocationCode(
         govEn.isNotEmpty ? govEn : govAr,
       );
-      final areaCode = propertyLocationCode(
-        areaEn.isNotEmpty ? areaEn : areaAr,
-      );
+      final areaCode = _resolvedAreaCode(areaAr, areaEn);
 
       final listingPrice = _computeListingPrice();
+      // Never persist non-positive or non-finite price (defense in depth after _validate).
+      if (!listingPrice.price.isFinite || listingPrice.price <= 0) {
+        if (mounted) {
+          _toast(
+            isAr ? 'السعر غير صالح.' : 'Invalid price.',
+          );
+        }
+        return;
+      }
+
+      final priceType = PropertyPriceType.forNewListing(
+        propertyType: selectedPropertyType!,
+        serviceType: selectedServiceType,
+      );
 
       final data = {
         "ownerId": user.uid,
@@ -486,6 +529,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "parkingCount": parsePropertyInt(parkingCountController.text),
         "size": parsePropertyDouble(sizeController.text),
         "price": listingPrice.price,
+        "priceType": priceType,
         if (listingPrice.priceAutoCorrected) "priceAutoCorrected": true,
 
         "hasElevator": hasElevator,
@@ -507,10 +551,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "status": ListingStatus.pendingUpload,
         "isActive": true,
 
-        // Phase 1: تمييز الشاليه عن العادي (بدون حجوزات في التطبيق بعد)
-        "listingCategory": selectedPropertyType == 'chalet'
-            ? 'chalet'
-            : 'normal',
+        // Phase 1: listingCategory tracks `type` for rules + queries (type is source for chalet).
+        "listingCategory": listingCategoryForPropertyType(selectedPropertyType),
         if (selectedPropertyType == 'chalet') "chaletMode": selectedChaletMode,
         "hiddenFromPublic": false,
         "closeRequestSubmitted": false,

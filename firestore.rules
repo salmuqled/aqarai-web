@@ -24,16 +24,35 @@ service cloud.firestore {
         || request.resource.data[field] == false;
     }
 
+    /// Public read: chalet by `type` (primary) or legacy `listingCategory == chalet`;
+    /// normal marketplace: `listingCategory == normal` && isActive.
+    /// Signed-in user owns the property document (chalet blocks, etc.).
+    function propertyOwnedByAuth(propertyId) {
+      return isSignedIn()
+        && propertyId is string
+        && exists(/databases/$(database)/documents/properties/$(propertyId))
+        && get(/databases/$(database)/documents/properties/$(propertyId)).data.ownerId == request.auth.uid;
+    }
+
     function propertyPublicDiscovery(data) {
       return data.approved == true
         && (!('status' in data) || data.status != 'pending_upload')
         && 'hiddenFromPublic' in data
         && data.hiddenFromPublic == false
-        && 'listingCategory' in data
         && (
-          (data.listingCategory == 'chalet')
-          || (data.listingCategory == 'normal' && data.isActive == true)
+             ('type' in data && data.type == 'chalet')
+          || ('listingCategory' in data && data.listingCategory == 'chalet')
+          || (
+               'listingCategory' in data
+            && data.listingCategory == 'normal'
+            && data.isActive == true )
         );
+    }
+
+    /// Writes: if `type == chalet`, `listingCategory` must be `chalet`.
+    function propertyChaletTypeCategoryAligned(data) {
+      return !('type' in data && data.type == 'chalet')
+          || ('listingCategory' in data && data.listingCategory == 'chalet');
     }
 
     /* ============================================================
@@ -43,7 +62,7 @@ service cloud.firestore {
     match /properties/{propertyId} {
 
       // 👀 القراءة:
-      // - العامة: approved + listingCategory + (normal: isActive) + hiddenFromPublic == false
+      // - العامة: approved + (type==chalet أو listingCategory chalet legacy) أو normal+isActive؛ hiddenFromPublic == false
       // - المالك والأدمن: دائماً
       allow read: if
         propertyPublicDiscovery(resource.data)
@@ -60,6 +79,7 @@ service cloud.firestore {
         && isFalseOrMissing('approved')
         && isFalseOrMissing('imagesApproved')
         && request.resource.data.listingCategory in ['normal', 'chalet']
+        && propertyChaletTypeCategoryAligned(request.resource.data)
         && request.resource.data.hiddenFromPublic == false
         && request.resource.data.status == 'pending_upload'
         && request.resource.data.hasImage == false;
@@ -150,14 +170,26 @@ service cloud.firestore {
         && request.resource.data.closeRequestedBy == request.auth.uid;
       }
 
-      allow update: if isAdmin()
-        || (
-          isSignedIn()
-          && resource.data.ownerId == request.auth.uid
-          && (
-            ownerPropertyContentUpdateAllowed()
-            || ownerPropertyClosureUpdateAllowed()
-            || ownerCompletePendingUpload()
+      // If `type` / `listingCategory` change, resulting doc must satisfy chalet alignment (legacy mismatch OK until edited).
+      function propertyTypeOrCategoryChanged() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['type', 'listingCategory']);
+      }
+
+      allow update: if (
+          !propertyTypeOrCategoryChanged()
+          || propertyChaletTypeCategoryAligned(request.resource.data)
+        )
+        && (
+          isAdmin()
+          || (
+            isSignedIn()
+            && resource.data.ownerId == request.auth.uid
+            && (
+              ownerPropertyContentUpdateAllowed()
+              || ownerPropertyClosureUpdateAllowed()
+              || ownerCompletePendingUpload()
+            )
           )
         );
 
@@ -186,6 +218,56 @@ service cloud.firestore {
         );
 
       allow create, update, delete: if false;
+    }
+
+    /* ============================================================
+        External blocks (manual / external bookings)
+    ============================================================ */
+
+    match /blocked_dates/{blockId} {
+      // Reads are OR'd across separate `allow read` clauses (better query / rules evaluation).
+      allow read: if isAdmin();
+
+      // Listing owner: any block row for a property they own (owner calendar + availability tools).
+      allow read: if resource.data.propertyId is string
+        && propertyOwnedByAuth(resource.data.propertyId);
+
+      // Owner-created rows: creator can read (covers edge cases; create still requires owning the listing).
+      allow read: if isSignedIn()
+        && resource.data.propertyId is string
+        && resource.data.source == 'owner'
+        && resource.data.ownerId == request.auth.uid;
+
+      // Public read for guests when the listing is discoverable.
+      allow read: if resource.data.propertyId is string
+        && exists(/databases/$(database)/documents/properties/$(resource.data.propertyId))
+        && propertyPublicDiscovery(
+          get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data
+        );
+
+      // Owner: create manual blocks (same overlap semantics as admin blocks).
+      allow create: if isAdmin() || (
+        isSignedIn()
+        && request.resource.data.keys().hasOnly(['propertyId', 'startDate', 'endDate', 'source', 'ownerId'])
+        && request.resource.data.propertyId is string
+        && propertyOwnedByAuth(request.resource.data.propertyId)
+        && request.resource.data.startDate is timestamp
+        && request.resource.data.endDate is timestamp
+        && request.resource.data.startDate < request.resource.data.endDate
+        && request.resource.data.source == 'owner'
+        && request.resource.data.ownerId == request.auth.uid
+      );
+
+      allow update: if isAdmin();
+
+      // Owner may remove only their owner-sourced blocks; admin any.
+      allow delete: if isAdmin() || (
+        isSignedIn()
+        && resource.data.propertyId is string
+        && propertyOwnedByAuth(resource.data.propertyId)
+        && resource.data.source == 'owner'
+        && resource.data.ownerId == request.auth.uid
+      );
     }
 
     /* ============================================================
@@ -590,6 +672,21 @@ service cloud.firestore {
 
       // 👀 / ✏️ / ❌:
       allow read, update, delete: if isAdmin();
+    }
+
+    /* ============================================================
+        Exception logs (مراقبة الأعطال — إنشاء من Cloud Functions فقط)
+    ============================================================ */
+
+    match /exception_logs/{logId} {
+      allow read: if isAdmin();
+      allow create, delete: if false;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedAt'])
+        && request.resource.data.resolved is bool
+        && (!('resolvedAt' in request.resource.data)
+          || request.resource.data.resolvedAt == null
+          || request.resource.data.resolvedAt is timestamp);
     }
 
     /* ============================================================

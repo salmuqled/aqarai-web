@@ -14,7 +14,6 @@ import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/pages/admin_deal_detail_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
 import 'package:aqarai_app/pages/auction_details_page.dart';
-import 'package:aqarai_app/pages/chalets_page.dart';
 import 'package:aqarai_app/pages/owner_dashboard_page.dart';
 import 'package:aqarai_app/services/notification_click_tracking_service.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
@@ -257,9 +256,7 @@ class NotificationService {
           if (propertyId.isNotEmpty) {
             pushProperty(propertyId);
           } else {
-            nav.push(
-              MaterialPageRoute<void>(builder: (_) => const ChaletsPage()),
-            );
+            pushHome();
           }
           return;
         }

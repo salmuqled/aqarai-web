@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:aqarai_app/utils/property_listing_cover.dart';
+import 'package:aqarai_app/utils/property_price_type.dart';
 import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 
 /// Badge text for labels (Arabic). Max 2 shown.
@@ -26,6 +27,8 @@ class ListingCard extends StatelessWidget {
   final List<String>? labels;
   /// When provided, card is tappable and opens details (e.g. PropertyDetailsPage).
   final VoidCallback? onTap;
+  /// When set with [PropertyPriceType.daily], shows a small total line (price × nights).
+  final int? nightsForTotalEstimate;
 
   const ListingCard({
     super.key,
@@ -33,6 +36,7 @@ class ListingCard extends StatelessWidget {
     required this.data,
     this.labels,
     this.onTap,
+    this.nightsForTotalEstimate,
   });
 
   /// Resolve labels from widget or data, map to badge text, max 2.
@@ -58,6 +62,13 @@ class ListingCard extends StatelessWidget {
     final price = data['price'];
     final area = (data['area'] ?? data['areaAr'] ?? data['areaEn'] ?? data['area_id'] ?? data['areaCode'] ?? '').toString();
     final type = (data['type'] ?? '').toString().toLowerCase();
+    final priceType = PropertyPriceType.infer(
+      stored: data['priceType']?.toString(),
+      listingType: (data['type'] ?? '').toString(),
+    );
+    final priceUnit = PropertyPriceType.suffixForLocale(priceType, isArabic: isArabic);
+    final num? priceNum = price is num ? price : num.tryParse('$price');
+    final int? nTotal = nightsForTotalEstimate;
 
     // ---------------------- ترجمة الأنواع ----------------------
     const Map<String, String> propertyTypeAr = {
@@ -185,13 +196,30 @@ class ListingCard extends StatelessWidget {
 
                   Text(
                     isArabic
-                        ? "السعر: ${_fmtPrice(price, localeStr)} د.ك"
-                        : "Price: ${_fmtPrice(price, localeStr)} KWD",
+                        ? "السعر: ${_fmtPrice(price, localeStr)} د.ك$priceUnit"
+                        : "Price: ${_fmtPrice(price, localeStr)} KWD$priceUnit",
                     style: const TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                  if (priceType == 'daily' &&
+                      nTotal != null &&
+                      nTotal > 0 &&
+                      priceNum != null &&
+                      priceNum > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      isArabic
+                          ? 'الإجمالي: ${_fmtPrice(priceNum * nTotal, localeStr)} د.ك'
+                          : 'Total: ${_fmtPrice(priceNum * nTotal, localeStr)} KWD',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

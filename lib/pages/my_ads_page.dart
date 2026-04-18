@@ -28,6 +28,7 @@ import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/property_closure_service.dart';
 import 'package:aqarai_app/utils/property_listing_cover.dart';
+import 'package:aqarai_app/utils/property_price_type.dart';
 import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 import 'package:aqarai_app/services/image_processing_service.dart';
 import 'package:aqarai_app/services/property_listing_image_service.dart';
@@ -1233,6 +1234,11 @@ class _MyAdsPageState extends State<MyAdsPage> {
     final approved = d['approved'] == true;
     final needsPhoto = listingDataNeedsImageUpload(d);
     final isAr = locale == 'ar';
+    final priceType = PropertyPriceType.infer(
+      stored: d['priceType']?.toString(),
+      listingType: typeEn,
+    );
+    final priceUnit = PropertyPriceType.suffixForLocale(priceType, isArabic: isAr);
     final statusChip = _myAdsPropertyStatusChipLabel(d, locale);
     if (kDebugMode) {
       final st = (d['status'] ?? ListingStatus.active).toString().trim();
@@ -1316,7 +1322,7 @@ class _MyAdsPageState extends State<MyAdsPage> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          "${loc.price}: ${_price(price)} KWD",
+                          "${loc.price}: ${_price(price)} KWD$priceUnit",
                           style: const TextStyle(
                             fontSize: 15,
                             color: Colors.green,

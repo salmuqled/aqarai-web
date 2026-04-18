@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:aqarai_app/utils/property_listing_cover.dart';
+import 'package:aqarai_app/utils/property_price_type.dart';
 import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 import 'package:intl/intl.dart';
 import 'package:aqarai_app/services/firestore.dart';
@@ -11,7 +12,8 @@ import 'package:aqarai_app/models/listing_enums.dart';
 class FeaturedCarousel extends StatelessWidget {
   final String serviceType;
   final String title;
-  /// [ListingCategory.normal] or [ListingCategory.chalet] — drives visibility query (no status).
+  /// [ListingCategory.normal] or [ListingCategory.chalet] — normal uses [listingCategory];
+  /// chalet carousel uses `type == chalet` (see [_query]).
   final String listingCategory;
 
   const FeaturedCarousel({
@@ -88,8 +90,13 @@ class FeaturedCarousel extends StatelessWidget {
       query = query.where('isActive', isEqualTo: true);
     }
 
+    if (listingCategory == ListingCategory.chalet) {
+      query = query.where('type', isEqualTo: 'chalet');
+    } else {
+      query = query.where('listingCategory', isEqualTo: listingCategory);
+    }
+
     query = query
-        .where('listingCategory', isEqualTo: listingCategory)
         .where('hiddenFromPublic', isEqualTo: false)
         .where('serviceType', isEqualTo: serviceType)
         .where('featuredUntil', isGreaterThan: now);
@@ -187,9 +194,17 @@ class FeaturedCarousel extends StatelessWidget {
                       ? data['price'] as num
                       : num.tryParse('${data['price']}');
 
+                  final pt = PropertyPriceType.infer(
+                    stored: data['priceType']?.toString(),
+                    listingType: normalizedType,
+                  );
+                  final unit = PropertyPriceType.suffixForLocale(
+                    pt,
+                    isArabic: isArabic,
+                  );
                   final priceText = isArabic
-                      ? 'السعر: ${_fmtPrice(price, localeStr)} د.ك'
-                      : 'Price: ${_fmtPrice(price, localeStr)} KWD';
+                      ? 'السعر: ${_fmtPrice(price, localeStr)} د.ك$unit'
+                      : 'Price: ${_fmtPrice(price, localeStr)} KWD$unit';
 
                   return _FeaturedCard(
                     title: combinedTitle,

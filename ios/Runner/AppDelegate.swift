@@ -12,8 +12,11 @@ import UIKit
   }
 
   override init() {
-    super.init()
+    // Configure before `super.init()` so FlutterAppDelegate’s setup cannot touch
+    // Firebase Messaging / Core before a default `FirebaseApp` exists (avoids
+    // I-COR000003 and often I-SWZ001014 during early swizzling).
     Self.configureFirebaseIfNeeded()
+    super.init()
   }
 
   /// Runs before `didFinishLaunchingWithOptions` — reduces races with FCM / AppDelegate swizzling.

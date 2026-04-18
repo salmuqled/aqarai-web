@@ -55,7 +55,7 @@ class _OwnerDashboardPageState extends State<OwnerDashboardPage> {
   ) {
     final out = <ChaletBookingTransaction>[];
     for (final d in docs) {
-      final row = ChaletBookingTransaction.tryParse(d.id, d.data());
+      final row = TransactionModel.parse(d.id, d.data());
       if (row == null || row.isDeleted) continue;
       out.add(row);
     }

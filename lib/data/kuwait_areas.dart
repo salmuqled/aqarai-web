@@ -1,5 +1,8 @@
 // Central registry for Kuwait areas (code + Arabic + English).
-// Initial subset; extend over time. Existing maps elsewhere stay unchanged until migrated.
+// This is the single source of truth for generating stable `areaCode` values.
+// Keep it extended and canonical to avoid search mismatches.
+
+import 'package:aqarai_app/utils/property_form_parsing.dart';
 
 class AreaModel {
   final String code;
@@ -21,6 +24,13 @@ const List<AreaModel> kuwaitAreas = [
   AreaModel(code: 'farwaniya', nameAr: 'الفروانية', nameEn: 'Farwaniya'),
   AreaModel(code: 'mahboula', nameAr: 'المهبولة', nameEn: 'Mahboula'),
   AreaModel(code: 'fahaheel', nameAr: 'الفحيحيل', nameEn: 'Fahaheel'),
+  // Chalet areas (must match chalet search areas)
+  AreaModel(code: 'khiran', nameAr: 'الخيران', nameEn: 'Khiran'),
+  AreaModel(code: 'bneider', nameAr: 'بنيدر', nameEn: 'Bneider'),
+  AreaModel(code: 'zour', nameAr: 'الزور', nameEn: 'Zour'),
+  AreaModel(code: 'nuwaiseeb', nameAr: 'النويصيب', nameEn: 'Nuwaiseeb'),
+  AreaModel(code: 'julaia', nameAr: 'الجليعة', nameEn: 'Julaia'),
+  AreaModel(code: 'dhubaiya', nameAr: 'الضباعية', nameEn: 'Dhubaiya'),
 ];
 
 AreaModel? getAreaByCode(String? code) {
@@ -83,4 +93,24 @@ String? resolveAreaCodeFromText(String input) {
   }
 
   return bestScore > 0 ? bestCode : null;
+}
+
+/// Unified `areaCode` generator:
+/// 1) canonical code via [kuwaitAreas] matching (Arabic or English),
+/// 2) fallback to [propertyLocationCode] slug when not found.
+///
+/// Use this everywhere to prevent mismatched `areaCode` values across flows.
+String getUnifiedAreaCode(
+  String input, {
+  String? fallbackSlugSource,
+}) {
+  final collapsed = _collapseSpaces(input);
+  final String? resolved = collapsed.isNotEmpty ? resolveAreaCodeFromText(collapsed) : null;
+  if (resolved != null && resolved.isNotEmpty) return resolved;
+
+  final fallbackInput = (fallbackSlugSource != null && fallbackSlugSource.trim().isNotEmpty)
+      ? fallbackSlugSource
+      : collapsed;
+  final slug = propertyLocationCode(fallbackInput);
+  return slug;
 }

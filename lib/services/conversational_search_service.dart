@@ -238,13 +238,14 @@ class ConversationalSearchService {
     Query<Map<String, dynamic>> q = FirebaseFirestore.instance
         .collection('properties')
         .where('approved', isEqualTo: true)
-        .where('listingCategory', isEqualTo: ListingCategory.chalet)
         .where('hiddenFromPublic', isEqualTo: false);
     if (f.serviceType != null && f.serviceType!.trim().isNotEmpty) {
       q = q.where('serviceType', isEqualTo: f.serviceType!.trim());
     }
     if (f.propertyType != null && f.propertyType!.trim().isNotEmpty) {
       q = q.where('type', isEqualTo: f.propertyType!.trim());
+    } else {
+      q = q.where('type', isEqualTo: 'chalet');
     }
     if (f.governorateCode != null &&
         f.governorateCode!.trim().isNotEmpty &&

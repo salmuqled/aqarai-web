@@ -5,6 +5,7 @@ import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/utils/property_listing_cover.dart';
+import 'package:aqarai_app/utils/property_price_type.dart';
 import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 
 class FavoritesPage extends StatelessWidget {
@@ -193,6 +194,14 @@ class _FavoritePropertyTileState extends State<_FavoritePropertyTile> {
         final data = snap.data!.data()!;
         final type = data['type'] ?? '';
         final price = (data['price'] ?? 0) as num;
+        final pt = PropertyPriceType.infer(
+          stored: data['priceType']?.toString(),
+          listingType: type.toString(),
+        );
+        final priceUnit = PropertyPriceType.suffixForLocale(
+          pt,
+          isArabic: widget.isAr,
+        );
         final area = widget.isAr
             ? (data['areaAr'] ?? data['area'] ?? '')
             : (data['areaEn'] ?? data['area'] ?? '');
@@ -256,7 +265,7 @@ class _FavoritePropertyTileState extends State<_FavoritePropertyTile> {
                         ],
                         const SizedBox(height: 6),
                         Text(
-                          'KWD $price',
+                          'KWD $price$priceUnit',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,

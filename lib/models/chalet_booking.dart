@@ -4,6 +4,14 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// One busy stay interval for chalet calendar UI (bookings + blocks).
+class ChaletBookedRange {
+  const ChaletBookedRange({required this.start, required this.end});
+
+  final DateTime start;
+  final DateTime end;
+}
+
 /// Nullable [pricePerNight] / [currency] / [confirmedAt] for backward compatibility.
 class ChaletBooking {
   const ChaletBooking({

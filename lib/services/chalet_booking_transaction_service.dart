@@ -3,16 +3,96 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+/// One page of admin ledger query results (for future pagination UI).
+class AdminBookingLedgerPageBatch {
+  const AdminBookingLedgerPageBatch({
+    required this.documents,
+    required this.limit,
+    this.lastDocument,
+  });
+
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> documents;
+  final QueryDocumentSnapshot<Map<String, dynamic>>? lastDocument;
+  final int limit;
+
+  /// When true, callers may fetch another page with [startAfterDocument] = [lastDocument].
+  bool get mayHaveMore => documents.length >= limit && lastDocument != null;
+}
+
 abstract final class ChaletBookingTransactionService {
   ChaletBookingTransactionService._();
 
   static const String collection = 'transactions';
   static const String sourceChaletDaily = 'chalet_daily';
 
+  /// Default page size for admin ledger reads (keep in sync with UI until pagination ships).
+  static const int adminBookingLedgerPageSizeDefault = 400;
+
   static FirebaseFunctions _functions() =>
       FirebaseFunctions.instanceFor(region: 'us-central1');
 
-  /// Admin list: chalet daily rows, newest first.
+  /// Admin list: newest first (`createdAt` desc). Optional [startAfterDocument] for next page.
+  static Query<Map<String, dynamic>> adminBookingLedgerQuery({
+    int limit = adminBookingLedgerPageSizeDefault,
+    DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
+  }) {
+    var q = FirebaseFirestore.instance
+        .collection(collection)
+        .orderBy('createdAt', descending: true);
+    if (startAfterDocument != null) {
+      q = q.startAfterDocument(startAfterDocument);
+    }
+    return q.limit(limit);
+  }
+
+  /// Admin payout queue: pending first, same sort as full list (`createdAt` desc).
+  static Query<Map<String, dynamic>> adminBookingLedgerPendingPayoutsQuery({
+    int limit = adminBookingLedgerPageSizeDefault,
+    DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
+  }) {
+    var q = FirebaseFirestore.instance
+        .collection(collection)
+        .where('payoutStatus', isEqualTo: 'pending')
+        .orderBy('createdAt', descending: true);
+    if (startAfterDocument != null) {
+      q = q.startAfterDocument(startAfterDocument);
+    }
+    return q.limit(limit);
+  }
+
+  /// Fetches one page of all ledger docs (newest first). UI can pass [startAfterDocument] from a prior batch’s [AdminBookingLedgerPageBatch.lastDocument].
+  static Future<AdminBookingLedgerPageBatch> fetchAdminBookingLedgerPage({
+    int limit = adminBookingLedgerPageSizeDefault,
+    DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
+  }) async {
+    final snap =
+        await adminBookingLedgerQuery(limit: limit, startAfterDocument: startAfterDocument).get();
+    final docs = snap.docs;
+    return AdminBookingLedgerPageBatch(
+      documents: docs,
+      lastDocument: docs.isEmpty ? null : docs.last,
+      limit: limit,
+    );
+  }
+
+  /// Fetches one page of pending payout rows (same ordering as [adminBookingLedgerPendingPayoutsQuery]).
+  static Future<AdminBookingLedgerPageBatch> fetchAdminBookingLedgerPendingPage({
+    int limit = adminBookingLedgerPageSizeDefault,
+    DocumentSnapshot<Map<String, dynamic>>? startAfterDocument,
+  }) async {
+    final snap = await adminBookingLedgerPendingPayoutsQuery(
+      limit: limit,
+      startAfterDocument: startAfterDocument,
+    ).get();
+    final docs = snap.docs;
+    return AdminBookingLedgerPageBatch(
+      documents: docs,
+      lastDocument: docs.isEmpty ? null : docs.last,
+      limit: limit,
+    );
+  }
+
+  /// Admin list: chalet daily rows only, newest first.
   static Query<Map<String, dynamic>> adminChaletDailyQuery({int limit = 200}) {
     return FirebaseFirestore.instance
         .collection(collection)
@@ -21,7 +101,7 @@ abstract final class ChaletBookingTransactionService {
         .limit(limit);
   }
 
-  /// Admin payout queue: pending bank transfer only.
+  /// Admin payout queue: chalet daily pending only.
   static Query<Map<String, dynamic>> adminChaletDailyPendingPayoutsQuery({
     int limit = 200,
   }) {

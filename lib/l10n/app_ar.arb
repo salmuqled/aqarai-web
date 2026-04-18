@@ -1477,6 +1477,9 @@
   "adminChaletPayoutsFilterPending": "بانتظار التحويل",
   "adminChaletPayoutsFilterAll": "كل السجلات",
   "adminChaletPayoutsTotalPending": "إجمالي المبالغ المطلوب تحويلها",
+  "adminChaletPayoutsEmptyTitle": "لا توجد تحويلات حالياً",
+  "adminChaletPayoutsEmptySubtitle": "ستظهر طلبات التحويل هنا عند توفرها",
+  "adminChaletPayoutsEmptyCta": "طلب تحويل",
   "adminChaletRefundExecute": "تسجيل استرداد للضيف",
   "adminChaletRefundConfirmTitle": "تسجيل الاسترداد في السجل المالي؟",
   "adminChaletRefundConfirmBody": "يحدّث السجل المالي فقط (دون تعديل الحجز). يحسب مبلغ الاسترداد حسب سياسة الإلغاء على الخادم.",
@@ -1493,6 +1496,51 @@
   "adminChaletLedgerOwnerUnknown": "مالك غير معروف",
   "adminChaletLedgerHasIssueBadge": "عملية فيها مشكلة",
   "adminChaletLedgerFinalizedBadge": "تمت المعالجة",
+  "chaletTransactionGrossLabel": "إجمالي الحجز (د.ك)",
+  "adminLedgerSourceChalet": "شاليه (يومي)",
+  "adminLedgerSourceSale": "بيع عقار",
+  "adminLedgerSourceRent": "إيجار عقار",
+  "adminLedgerSourceOther": "أخرى",
+  "adminLedgerUnknownProperty": "عقار غير معروف",
+  "adminLedgerUnknown": "غير معروف",
+  "adminLedgerIntegrityHint": "راجع البيانات: المبلغ أو المصدر أو المرجع قد يكون ناقصًا.",
+  "adminLedgerPropertyNameLabel": "العقار",
+  "adminLedgerPropertyIdLabel": "رقم الإعلان",
+  "adminLedgerBookingRefLabel": "الحجز",
+  "adminLedgerDealRefLabel": "الصفقة",
+  "adminLedgerRecordIdLabel": "مرجع السجل",
+  "adminLedgerFilterSourceAll": "كل المصادر",
+  "adminLedgerFilterSourceLabel": "نوع المصدر",
+  "adminLedgerGroupByLabel": "تجميع حسب",
+  "adminLedgerGroupNone": "بدون",
+  "adminLedgerGroupSource": "المصدر",
+  "adminLedgerGroupProperty": "العقار",
+  "adminLedgerDetailsSection": "تفاصيل تقنية",
+  "adminLedgerAnalyticsHeading": "هذا الشهر",
+  "adminLedgerAnalyticsRevenueTitle": "إيراد المنصة",
+  "adminLedgerAnalyticsVolumeTitle": "إجمالي التداول",
+  "adminLedgerAnalyticsTransactionsLabel": "{count} معاملة",
+  "@adminLedgerAnalyticsTransactionsLabel": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "adminLedgerAnalyticsSourceBreakdown": "حسب المصدر",
+  "adminLedgerAnalyticsTopProperty": "أفضل عقار",
+  "adminLedgerAnalyticsTopPropertyEmpty": "لا إيراد لإعلان في هذا الشهر",
+  "adminLedgerAnalyticsDataNote": "الأرقام من السجلات المحمّلة (الأحدث أولاً، بحد أقصى).",
+  "adminLedgerAnalyticsLimitWarning": "قد تكون البيانات غير مكتملة بسبب الحد (عرض آخر {limit} سجل).",
+  "@adminLedgerAnalyticsLimitWarning": {
+    "placeholders": {
+      "limit": {"type": "int"}
+    }
+  },
+  "adminLedgerAnalyticsUndatedNote": "{count} سجلات بدون تاريخ؛ مستبعدة من إجماليات هذا الشهر.",
+  "@adminLedgerAnalyticsUndatedNote": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "ownerDashboardTitle": "لوحة الشاليه",
   "ownerDashboardSubtitle": "الإيراد، الإشغال، ومؤشرات الحجوزات",
   "ownerDashboardMetricPaid": "المستلم",

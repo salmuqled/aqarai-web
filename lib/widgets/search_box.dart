@@ -12,7 +12,6 @@ import 'package:aqarai_app/data/governorates_data_en.dart';
 // 🔥 AR → EN mapping
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 import 'package:aqarai_app/data/kuwait_areas.dart';
-import 'package:aqarai_app/utils/property_form_parsing.dart';
 
 class AqarSearchBox extends StatefulWidget {
   final String? initialSearchType;
@@ -328,8 +327,7 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
 
               final governorateCode = _code(govEn.isNotEmpty ? govEn : govAr);
 
-              // Firestore area filter: single normalized input → resolve → slug fallback.
-              // Priority: selected label → mapped English → Arabic (matches ?? chain intent).
+              // Firestore area filter: unified areaCode generation.
               final String rawInput;
               final sel = selectedArea;
               if (sel != null && sel.isNotEmpty) {
@@ -339,24 +337,48 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
               } else {
                 rawInput = areaAr;
               }
-              final String? resolvedCode = resolveAreaCodeFromText(rawInput);
-              final String fallbackCode = propertyLocationCode(
-                areaEn.isNotEmpty ? areaEn : areaAr,
+              final String selectedAreaCode = getUnifiedAreaCode(
+                rawInput,
+                fallbackSlugSource: areaEn.isNotEmpty ? areaEn : areaAr,
               );
-              final String selectedAreaCode =
-                  resolvedCode ??
-                  (fallbackCode.isNotEmpty ? fallbackCode : '');
 
               if (kDebugMode) {
                 debugPrint('AREA INPUT → $rawInput');
-                debugPrint('RESOLVED CODE → $resolvedCode');
-                debugPrint('FALLBACK CODE → $fallbackCode');
                 debugPrint('FINAL CODE → $selectedAreaCode');
               }
 
               final propertyCode = selectedProperty != null
                   ? _mapPropertyToCode(selectedProperty!, loc)
                   : null;
+
+              final String debugServiceType = selectedType == loc.forRent
+                  ? 'rent'
+                  : selectedType == loc.forExchange
+                      ? 'exchange'
+                      : 'sale';
+
+              if (kDebugMode) {
+                debugPrint(
+                  '[SearchBox→PropertyList] selectedType (mapped sale/rent/exchange)=$debugServiceType '
+                  '| selectedTypeLabel=$selectedType',
+                );
+                debugPrint(
+                  '[SearchBox→PropertyList] selectedProperty (typeFilter label)=$selectedProperty '
+                  '| typeFilter code=$propertyCode',
+                );
+                debugPrint(
+                  '[SearchBox→PropertyList] selectedGovernorate (raw)=$selectedGovernorate',
+                );
+                debugPrint(
+                  '[SearchBox→PropertyList] selectedArea (raw)=$selectedArea',
+                );
+                debugPrint(
+                  '[SearchBox→PropertyList] computed governorateCode=$governorateCode',
+                );
+                debugPrint(
+                  '[SearchBox→PropertyList] computed areaCode=$selectedAreaCode',
+                );
+              }
 
               Navigator.push(
                 context,

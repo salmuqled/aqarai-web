@@ -2220,6 +2220,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get adminChaletPayoutsTotalPending => 'إجمالي المبالغ المطلوب تحويلها';
 
   @override
+  String get adminChaletPayoutsEmptyTitle => 'لا توجد تحويلات حالياً';
+
+  @override
+  String get adminChaletPayoutsEmptySubtitle => 'ستظهر طلبات التحويل هنا عند توفرها';
+
+  @override
+  String get adminChaletPayoutsEmptyCta => 'طلب تحويل';
+
+  @override
   String get adminChaletRefundExecute => 'تسجيل استرداد للضيف';
 
   @override
@@ -2266,6 +2275,102 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get adminChaletLedgerFinalizedBadge => 'تمت المعالجة';
+
+  @override
+  String get chaletTransactionGrossLabel => 'إجمالي الحجز (د.ك)';
+
+  @override
+  String get adminLedgerSourceChalet => 'شاليه (يومي)';
+
+  @override
+  String get adminLedgerSourceSale => 'بيع عقار';
+
+  @override
+  String get adminLedgerSourceRent => 'إيجار عقار';
+
+  @override
+  String get adminLedgerSourceOther => 'أخرى';
+
+  @override
+  String get adminLedgerUnknownProperty => 'عقار غير معروف';
+
+  @override
+  String get adminLedgerUnknown => 'غير معروف';
+
+  @override
+  String get adminLedgerIntegrityHint => 'راجع البيانات: المبلغ أو المصدر أو المرجع قد يكون ناقصًا.';
+
+  @override
+  String get adminLedgerPropertyNameLabel => 'العقار';
+
+  @override
+  String get adminLedgerPropertyIdLabel => 'رقم الإعلان';
+
+  @override
+  String get adminLedgerBookingRefLabel => 'الحجز';
+
+  @override
+  String get adminLedgerDealRefLabel => 'الصفقة';
+
+  @override
+  String get adminLedgerRecordIdLabel => 'مرجع السجل';
+
+  @override
+  String get adminLedgerFilterSourceAll => 'كل المصادر';
+
+  @override
+  String get adminLedgerFilterSourceLabel => 'نوع المصدر';
+
+  @override
+  String get adminLedgerGroupByLabel => 'تجميع حسب';
+
+  @override
+  String get adminLedgerGroupNone => 'بدون';
+
+  @override
+  String get adminLedgerGroupSource => 'المصدر';
+
+  @override
+  String get adminLedgerGroupProperty => 'العقار';
+
+  @override
+  String get adminLedgerDetailsSection => 'تفاصيل تقنية';
+
+  @override
+  String get adminLedgerAnalyticsHeading => 'هذا الشهر';
+
+  @override
+  String get adminLedgerAnalyticsRevenueTitle => 'إيراد المنصة';
+
+  @override
+  String get adminLedgerAnalyticsVolumeTitle => 'إجمالي التداول';
+
+  @override
+  String adminLedgerAnalyticsTransactionsLabel(int count) {
+    return '$count معاملة';
+  }
+
+  @override
+  String get adminLedgerAnalyticsSourceBreakdown => 'حسب المصدر';
+
+  @override
+  String get adminLedgerAnalyticsTopProperty => 'أفضل عقار';
+
+  @override
+  String get adminLedgerAnalyticsTopPropertyEmpty => 'لا إيراد لإعلان في هذا الشهر';
+
+  @override
+  String get adminLedgerAnalyticsDataNote => 'الأرقام من السجلات المحمّلة (الأحدث أولاً، بحد أقصى).';
+
+  @override
+  String adminLedgerAnalyticsLimitWarning(int limit) {
+    return 'قد تكون البيانات غير مكتملة بسبب الحد (عرض آخر $limit سجل).';
+  }
+
+  @override
+  String adminLedgerAnalyticsUndatedNote(int count) {
+    return '$count سجلات بدون تاريخ؛ مستبعدة من إجماليات هذا الشهر.';
+  }
 
   @override
   String get ownerDashboardTitle => 'لوحة الشاليه';
