@@ -24,6 +24,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get selectGovernorateAndArea => 'يرجى اختيار المحافظة والمنطقة أولاً';
 
   @override
+  String get selectAreaToSearch => 'اختر المنطقة للبحث';
+
+  @override
+  String get areaSearchNoResults => 'لا توجد نتائج';
+
+  @override
   String get smartAssistantCtaTitle => 'اسأل عن أي عقار بالكويت';
 
   @override

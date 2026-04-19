@@ -261,6 +261,8 @@ function chaletPropertyBookable(data: admin.firestore.DocumentData | undefined):
   if (data.listingCategory !== "chalet") return bad;
   if (effectiveChaletMode(data) !== "daily") return bad;
   if (data.approved !== true) return bad;
+  // Public marketplace: must match app + rules (`hiddenFromPublic` must be boolean false).
+  if (data.hiddenFromPublic !== false) return bad;
   const owner = data.ownerId;
   if (typeof owner !== "string" || !owner.trim()) return bad;
   const price =
@@ -290,6 +292,24 @@ function chaletPropertyBookable(data: admin.firestore.DocumentData | undefined):
     weekendPricePerNight: weekendPrice,
     weekendWeekdays,
   };
+}
+
+/**
+ * Guest payment confirmation: listing must still be approved and publicly bookable.
+ * Mirrors app [listingDataIsPubliclyDiscoverable] for the critical `approved` + `hiddenFromPublic` slice.
+ */
+function assertPropertyPublicForGuestBookingPayment(
+  pdata: admin.firestore.DocumentData | undefined
+): void {
+  if (!pdata) {
+    throw new HttpsError("failed-precondition", "Property is not available for booking");
+  }
+  if (pdata.approved !== true) {
+    throw new HttpsError("failed-precondition", "Property is not available for booking");
+  }
+  if (pdata.hiddenFromPublic !== false) {
+    throw new HttpsError("failed-precondition", "Property is not available for booking");
+  }
 }
 
 /** Dart [DateTime.weekday]: Mon=1 … Sun=7 from UTC instant. */
@@ -793,6 +813,14 @@ export async function finalizeBookingAfterPayment(
           throw new HttpsError("permission-denied", "Not your booking");
         }
 
+        const propertyIdMf =
+          typeof data.propertyId === "string" ? data.propertyId.trim() : "";
+        if (!propertyIdMf) {
+          throw new HttpsError("failed-precondition", "Property is not available for booking");
+        }
+        const propSnapMf = await tx.get(db.collection("properties").doc(propertyIdMf));
+        assertPropertyPublicForGuestBookingPayment(propSnapMf.data());
+
         tx.update(bookingRef, {
           status: "confirmed" as BookingStatus,
           confirmedAt: FieldValue.serverTimestamp(),
@@ -852,6 +880,7 @@ export async function finalizeBookingAfterPayment(
             "Booking not allowed for this property type"
           );
         }
+        assertPropertyPublicForGuestBookingPayment(propDataBooking);
 
         const q = db
           .collection("bookings")
@@ -962,6 +991,7 @@ export async function finalizeBookingAfterPayment(
           "Booking not allowed for this property type"
         );
       }
+      assertPropertyPublicForGuestBookingPayment(propDataFake);
 
       const qFake = db
         .collection("bookings")

@@ -16,6 +16,12 @@
   "selectGovernorateAndArea": "Please select governorate and area first",
   "@selectGovernorateAndArea": { "description": "Alert: select governorate first" },
 
+  "selectAreaToSearch": "Select an area to search",
+  "@selectAreaToSearch": { "description": "Home search: prompt to pick an area before searching" },
+
+  "areaSearchNoResults": "No results found",
+  "@areaSearchNoResults": { "description": "Area search sheet: no rows match the query" },
+
   "smartAssistantCtaTitle": "Ask about any property in Kuwait",
   "@smartAssistantCtaTitle": { "description": "Smart assistant banner title on home" },
 

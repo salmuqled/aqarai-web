@@ -9,6 +9,8 @@ import 'package:aqarai_app/widgets/chalet_booking_widget.dart';
 ///
 /// Rebuilds are scoped with [ValueListenableBuilder] / [ListenableBuilder] so the
 /// shell (Material, padding) is not rebuilt on every calendar tick.
+///
+/// Shown only for guest users on property details ([PropertyDetailsPage] gates visibility).
 class BookingBar extends StatelessWidget {
   const BookingBar({
     super.key,
@@ -60,54 +62,54 @@ class BookingBar extends StatelessWidget {
                       return ValueListenableBuilder<String?>(
                         valueListenable: controller.barBreakdownLineVN,
                         builder: (context, breakdownOverride, _) {
-                      final totalLabel = '${fmt.format(total)} $currencyLabel';
-                      final breakdown =
-                          breakdownOverride ?? breakdownForNights(nights);
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          final totalLabel = '${fmt.format(total)} $currencyLabel';
+                          final breakdown =
+                              breakdownOverride ?? breakdownForNights(nights);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Expanded(
-                                child: _AnimatedBarMetric(
-                                  label: isAr ? 'عدد الأيام' : 'Nights',
-                                  value: '$nights',
-                                  valueKey: nights,
-                                  align: TextAlign.start,
-                                ),
-                              ),
-                              Expanded(
-                                child: _AnimatedBarMetric(
-                                  label: isAr
-                                      ? 'السعر الإجمالي'
-                                      : 'Total price',
-                                  value: totalLabel,
-                                  valueKey: totalLabel,
-                                  align: TextAlign.end,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (breakdown != null && breakdown.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              breakdown,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: cs.onSurface.withValues(
-                                      alpha: 0.62,
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _AnimatedBarMetric(
+                                      label: isAr ? 'عدد الأيام' : 'Nights',
+                                      value: '$nights',
+                                      valueKey: nights,
+                                      align: TextAlign.start,
                                     ),
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.3,
                                   ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ],
-                      );
+                                  Expanded(
+                                    child: _AnimatedBarMetric(
+                                      label: isAr
+                                          ? 'السعر الإجمالي'
+                                          : 'Total price',
+                                      value: totalLabel,
+                                      valueKey: totalLabel,
+                                      align: TextAlign.end,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (breakdown != null && breakdown.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  breakdown,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.62,
+                                        ),
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.3,
+                                      ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ],
+                          );
                         },
                       );
                     },
@@ -125,10 +127,10 @@ class BookingBar extends StatelessWidget {
                           ? 'معاينة — اضغط تاريخ المغادرة لإنهاء الاختيار'
                           : 'Preview — tap check-out to confirm your stay',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: cs.primary.withValues(alpha: 0.85),
-                        fontWeight: FontWeight.w600,
-                        height: 1.3,
-                      ),
+                            color: cs.primary.withValues(alpha: 0.85),
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                          ),
                       textAlign: TextAlign.center,
                     ),
                   );
@@ -146,7 +148,8 @@ class BookingBar extends StatelessWidget {
                       final canBook = controller.canBookVN.value;
                       final submitting = controller.submittingVN.value;
                       final hasSelectedDates = controller.nightsVN.value > 0;
-                      final canAct = loggedIn && canBook && !submitting;
+                      final canAct =
+                          loggedIn && canBook && !submitting;
 
                       Widget label;
                       if (submitting && loggedIn) {
@@ -168,7 +171,7 @@ class BookingBar extends StatelessWidget {
                         );
                       } else if (!hasSelectedDates) {
                         label = Text(
-                          'اختر التواريخ للحجز',
+                          isAr ? 'اختر التواريخ للحجز' : 'Select dates to book',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -257,8 +260,8 @@ class _AnimatedBarMetric extends StatelessWidget {
     final crossAxis = align == TextAlign.end
         ? CrossAxisAlignment.end
         : align == TextAlign.center
-        ? CrossAxisAlignment.center
-        : CrossAxisAlignment.start;
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start;
 
     return Column(
       crossAxisAlignment: crossAxis,

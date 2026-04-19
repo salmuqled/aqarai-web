@@ -165,6 +165,346 @@ export const setAdminClaim = onCall({ region: "us-central1" }, async (request) =
   return { ok: true, message: "Admin claim set for " + targetUid };
 });
 
+/* --------------------------------------------------------
+   Daily rental property search (callable; optional date availability)
+-------------------------------------------------------- */
+const SEARCH_DAILY_PROPERTIES_PAGE_SIZE = 20;
+const SEARCH_DAILY_PROPERTY_ID_IN_CHUNK = 30;
+const SEARCH_DAILY_MAX_SCAN_PAGES = 40;
+
+/** Same hold window as chalet booking `pending_payment` (must stay aligned). */
+const SEARCH_DAILY_PENDING_PAYMENT_HOLD_MS = 5 * 60 * 1000;
+
+function searchDailyPendingPaymentStillHolds(
+  data: admin.firestore.DocumentData,
+  nowMs: number
+): boolean {
+  const st = typeof data.status === "string" ? data.status.trim() : "";
+  if (st !== "pending_payment") return false;
+  const exp = data.expiresAt;
+  if (exp instanceof admin.firestore.Timestamp) {
+    return exp.toMillis() > nowMs;
+  }
+  const cr = data.createdAt;
+  if (cr instanceof admin.firestore.Timestamp) {
+    return cr.toMillis() + SEARCH_DAILY_PENDING_PAYMENT_HOLD_MS > nowMs;
+  }
+  return true;
+}
+
+function searchDailyRangesOverlap(
+  startA: admin.firestore.Timestamp,
+  endA: admin.firestore.Timestamp,
+  startB: admin.firestore.Timestamp,
+  endB: admin.firestore.Timestamp
+): boolean {
+  return startA.toMillis() < endB.toMillis() && endA.toMillis() > startB.toMillis();
+}
+
+function parseSearchDailyDateInput(v: unknown): admin.firestore.Timestamp | null {
+  if (v == null || v === "") return null;
+  if (v instanceof admin.firestore.Timestamp) return v;
+  if (typeof v === "object" && v !== null && "seconds" in v) {
+    const o = v as { seconds: number; nanoseconds?: number };
+    if (typeof o.seconds === "number") {
+      return new admin.firestore.Timestamp(o.seconds, o.nanoseconds ?? 0);
+    }
+  }
+  if (typeof v === "number" && !Number.isNaN(v)) {
+    return admin.firestore.Timestamp.fromMillis(Math.trunc(v));
+  }
+  if (typeof v === "string") {
+    const ms = Date.parse(v);
+    if (!Number.isNaN(ms)) return admin.firestore.Timestamp.fromMillis(ms);
+  }
+  return null;
+}
+
+function buildSearchDailyBaseQuery(
+  db: admin.firestore.Firestore,
+  rentalType: "daily" | "monthly"
+): admin.firestore.Query {
+  return db
+    .collection("properties")
+    .where("serviceType", "==", "rent")
+    .where("rentalType", "==", rentalType)
+    .where("approved", "==", true)
+    .where("isActive", "==", true)
+    .orderBy("createdAt", "desc")
+    .orderBy(admin.firestore.FieldPath.documentId(), "desc");
+}
+
+async function fetchUnavailablePropertyIdsSearchDaily(
+  db: admin.firestore.Firestore,
+  propertyIds: string[],
+  reqStart: admin.firestore.Timestamp,
+  reqEnd: admin.firestore.Timestamp,
+  nowMs: number
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (propertyIds.length === 0) return out;
+
+  for (let i = 0; i < propertyIds.length; i += SEARCH_DAILY_PROPERTY_ID_IN_CHUNK) {
+    const chunk = propertyIds.slice(i, i + SEARCH_DAILY_PROPERTY_ID_IN_CHUNK);
+    const [blocksSnap, bookingsSnap] = await Promise.all([
+      db
+        .collection("blocked_dates")
+        .where("propertyId", "in", chunk)
+        .where("startDate", "<=", reqEnd)
+        .get(),
+      db.collection("bookings").where("propertyId", "in", chunk).get(),
+    ]);
+
+    for (const doc of blocksSnap.docs) {
+      const d = doc.data();
+      const pid = typeof d.propertyId === "string" ? d.propertyId : "";
+      const bs = d.startDate as admin.firestore.Timestamp | undefined;
+      const be = d.endDate as admin.firestore.Timestamp | undefined;
+      if (!pid || !bs || !be) continue;
+      if (searchDailyRangesOverlap(reqStart, reqEnd, bs, be)) out.add(pid);
+    }
+
+    for (const doc of bookingsSnap.docs) {
+      const d = doc.data();
+      const pid = typeof d.propertyId === "string" ? d.propertyId : "";
+      const st = typeof d.status === "string" ? d.status.trim() : "";
+      if (st !== "pending_payment" && st !== "confirmed") continue;
+      if (st === "pending_payment" && !searchDailyPendingPaymentStillHolds(d, nowMs)) continue;
+      const bs = d.startDate as admin.firestore.Timestamp | undefined;
+      const be = d.endDate as admin.firestore.Timestamp | undefined;
+      if (!pid || !bs || !be) continue;
+      if (searchDailyRangesOverlap(reqStart, reqEnd, bs, be)) out.add(pid);
+    }
+  }
+  return out;
+}
+
+function computeSearchDailyScore(
+  data: admin.firestore.DocumentData,
+  nowMs: number
+): number {
+  let score = 0;
+
+  const createdAt = data.createdAt;
+  if (createdAt instanceof admin.firestore.Timestamp) {
+    const ageDays = (nowMs - createdAt.toMillis()) / (1000 * 60 * 60 * 24);
+    score += Math.max(0, 30 - ageDays);
+  }
+
+  const featuredFlag = data.featured === true || data.featured === "true";
+  const featuredUntil = data.featuredUntil;
+  const featuredActive =
+    featuredUntil instanceof admin.firestore.Timestamp &&
+    featuredUntil.toMillis() > nowMs;
+  if (featuredFlag || featuredActive) {
+    score += 20;
+  }
+
+  const price = data.price;
+  if (typeof price === "number" && price > 0) {
+    score += 5;
+  } else if (typeof price === "string" && price.trim() !== "") {
+    const n = Number(price);
+    if (!Number.isNaN(n) && n > 0) score += 5;
+  }
+
+  return score;
+}
+
+export const searchDailyProperties = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    console.log("🔥🔥 FUNCTION HIT 🔥🔥");
+    try {
+      console.log("DEBUG_REQUEST_DATA:", JSON.stringify(request.data));
+      const db = admin.firestore();
+      const { startDate, endDate, cursor, rentalType: rentalTypeRaw } = (request.data || {}) as {
+        startDate?: unknown;
+        endDate?: unknown;
+        cursor?: unknown;
+        rentalType?: unknown;
+      };
+
+      let rentalType: "daily" | "monthly" = "daily";
+      if (typeof rentalTypeRaw === "string") {
+        const t = rentalTypeRaw.trim().toLowerCase();
+        if (t === "monthly") rentalType = "monthly";
+        else if (t === "daily") rentalType = "daily";
+      }
+
+      console.log("DEBUG_RENTAL_TYPE:", rentalType);
+
+      const rawCursor = typeof cursor === "string" ? cursor : "";
+      const reqStartTs = parseSearchDailyDateInput(startDate);
+      const reqEndTs = parseSearchDailyDateInput(endDate);
+      const filterByDates =
+        reqStartTs != null && reqEndTs != null && reqStartTs.toMillis() < reqEndTs.toMillis();
+
+      if (
+        (startDate != null && startDate !== "" && reqStartTs == null) ||
+        (endDate != null && endDate !== "" && reqEndTs == null)
+      ) {
+        throw new HttpsError("invalid-argument", "Invalid startDate or endDate");
+      }
+      if (
+        (reqStartTs != null && reqEndTs == null) ||
+        (reqStartTs == null && reqEndTs != null)
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "startDate and endDate must both be provided for availability filtering"
+        );
+      }
+      if (reqStartTs != null && reqEndTs != null && reqStartTs.toMillis() >= reqEndTs.toMillis()) {
+        throw new HttpsError("invalid-argument", "startDate must be before endDate");
+      }
+
+      let q = buildSearchDailyBaseQuery(db, rentalType);
+
+      if (rawCursor.length > 0) {
+        let payload: { createdAtMs?: unknown; documentId?: unknown };
+        try {
+          payload = JSON.parse(
+            Buffer.from(rawCursor, "base64").toString("utf8")
+          ) as { createdAtMs?: unknown; documentId?: unknown };
+        } catch {
+          throw new HttpsError("invalid-argument", "Invalid cursor");
+        }
+        const documentId =
+          typeof payload.documentId === "string" ? payload.documentId : "";
+        if (!documentId) {
+          throw new HttpsError("invalid-argument", "Invalid cursor");
+        }
+        const msRaw = payload.createdAtMs;
+        const ms =
+          typeof msRaw === "number" && Number.isFinite(msRaw)
+            ? msRaw
+            : typeof msRaw === "string" && msRaw.length > 0
+              ? Number(msRaw)
+              : NaN;
+        const ts = Number.isFinite(ms)
+          ? admin.firestore.Timestamp.fromMillis(ms as number)
+          : admin.firestore.Timestamp.fromMillis(0);
+        q = q.startAfter(ts, documentId);
+      }
+
+      console.log("DEBUG_QUERY_FILTER:", {
+        serviceType: "rent",
+        rentalType: rentalType,
+      });
+
+      const pageSize = SEARCH_DAILY_PROPERTIES_PAGE_SIZE;
+      const nowMs = Date.now();
+      const collected: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+      let lastSnap: FirebaseFirestore.QuerySnapshot | null = null;
+      let pages = 0;
+
+      while (collected.length < pageSize && pages < SEARCH_DAILY_MAX_SCAN_PAGES) {
+        pages += 1;
+        const snap = await q.limit(pageSize).get();
+        lastSnap = snap;
+        const snapshot = snap;
+        console.log("🔥 QUERY RENTAL TYPE:", rentalType);
+        console.log(
+          "🔥 DB RETURN TYPES:",
+          snapshot.docs.map((d) => ({
+            id: d.id,
+            rentalType: d.data().rentalType,
+          }))
+        );
+        console.log("DEBUG_RAW_DOCS_COUNT:", snapshot.size);
+        console.log(
+          "DEBUG_RAW_RENTAL_TYPES:",
+          snapshot.docs.map((d) => d.data().rentalType)
+        );
+        if (snap.empty) break;
+
+        const ids = snap.docs.map((d) => d.id);
+        const unavailable = filterByDates
+          ? await fetchUnavailablePropertyIdsSearchDaily(
+              db,
+              ids,
+              reqStartTs!,
+              reqEndTs!,
+              nowMs
+            )
+          : new Set<string>();
+
+        for (const doc of snap.docs) {
+          if (!filterByDates || !unavailable.has(doc.id)) {
+            collected.push(doc);
+            if (collected.length >= pageSize) break;
+          }
+        }
+
+        if (collected.length >= pageSize) break;
+        if (snap.size < pageSize) break;
+
+        const lastDoc = snap.docs[snap.docs.length - 1];
+        const dLast = lastDoc.data();
+        const ca = (dLast as { createdAt?: admin.firestore.Timestamp }).createdAt;
+        if (!(ca instanceof admin.firestore.Timestamp)) break;
+        q = buildSearchDailyBaseQuery(db, rentalType).startAfter(ca, lastDoc.id);
+      }
+
+      const availableDocs = collected.slice(0, pageSize);
+      availableDocs.sort((a, b) => {
+        const sa = computeSearchDailyScore(a.data(), nowMs);
+        const sb = computeSearchDailyScore(b.data(), nowMs);
+        if (sb !== sa) return sb - sa;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      });
+
+      console.log("DEBUG_FILTERED_COUNT:", availableDocs.length);
+      console.log(
+        "DEBUG_FILTERED_RENTAL_TYPES:",
+        availableDocs.map((d) => d.data().rentalType)
+      );
+
+      const results = availableDocs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      console.log("DEBUG_RESPONSE_COUNT:", results.length);
+
+      const lastBatch = lastSnap;
+      const hitScanCap = pages >= SEARCH_DAILY_MAX_SCAN_PAGES;
+      const hasMore =
+        !hitScanCap && lastBatch != null && lastBatch.size === pageSize;
+      const lastForCursor =
+        lastBatch != null && lastBatch.docs.length > 0
+          ? lastBatch.docs[lastBatch.docs.length - 1]
+          : null;
+
+      let nextCursor: string | null = null;
+      if (hasMore && lastForCursor) {
+        const data = lastForCursor.data() ?? {};
+        const payload = {
+          createdAtMs:
+            (data as { createdAt?: admin.firestore.Timestamp }).createdAt
+              ?.toMillis?.() || null,
+          documentId: lastForCursor.id,
+        };
+        nextCursor = Buffer.from(JSON.stringify(payload), "utf8").toString(
+          "base64"
+        );
+      }
+
+      return {
+        success: true,
+        properties: results,
+        hasMore,
+        nextCursor,
+      };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("searchDailyProperties error:", error);
+      throw new HttpsError("internal", "Failed to fetch properties");
+    }
+  }
+);
+
 // ⛔️ هذا مكان استيراد أي فانكشن ثانية — خارج كل الفانكشنز
 export { approveListingV2 } from "./listing_approval";
 export { onPropertyUpdated, onWantedUpdated } from "./match_listings";

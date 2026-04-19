@@ -19,13 +19,15 @@ import 'package:aqarai_app/services/interest_lead_flow_service.dart';
 import 'package:aqarai_app/widgets/interested_lead_confirmation_sheet.dart';
 import 'package:aqarai_app/widgets/chalet_booking_widget.dart';
 import 'package:aqarai_app/widgets/booking_bar.dart';
+import 'package:aqarai_app/widgets/owner_booking_tools.dart';
 import 'package:aqarai_app/services/featured_property_service.dart';
 import 'package:aqarai_app/services/featured_suggestion_tracking_service.dart';
 import 'package:aqarai_app/services/payment/payment_service_provider.dart';
 import 'package:aqarai_app/services/ai_suggestions_auto_config_service.dart';
 import 'package:aqarai_app/pages/video_page.dart';
 import 'package:aqarai_app/utils/video_embed_url.dart';
-import 'package:aqarai_app/utils/property_price_type.dart';
+import 'package:aqarai_app/utils/booking_rules.dart';
+import 'package:aqarai_app/utils/property_price_display.dart';
 
 /// Human-friendly featured expiry line for owner CTA (Arabic / English).
 String formatRemainingTime(DateTime featuredUntil, {bool isArabic = true}) {
@@ -116,6 +118,20 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
   bool _trackedSuggestionShown = false;
   String? _lastShownEventId;
   String? _lastClickEventId;
+
+  @override
+  void initState() {
+    super.initState();
+    _bookingController.reset();
+  }
+
+  @override
+  void didUpdateWidget(covariant PropertyDetailsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.propertyId != oldWidget.propertyId) {
+      _bookingController.reset();
+    }
+  }
 
   @override
   void dispose() {
@@ -356,6 +372,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool showOwnerTools = false;
     final loc = AppLocalizations.of(context)!;
 
     return _RecordPropertyViewOnce(
@@ -450,6 +467,10 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
           final String ownerId = (data['ownerId'] ?? '').toString().trim();
           final String? uid = FirebaseAuth.instance.currentUser?.uid;
           final bool isOwner = uid != null && uid.isNotEmpty && uid == ownerId;
+          final bool isAdmin = widget.isAdminView;
+
+          final bool isChaletRentListing = canShowBookingUI(data);
+          final bool canSeeBooking = isChaletRentListing && !isOwner && !isAdmin;
 
           final int roomCount = (data['roomCount'] ?? 0) as int;
           final int masterRoomCount = (data['masterRoomCount'] ?? 0) as int;
@@ -465,14 +486,6 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
           final bool hasLaundryRoom = data['hasLaundryRoom'] ?? false;
           final bool hasGarden = data['hasGarden'] ?? false;
 
-          final bool showChaletBooking =
-              !widget.isAdminView &&
-              listingDataIsChalet(data) &&
-              serviceType == 'rent' &&
-              listingDataChaletAllowsDailyBooking(data) &&
-              listingDataIsPubliclyDiscoverable(data) &&
-              FirebaseAuth.instance.currentUser?.uid != ownerId;
-
           return Scaffold(
             backgroundColor: const Color(0xFFF7F7F7),
             appBar: AppBar(
@@ -485,12 +498,11 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
               ),
               centerTitle: true,
               actions: [
-                if (FirebaseAuth.instance.currentUser != null &&
-                    !widget.isAdminView)
+                if (FirebaseAuth.instance.currentUser != null && !isAdmin)
                   _FavoriteHeart(propertyId: widget.propertyId),
               ],
             ),
-            bottomNavigationBar: showChaletBooking
+            bottomNavigationBar: canSeeBooking
                 ? BookingBar(
                     controller: _bookingController,
                     pricePerNight: price.toDouble(),
@@ -501,7 +513,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                 16,
                 16,
                 16,
-                showChaletBooking ? 100 : 16,
+                canSeeBooking ? 100 : 16,
               ),
               children: [
                 _buildImageSlider(context, images),
@@ -509,7 +521,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   const SizedBox(height: 12),
                   _PropertyVideoPreviewCard(videoUrl: videoUrlRaw),
                 ],
-                if (showChaletBooking) ...[
+                if (canSeeBooking) ...[
                   const SizedBox(height: 16),
                   _buildChaletBookingConversionCard(
                     context: context,
@@ -521,7 +533,15 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                     area: area,
                     typeLabel: _translateType(context, type),
                     imageUrl: images.isNotEmpty ? images.first.toString() : '',
+                    listingData: data,
                   ),
+                ],
+                if (showOwnerTools && // ignore: dead_code
+                    isChaletRentListing && // ignore: dead_code
+                    isOwner && // ignore: dead_code
+                    !isAdmin) ...[ // ignore: dead_code
+                  const SizedBox(height: 16),
+                  OwnerBookingTools(propertyId: widget.propertyId),
                 ],
                 const SizedBox(height: 16),
 
@@ -533,23 +553,22 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   _translateType(context, type),
                   _translateService(context, serviceType),
                   _translateStatus(context, status),
-                  listingTypeSlug: type,
+                  serviceTypeRaw: serviceType,
                   priceTypeRaw: data['priceType']?.toString(),
                   bookingForTotalLine:
-                      listingDataIsChalet(data) &&
-                              serviceType == 'rent' &&
-                              PropertyPriceType.infer(
-                                    stored: data['priceType']?.toString(),
-                                    listingType: type,
+                      canSeeBooking &&
+                              resolveDisplayPriceType(
+                                    serviceType: serviceType,
+                                    priceType: data['priceType']?.toString(),
                                   ) ==
-                                  'daily'
+                                  DisplayPriceType.daily
                           ? _bookingController
                           : null,
-                  hideHeroPrice: showChaletBooking,
-                  chaletPerNightPrice: showChaletBooking,
+                  hideHeroPrice: isChaletRentListing,
+                  chaletPerNightPrice: isChaletRentListing,
                 ),
 
-                if (!widget.isAdminView && isOwner) ...[
+                if (!isAdmin && isOwner) ...[
                   const SizedBox(height: 14),
                   StreamBuilder<AiSuggestionsAutoConfig>(
                     stream: AiSuggestionsAutoConfigService.watch(),
@@ -716,14 +735,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   ),
                 ],
 
-                if ((isOwner || widget.isAdminView) &&
-                    listingDataIsChalet(data) &&
-                    listingDataChaletAllowsDailyBooking(data)) ...[
-                  const SizedBox(height: 16),
-                  ChaletOwnerAvailabilityTools(propertyId: widget.propertyId),
-                ],
-
-                if (!widget.isAdminView &&
+                if (!isAdmin &&
                     widget.auctionLotId != null &&
                     widget.auctionLotId!.trim().isNotEmpty)
                   _AuctionRegistrationForLot(
@@ -732,7 +744,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                     listingPrice: price.toDouble(),
                   ),
 
-                if (!widget.isAdminView &&
+                if (!isAdmin &&
                     widget.auctionLotId != null &&
                     widget.auctionLotId!.trim().isNotEmpty)
                   _AuctionLotPublicRejectionStrip(
@@ -740,7 +752,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                     expectedAuctionId: widget.auctionId,
                   ),
 
-                if (!widget.isAdminView &&
+                if (!isAdmin &&
                     widget.auctionLotId != null &&
                     widget.auctionLotId!.trim().isNotEmpty &&
                     ownerId.isNotEmpty &&
@@ -773,13 +785,12 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
 
                 const SizedBox(height: 16),
 
-                if (widget.isAdminView)
-                  _buildOwnerCard(
-                    context,
-                    ownerName,
-                    ownerPhone,
-                    widget.propertyId,
-                    ownerId,
+                if (isAdmin)
+                  PropertyDetailsAdminControls(
+                    ownerName: ownerName,
+                    ownerPhone: ownerPhone,
+                    propertyId: widget.propertyId,
+                    ownerId: ownerId,
                   ),
 
                 const SizedBox(height: 16),
@@ -788,8 +799,8 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
 
                 const SizedBox(height: 24),
 
-                // Daily chalets: booking bar + calendar are the primary flow (no duplicate CTA).
-                if (!widget.isAdminView && !showChaletBooking)
+                // Rent chalets: booking module is primary; others use interest CTA.
+                if (!isChaletRentListing)
                   _buildInterestedButton(
                     context,
                     widget.propertyId,
@@ -988,13 +999,26 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     return isAr ? '$a د.ك / الليلة' : '$a KWD / night';
   }
 
-  String _heroPriceWithUnit(num price, bool isAr, String priceType) {
+  String _heroPriceWithUnit(
+    num price,
+    bool isAr,
+    String serviceTypeRaw,
+    String? priceTypeRaw,
+  ) {
+    final displayType = resolveDisplayPriceType(
+      serviceType: serviceTypeRaw,
+      priceType: priceTypeRaw,
+    );
     final core = _formatKwdDisplayAmount(price, isAr: isAr);
-    final suffix = PropertyPriceType.suffixForLocale(priceType, isArabic: isAr);
+    final suffix = priceSuffix(displayType, isAr);
     return isAr ? '$core د.ك$suffix' : '$core KWD$suffix';
   }
 
-  void _onChaletPrimaryCtaTap(BuildContext context, bool isAr) {
+  void _onChaletPrimaryCtaTap(
+    BuildContext context,
+    bool isAr,
+    Map<String, dynamic> listingData,
+  ) {
     if (!_bookingController.canBook) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1003,6 +1027,19 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
             isAr
                 ? 'يرجى اختيار تواريخ الوصول والمغادرة'
                 : 'Please select check-in and check-out dates',
+          ),
+        ),
+      );
+      return;
+    }
+    if (!listingDataIsPubliclyDiscoverable(listingData)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            isAr
+                ? 'هذا العقار غير متاح للحجز حالياً'
+                : 'This property is not available for booking right now.',
           ),
         ),
       );
@@ -1022,6 +1059,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     required String area,
     required String typeLabel,
     required String imageUrl,
+    required Map<String, dynamic> listingData,
   }) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -1239,6 +1277,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
               weekendPricePerNight: chaletWeekendPrice,
               peakNightWeekdays: chaletPeakWeekdays,
               compactLayoutForPropertyDetails: true,
+              allowPublicBooking: listingDataIsPubliclyDiscoverable(listingData),
             ),
             const SizedBox(height: 18),
             Text(
@@ -1264,7 +1303,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   child: FilledButton(
                     onPressed: busy
                         ? null
-                        : () => _onChaletPrimaryCtaTap(context, isAr),
+                        : () => _onChaletPrimaryCtaTap(context, isAr, listingData),
                     style: FilledButton.styleFrom(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -1373,7 +1412,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     String type,
     String serviceType,
     String status, {
-    required String listingTypeSlug,
+    required String serviceTypeRaw,
     String? priceTypeRaw,
     ChaletBookingController? bookingForTotalLine,
     bool hideHeroPrice = false,
@@ -1381,13 +1420,13 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
   }) {
     final loc = AppLocalizations.of(context)!;
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
-    final inferredPt = PropertyPriceType.infer(
-      stored: priceTypeRaw,
-      listingType: listingTypeSlug,
+    final displayType = resolveDisplayPriceType(
+      serviceType: serviceTypeRaw,
+      priceType: priceTypeRaw,
     );
     final heroPriceText = chaletPerNightPrice
         ? _perNightPriceLine(price, isAr)
-        : _heroPriceWithUnit(price, isAr, inferredPt);
+        : _heroPriceWithUnit(price, isAr, serviceTypeRaw, priceTypeRaw);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1405,7 +1444,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
               ),
             ),
             if (bookingForTotalLine != null &&
-                inferredPt == 'daily' &&
+                displayType == DisplayPriceType.daily &&
                 price > 0) ...[
               ListenableBuilder(
                 listenable: bookingForTotalLine.nightsVN,
@@ -1531,13 +1570,76 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     );
   }
 
-  Widget _buildOwnerCard(
-    BuildContext context,
-    String ownerName,
-    String ownerPhone,
-    String propertyId,
-    String ownerId,
-  ) {
+  Widget _buildFooter(BuildContext context, Timestamp createdAt) {
+    final loc = AppLocalizations.of(context)!;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(),
+      child: Text(
+        "${loc.addedOnDate} ${_formatDate(createdAt.toDate())}",
+        style: const TextStyle(fontSize: 15, color: Colors.grey),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return "${date.year}-${date.month}-${date.day}";
+  }
+
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.shade300,
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    );
+  }
+
+  Widget _rowInfo(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text("$label: $value", style: const TextStyle(fontSize: 16)),
+    );
+  }
+}
+
+/// Admin-only section on property details (moderation + owner contact).
+class PropertyDetailsAdminControls extends StatelessWidget {
+  const PropertyDetailsAdminControls({
+    super.key,
+    required this.ownerName,
+    required this.ownerPhone,
+    required this.propertyId,
+    required this.ownerId,
+  });
+
+  final String ownerName;
+  final String ownerPhone;
+  final String propertyId;
+  final String ownerId;
+
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.grey.shade300,
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
     final isAr = Localizations.localeOf(context).languageCode == 'ar';
 
@@ -1585,19 +1687,16 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
             ],
           ),
           const SizedBox(height: 16),
-
           Text(
             "${loc.ownerNameLabel}: $ownerName",
             style: const TextStyle(fontSize: 16),
           ),
           const SizedBox(height: 6),
-
           Text(
             "${loc.ownerPhoneLabel}: $ownerPhone",
             style: const TextStyle(fontSize: 16),
           ),
           const SizedBox(height: 6),
-
           Text(
             "${loc.adIdLabel}: $propertyId",
             style: const TextStyle(fontSize: 14, color: Colors.grey),
@@ -1611,7 +1710,6 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
               ),
             ),
           const SizedBox(height: 18),
-
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -1635,44 +1733,6 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildFooter(BuildContext context, Timestamp createdAt) {
-    final loc = AppLocalizations.of(context)!;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: Text(
-        "${loc.addedOnDate} ${_formatDate(createdAt.toDate())}",
-        style: const TextStyle(fontSize: 15, color: Colors.grey),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    return "${date.year}-${date.month}-${date.day}";
-  }
-
-  BoxDecoration _cardDecoration() {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.grey.shade300,
-          blurRadius: 8,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    );
-  }
-
-  Widget _rowInfo(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text("$label: $value", style: const TextStyle(fontSize: 16)),
     );
   }
 }

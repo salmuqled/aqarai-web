@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:aqarai_app/utils/property_listing_cover.dart';
-import 'package:aqarai_app/utils/property_price_type.dart';
+import 'package:aqarai_app/utils/property_price_display.dart';
 import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 
 /// Badge text for labels (Arabic). Max 2 shown.
@@ -62,11 +62,11 @@ class ListingCard extends StatelessWidget {
     final price = data['price'];
     final area = (data['area'] ?? data['areaAr'] ?? data['areaEn'] ?? data['area_id'] ?? data['areaCode'] ?? '').toString();
     final type = (data['type'] ?? '').toString().toLowerCase();
-    final priceType = PropertyPriceType.infer(
-      stored: data['priceType']?.toString(),
-      listingType: (data['type'] ?? '').toString(),
+    final displayType = resolveDisplayPriceType(
+      serviceType: data['serviceType']?.toString(),
+      priceType: data['priceType']?.toString(),
     );
-    final priceUnit = PropertyPriceType.suffixForLocale(priceType, isArabic: isArabic);
+    final priceUnit = priceSuffix(displayType, isArabic);
     final num? priceNum = price is num ? price : num.tryParse('$price');
     final int? nTotal = nightsForTotalEstimate;
 
@@ -203,7 +203,7 @@ class ListingCard extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (priceType == 'daily' &&
+                  if (displayType == DisplayPriceType.daily &&
                       nTotal != null &&
                       nTotal > 0 &&
                       priceNum != null &&

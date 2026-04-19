@@ -16,6 +16,7 @@ import 'package:aqarai_app/pages/admin_requests_page.dart';
 import 'package:aqarai_app/pages/favorites_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
 import 'package:aqarai_app/pages/auctions_page.dart';
+import 'package:aqarai_app/pages/daily_rent_page.dart';
 import 'package:aqarai_app/pages/legal_pages.dart';
 import 'package:aqarai_app/pages/contact_us_page.dart';
 import 'package:aqarai_app/pages/notifications_page.dart';
@@ -306,6 +307,26 @@ class _HomePageState extends State<HomePage> {
                       const AqarSearchBox(),
 
                       const SizedBox(height: 14),
+
+                      SmartAssistantCta(
+                        title: locale == 'ar' ? 'إيجار يومي' : 'Daily rental',
+                        subtitle: locale == 'ar'
+                            ? 'عقارات للإيجار باليوم في الكويت'
+                            : 'Daily rental properties across Kuwait',
+                        leadingIcon: Icons.calendar_today_outlined,
+                        trailingIcon: Icons.chevron_right_rounded,
+                        accentColor: const Color(0xFF0EA5E9),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const DailyRentPage(),
+                            ),
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 12),
 
                       SmartAssistantCta(
                         title: loc.smartAssistantCtaTitle,

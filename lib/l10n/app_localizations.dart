@@ -125,6 +125,18 @@ abstract class AppLocalizations {
   /// **'Please select governorate and area first'**
   String get selectGovernorateAndArea;
 
+  /// Home search: prompt to pick an area before searching
+  ///
+  /// In en, this message translates to:
+  /// **'Select an area to search'**
+  String get selectAreaToSearch;
+
+  /// Area search sheet: no rows match the query
+  ///
+  /// In en, this message translates to:
+  /// **'No results found'**
+  String get areaSearchNoResults;
+
   /// Smart assistant banner title on home
   ///
   /// In en, this message translates to:

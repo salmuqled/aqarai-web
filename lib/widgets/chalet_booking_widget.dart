@@ -97,6 +97,19 @@ class ChaletBookingController {
 
   void submit() => _submit?.call();
 
+  /// Clears selection and bar state when switching to another property (same [State] instance).
+  void reset() {
+    _startDate = null;
+    _endDate = null;
+    _submit = null;
+    if (nightsVN.value != 0) nightsVN.value = 0;
+    if (totalPriceVN.value != 0.0) totalPriceVN.value = 0.0;
+    if (canBookVN.value) canBookVN.value = false;
+    if (isProvisionalVN.value) isProvisionalVN.value = false;
+    if (submittingVN.value) submittingVN.value = false;
+    if (barBreakdownLineVN.value != null) barBreakdownLineVN.value = null;
+  }
+
   void dispose() {
     nightsVN.dispose();
     totalPriceVN.dispose();
@@ -196,6 +209,8 @@ class ChaletBookingWidget extends StatelessWidget {
     this.peakNightWeekdays,
     /// When true, hides the title/price header so the parent (e.g. property details) supplies hierarchy.
     this.compactLayoutForPropertyDetails = false,
+    /// When false, blocks client booking actions (non-public listing); server also enforces.
+    this.allowPublicBooking = true,
   });
 
   final String propertyId;
@@ -220,6 +235,9 @@ class ChaletBookingWidget extends StatelessWidget {
 
   /// Hides duplicate title + per-night price block when embedded in a parent card.
   final bool compactLayoutForPropertyDetails;
+
+  /// Guest booking allowed only when the listing is publicly discoverable.
+  final bool allowPublicBooking;
 
   static List<ChaletBookedRange> _blockedRangesFromSnapshot(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
@@ -328,6 +346,7 @@ class ChaletBookingWidget extends StatelessWidget {
                       minNights: minNights,
                       errorTextStyle: TextStyle(color: cs.error),
                       isAr: isAr,
+                      allowPublicBooking: allowPublicBooking,
                     ),
                   ),
                 ],
@@ -356,6 +375,7 @@ class _ChaletBookingFirestoreGate extends StatefulWidget {
     required this.minNights,
     required this.errorTextStyle,
     required this.isAr,
+    required this.allowPublicBooking,
   });
 
   final String propertyId;
@@ -370,6 +390,7 @@ class _ChaletBookingFirestoreGate extends StatefulWidget {
   final int minNights;
   final TextStyle errorTextStyle;
   final bool isAr;
+  final bool allowPublicBooking;
 
   @override
   State<_ChaletBookingFirestoreGate> createState() =>
@@ -484,6 +505,7 @@ class _ChaletBookingFirestoreGateState extends State<_ChaletBookingFirestoreGate
               showInternalBar: !widget.useExternalBookingBar,
               minNights: math.max(1, widget.minNights),
               showFullyAvailableBanner: bookingRanges.isEmpty,
+              allowPublicBooking: widget.allowPublicBooking,
             );
           }
         }
@@ -1034,6 +1056,7 @@ class _ChaletBookingBody extends StatefulWidget {
     required this.minNights,
     required this.showFullyAvailableBanner,
     this.controller,
+    required this.allowPublicBooking,
   });
 
   final String propertyId;
@@ -1048,6 +1071,7 @@ class _ChaletBookingBody extends StatefulWidget {
   final int minNights;
   final bool showFullyAvailableBanner;
   final ChaletBookingController? controller;
+  final bool allowPublicBooking;
 
   @override
   State<_ChaletBookingBody> createState() => _ChaletBookingBodyState();
@@ -1065,6 +1089,23 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
   bool _selectionHintIsBookedConflict = false;
   bool _selectionHintIsMinStay = false;
   bool _selectionHintIsUnavailableDateTap = false;
+
+  @override
+  void didUpdateWidget(covariant _ChaletBookingBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.propertyId != widget.propertyId) {
+      widget.controller?.reset();
+      _focusedDay = DateTime.now();
+      _rangeStart = null;
+      _rangeEnd = null;
+      _submitting = false;
+      _bookButtonPressed = false;
+      _selectionHint = null;
+      _selectionHintIsBookedConflict = false;
+      _selectionHintIsMinStay = false;
+      _selectionHintIsUnavailableDateTap = false;
+    }
+  }
 
   bool get _isAr => Localizations.localeOf(context).languageCode == 'ar';
 
@@ -1206,6 +1247,22 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
 
   Future<void> _payNowFlow() async {
     if (!_isValidSelection || _submitting) return;
+    if (!widget.allowPublicBooking) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          content: Text(
+            _isAr
+                ? 'هذا العقار غير متاح للحجز حالياً'
+                : 'This property is not available for booking right now.',
+          ),
+        ),
+      );
+      return;
+    }
     final bounds = _computeStayBounds();
     if (bounds == null || _nights < 1) return;
 

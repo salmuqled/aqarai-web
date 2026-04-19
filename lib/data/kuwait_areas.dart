@@ -24,6 +24,17 @@ const List<AreaModel> kuwaitAreas = [
   AreaModel(code: 'farwaniya', nameAr: 'الفروانية', nameEn: 'Farwaniya'),
   AreaModel(code: 'mahboula', nameAr: 'المهبولة', nameEn: 'Mahboula'),
   AreaModel(code: 'fahaheel', nameAr: 'الفحيحيل', nameEn: 'Fahaheel'),
+  // Khiran: official rows in governorates data (codes align with Firestore / functions/src/kuwait_areas.ts)
+  AreaModel(
+    code: 'sabah_al_ahmad_marine_khiran',
+    nameAr: 'صباح الاحمد البحرية - الخيران',
+    nameEn: 'Sabah Al-Ahmad Marine - Khiran',
+  ),
+  AreaModel(
+    code: 'khiran_residential_inland',
+    nameAr: 'الخيران السكنية - الجانب البري',
+    nameEn: 'Khiran Residential - Inland',
+  ),
   // Chalet areas (must match chalet search areas)
   AreaModel(code: 'khiran', nameAr: 'الخيران', nameEn: 'Khiran'),
   AreaModel(code: 'bneider', nameAr: 'بنيدر', nameEn: 'Bneider'),
@@ -61,6 +72,10 @@ int _scoreNameMatch(String name, String query) {
   if (name.startsWith(query)) return 85;
 
   if (name.contains(query)) return 60;
+
+  // Official governorate labels often wrap a short canonical name, e.g.
+  // "صباح الاحمد البحرية - الخيران" contains "الخيران".
+  if (name.length >= 2 && query.contains(name)) return 55;
 
   return 0;
 }

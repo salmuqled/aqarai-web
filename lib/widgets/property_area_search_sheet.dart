@@ -2,21 +2,55 @@ import 'package:flutter/material.dart';
 
 import 'package:aqarai_app/data/governorates_data_ar.dart';
 import 'package:aqarai_app/data/governorates_data_en.dart';
+import 'package:aqarai_app/l10n/app_localizations.dart';
+
+/// Canonical chalet beach labels (must stay aligned with [kuwaitAreas] chalet entries).
+const List<String> _chaletSearchAreasAr = [
+  'الخيران',
+  'بنيدر',
+  'الزور',
+  'النويصيب',
+  'الجليعة',
+  'الضباعية',
+];
+
+const List<String> _chaletSearchAreasEn = [
+  'Khiran',
+  'Bneider',
+  'Zour',
+  'Nuwaiseeb',
+  'Julaia',
+  'Dhubaiya',
+];
 
 /// Bottom sheet to pick governorate + area (same UX as [AddPropertyPage]).
+///
+/// When [chaletAreasOnly] is true, shows the same searchable sheet limited to
+/// chalet beach areas; governorate row label uses [AppLocalizations.chalets]
+/// (display only — codes unchanged by callers).
 void showPropertyAreaSearchSheet(
   BuildContext context, {
   required void Function(String governorate, String area) onAreaSelected,
+  bool chaletAreasOnly = false,
 }) {
+  final loc = AppLocalizations.of(context)!;
   final isArabic = Localizations.localeOf(context).languageCode == 'ar';
   final data = isArabic ? governoratesAndAreasAr : governoratesAndAreasEn;
 
   final List<Map<String, String>> allAreas = [];
-  data.forEach((gov, areas) {
+  if (chaletAreasOnly) {
+    final gov = loc.chalets;
+    final areas = isArabic ? _chaletSearchAreasAr : _chaletSearchAreasEn;
     for (final area in areas) {
       allAreas.add({'governorate': gov, 'area': area});
     }
-  });
+  } else {
+    data.forEach((gov, areas) {
+      for (final area in areas) {
+        allAreas.add({'governorate': gov, 'area': area});
+      }
+    });
+  }
 
   showModalBottomSheet<void>(
     context: context,
@@ -57,23 +91,40 @@ void showPropertyAreaSearchSheet(
                   ),
                 ),
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) {
-                      final item = filtered[i];
-                      return ListTile(
-                        title: Text(item['area']!),
-                        subtitle: Text(item['governorate']!),
-                        onTap: () {
-                          Navigator.pop(modalContext);
-                          onAreaSelected(
-                            item['governorate']!,
-                            item['area']!,
-                          );
-                        },
-                      );
-                    },
-                  ),
+                  child: filtered.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 32,
+                            ),
+                            child: Text(
+                              loc.areaSearchNoResults,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) {
+                            final item = filtered[i];
+                            return ListTile(
+                              title: Text(item['area']!),
+                              subtitle: Text(item['governorate']!),
+                              onTap: () {
+                                Navigator.pop(modalContext);
+                                onAreaSelected(
+                                  item['governorate']!,
+                                  item['area']!,
+                                );
+                              },
+                            );
+                          },
+                        ),
                 ),
               ],
             ),

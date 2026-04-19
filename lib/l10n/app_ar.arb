@@ -16,6 +16,12 @@
   "selectGovernorateAndArea": "يرجى اختيار المحافظة والمنطقة أولاً",
   "@selectGovernorateAndArea": { "description": "تنبيه اختيار المحافظة والمنطقة أولاً" },
 
+  "selectAreaToSearch": "اختر المنطقة للبحث",
+  "@selectAreaToSearch": { "description": "البحث في الرئيسية: اطلب اختيار منطقة قبل البحث" },
+
+  "areaSearchNoResults": "لا توجد نتائج",
+  "@areaSearchNoResults": { "description": "ورقة بحث المناطق: لا توجد صفوف تطابق البحث" },
+
   "smartAssistantCtaTitle": "اسأل عن أي عقار بالكويت",
   "@smartAssistantCtaTitle": { "description": "عنوان بانر المساعد الذكي في الرئيسية" },
 

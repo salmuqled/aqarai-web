@@ -3,14 +3,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:aqarai_app/widgets/property_list.dart';
+import 'package:aqarai_app/widgets/property_area_search_sheet.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
-// الخرائط الرسمية (عربي / إنجليزي)
-import 'package:aqarai_app/data/governorates_data_ar.dart';
-import 'package:aqarai_app/data/governorates_data_en.dart';
-
-// 🔥 AR → EN mapping
-import 'package:aqarai_app/data/ar_to_en_mapping.dart';
+// Arabic governorate labels need Latin slug for [governorateCode] ([_code] is ASCII-only).
+import 'package:aqarai_app/data/ar_to_en_mapping.dart' show governorateArToEn;
 import 'package:aqarai_app/data/kuwait_areas.dart';
 
 class AqarSearchBox extends StatefulWidget {
@@ -28,17 +25,20 @@ class AqarSearchBox extends StatefulWidget {
 }
 
 class _AqarSearchBoxState extends State<AqarSearchBox> {
-  String selectedType = '';
+  /// Canonical Firestore `serviceType`: `sale` | `rent` | `exchange` (never localized).
+  String selectedService = 'sale';
+
   String? selectedGovernorate;
   String? selectedArea;
   String? selectedProperty;
 
+  /// For [PropertyList] when searching [serviceType] rent (daily vs monthly).
+  String selectedRentalType = 'daily';
+
   String? _lastLocaleCode;
+  bool _appliedInitialSearchService = false;
 
   late List<String> localizedPropertyTypes;
-
-  late List<String> chaletAreasAr;
-  late List<String> chaletAreasEn;
 
   String _code(String s) {
     var v = s.trim().toLowerCase();
@@ -61,12 +61,17 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
       selectedGovernorate = null;
       selectedArea = null;
       selectedProperty = null;
-      selectedType = widget.initialSearchType ?? loc.forSale;
     }
 
     _lastLocaleCode = localeCode;
 
-    selectedType = widget.initialSearchType ?? loc.forSale;
+    if (!_appliedInitialSearchService) {
+      final init = widget.initialSearchType?.trim().toLowerCase();
+      if (init == 'rent' || init == 'sale' || init == 'exchange') {
+        selectedService = init!;
+      }
+      _appliedInitialSearchService = true;
+    }
 
     localizedPropertyTypes = [
       loc.propertyType_apartment,
@@ -78,62 +83,26 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
       loc.propertyType_office,
       loc.propertyType_chalet,
     ];
-
-    chaletAreasAr = const [
-      'الخيران',
-      'بنيدر',
-      'الزور',
-      'النويصيب',
-      'الجليعة',
-      'الضباعية',
-    ];
-
-    chaletAreasEn = const [
-      'Khiran',
-      'Bneider',
-      'Zour',
-      'Nuwaiseeb',
-      'Julaia',
-      'Dhubaiya',
-    ];
   }
 
-  void _showGovernoratesSheet() {
-    final localeCode = Localizations.localeOf(context).languageCode;
-
-    final List<String> items = widget.isChaletMode
-        ? (localeCode == 'ar' ? chaletAreasAr : chaletAreasEn)
-        : (localeCode == 'ar'
-              ? governoratesAndAreasAr.keys.toList()
-              : governoratesAndAreasEn.keys.toList());
-
-    showModalBottomSheet(
-      context: context,
-      builder: (_) {
-        return SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: items.map((item) {
-              return ListTile(
-                title: Text(item),
-                onTap: () {
-                  setState(() {
-                    if (widget.isChaletMode) {
-                      selectedGovernorate = 'chalet';
-                      selectedArea = item;
-                    } else {
-                      selectedGovernorate = item;
-                      selectedArea = null;
-                    }
-                  });
-                  Navigator.pop(context);
-                },
-              );
-            }).toList(),
-          ),
-        );
+  void _openLocationPicker() {
+    showPropertyAreaSearchSheet(
+      context,
+      chaletAreasOnly: widget.isChaletMode,
+      onAreaSelected: (governorate, area) {
+        setState(() {
+          selectedGovernorate = governorate;
+          selectedArea = area;
+        });
       },
     );
+  }
+
+  String _locationFieldLabel(AppLocalizations loc) {
+    if (selectedArea != null && selectedGovernorate != null) {
+      return '$selectedArea — $selectedGovernorate';
+    }
+    return loc.selectAreaToSearch;
   }
 
   String? _mapPropertyToCode(String label, AppLocalizations loc) {
@@ -181,17 +150,7 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
-    final localeCode = Localizations.localeOf(context).languageCode;
-
-    List<String> areaList = [];
-
-    if (widget.isChaletMode) {
-      areaList = localeCode == 'ar' ? chaletAreasAr : chaletAreasEn;
-    } else if (selectedGovernorate != null) {
-      areaList = localeCode == 'ar'
-          ? governoratesAndAreasAr[selectedGovernorate] ?? []
-          : governoratesAndAreasEn[selectedGovernorate] ?? [];
-    }
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -199,7 +158,7 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           GestureDetector(
-            onTap: _showGovernoratesSheet,
+            onTap: _openLocationPicker,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 18),
               decoration: BoxDecoration(
@@ -211,9 +170,14 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
                 children: [
                   Expanded(
                     child: Text(
-                      selectedGovernorate ?? loc.enterAreaToSearch,
+                      _locationFieldLabel(loc),
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.black),
+                      style: TextStyle(
+                        color: (selectedArea != null &&
+                                selectedGovernorate != null)
+                            ? Colors.black
+                            : Colors.black54,
+                      ),
                     ),
                   ),
                   const Icon(Icons.search, color: Colors.black),
@@ -221,33 +185,6 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
               ),
             ),
           ),
-          const SizedBox(height: 15),
-          if (!widget.isChaletMode && selectedGovernorate != null)
-            DropdownButtonFormField<String>(
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: loc.selectArea,
-                labelStyle: const TextStyle(color: Colors.white),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.75)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: const BorderSide(color: Colors.white, width: 2),
-                ),
-              ),
-              dropdownColor: const Color(0xFF0B0F1A),
-              iconEnabledColor: Colors.white,
-              style: const TextStyle(color: Colors.white),
-              items: areaList
-                  .map(
-                    (area) => DropdownMenuItem(value: area, child: Text(area)),
-                  )
-                  .toList(),
-              value: selectedArea,
-              onChanged: (value) => setState(() => selectedArea = value),
-            ),
           const SizedBox(height: 15),
           DropdownButtonFormField<String>(
             isExpanded: true,
@@ -278,21 +215,44 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
             children: [
               _buildServiceButton(
                 label: loc.forSale,
-                isSelected: selectedType == loc.forSale,
-                onPressed: () => setState(() => selectedType = loc.forSale),
+                isSelected: selectedService == 'sale',
+                onPressed: () => setState(() => selectedService = 'sale'),
               ),
               _buildServiceButton(
                 label: loc.forRent,
-                isSelected: selectedType == loc.forRent,
-                onPressed: () => setState(() => selectedType = loc.forRent),
+                isSelected: selectedService == 'rent',
+                onPressed: () => setState(() => selectedService = 'rent'),
               ),
               _buildServiceButton(
                 label: loc.forExchange,
-                isSelected: selectedType == loc.forExchange,
-                onPressed: () => setState(() => selectedType = loc.forExchange),
+                isSelected: selectedService == 'exchange',
+                onPressed: () => setState(() => selectedService = 'exchange'),
               ),
             ],
           ),
+          if (selectedService == 'rent') ...[
+            const SizedBox(height: 12),
+            SegmentedButton<String>(
+              segments: [
+                ButtonSegment<String>(
+                  value: 'daily',
+                  label: Text(isAr ? 'يومي' : 'Daily'),
+                ),
+                ButtonSegment<String>(
+                  value: 'monthly',
+                  label: Text(isAr ? 'شهري / سنوي' : 'Monthly / Yearly'),
+                ),
+              ],
+              selected: {selectedRentalType},
+              onSelectionChanged: (Set<String> next) {
+                if (next.isEmpty) return;
+                setState(() => selectedRentalType = next.first);
+              },
+              multiSelectionEnabled: false,
+              emptySelectionAllowed: false,
+              showSelectedIcon: false,
+            ),
+          ],
           const SizedBox(height: 20),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -303,47 +263,30 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
               ),
             ),
             onPressed: () {
-              final bool canSearch = widget.isChaletMode
-                  ? selectedArea != null
-                  : (selectedGovernorate != null && selectedArea != null);
+              final canSearch =
+                  selectedGovernorate != null && selectedArea != null;
 
               if (!canSearch) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(loc.selectGovernorateAndArea)),
+                  SnackBar(content: Text(loc.selectAreaToSearch)),
                 );
                 return;
               }
 
-              String govAr = selectedGovernorate ?? '';
-              String areaAr = selectedArea ?? '';
+              final govLabel = selectedGovernorate!;
+              final areaLabel = selectedArea!;
 
-              String govEn = governorateArToEn[govAr] ?? govAr;
-              String areaEn = areaArToEn[areaAr] ?? areaAr;
+              final String governorateCode = widget.isChaletMode
+                  ? _code('chalet')
+                  : _code(governorateArToEn[govLabel] ?? govLabel);
 
-              if (widget.isChaletMode) {
-                govAr = 'chalet';
-                govEn = 'chalet';
-              }
-
-              final governorateCode = _code(govEn.isNotEmpty ? govEn : govAr);
-
-              // Firestore area filter: unified areaCode generation.
-              final String rawInput;
-              final sel = selectedArea;
-              if (sel != null && sel.isNotEmpty) {
-                rawInput = sel;
-              } else if (areaEn.isNotEmpty) {
-                rawInput = areaEn;
-              } else {
-                rawInput = areaAr;
-              }
               final String selectedAreaCode = getUnifiedAreaCode(
-                rawInput,
-                fallbackSlugSource: areaEn.isNotEmpty ? areaEn : areaAr,
+                areaLabel,
+                fallbackSlugSource: areaLabel,
               );
 
               if (kDebugMode) {
-                debugPrint('AREA INPUT → $rawInput');
+                debugPrint('AREA INPUT → $areaLabel');
                 debugPrint('FINAL CODE → $selectedAreaCode');
               }
 
@@ -351,16 +294,9 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
                   ? _mapPropertyToCode(selectedProperty!, loc)
                   : null;
 
-              final String debugServiceType = selectedType == loc.forRent
-                  ? 'rent'
-                  : selectedType == loc.forExchange
-                      ? 'exchange'
-                      : 'sale';
-
               if (kDebugMode) {
                 debugPrint(
-                  '[SearchBox→PropertyList] selectedType (mapped sale/rent/exchange)=$debugServiceType '
-                  '| selectedTypeLabel=$selectedType',
+                  '[SearchBox→PropertyList] selectedService=$selectedService',
                 );
                 debugPrint(
                   '[SearchBox→PropertyList] selectedProperty (typeFilter label)=$selectedProperty '
@@ -385,17 +321,16 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
                 MaterialPageRoute(
                   builder: (_) => PropertyList(
                     governorateLabel: widget.isChaletMode
-                        ? (localeCode == 'ar' ? "الشاليهات" : "Chalets")
+                        ? loc.chalets
                         : selectedGovernorate ?? '',
                     areaLabel: selectedArea ?? '',
                     governorateCode: governorateCode,
                     areaCode: selectedAreaCode,
                     typeFilter: propertyCode,
-                    serviceType: selectedType == loc.forRent
-                        ? "rent"
-                        : selectedType == loc.forExchange
-                        ? "exchange"
-                        : "sale",
+                    serviceType: selectedService,
+                    rentalType: selectedService == 'rent'
+                        ? selectedRentalType
+                        : null,
                   ),
                 ),
               );

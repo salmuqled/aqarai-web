@@ -502,6 +502,22 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         serviceType: selectedServiceType,
       );
 
+      // Matches `searchDailyProperties` filters (`daily` | `monthly`); chalet `sale`
+      // mode must not be stored as `monthly`. Non-chalet follows `priceType`.
+      final String rentalTypeForSave = selectedPropertyType == 'chalet'
+          ? switch (selectedChaletMode) {
+              ChaletMode.daily => 'daily',
+              ChaletMode.monthly => 'monthly',
+              ChaletMode.sale => 'sale',
+              _ => 'daily',
+            }
+          : switch (priceType) {
+              'daily' => 'daily',
+              'monthly' => 'monthly',
+              'yearly' => 'monthly',
+              _ => 'full',
+            };
+
       final data = {
         "ownerId": user.uid,
         "fullName": fullNameController.text.trim(),
@@ -554,6 +570,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         // Phase 1: listingCategory tracks `type` for rules + queries (type is source for chalet).
         "listingCategory": listingCategoryForPropertyType(selectedPropertyType),
         if (selectedPropertyType == 'chalet') "chaletMode": selectedChaletMode,
+        "rentalType": rentalTypeForSave,
         "hiddenFromPublic": false,
         "closeRequestSubmitted": false,
 

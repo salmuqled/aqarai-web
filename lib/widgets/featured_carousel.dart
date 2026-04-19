@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:aqarai_app/utils/property_listing_cover.dart';
-import 'package:aqarai_app/utils/property_price_type.dart';
+import 'package:aqarai_app/utils/property_price_display.dart';
 import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 import 'package:intl/intl.dart';
 import 'package:aqarai_app/services/firestore.dart';
@@ -176,9 +176,9 @@ class FeaturedCarousel extends StatelessWidget {
                   final coverUrl = PropertyListingCover.urlFrom(data);
                   final normalizedType = _normalizeType(data['type']);
 
-                  String displayType = normalizedType;
+                  String titleType = normalizedType;
                   if (isArabic) {
-                    displayType =
+                    titleType =
                         propertyTypeAr[normalizedType] ?? normalizedType;
                   }
 
@@ -187,21 +187,18 @@ class FeaturedCarousel extends StatelessWidget {
                       : (data['areaEn'] ?? '').toString();
 
                   final combinedTitle = area.isNotEmpty
-                      ? '$displayType • $area'
-                      : displayType;
+                      ? '$titleType • $area'
+                      : titleType;
 
                   final price = (data['price'] is num)
                       ? data['price'] as num
                       : num.tryParse('${data['price']}');
 
-                  final pt = PropertyPriceType.infer(
-                    stored: data['priceType']?.toString(),
-                    listingType: normalizedType,
+                  final priceDisplay = resolveDisplayPriceType(
+                    serviceType: data['serviceType']?.toString(),
+                    priceType: data['priceType']?.toString(),
                   );
-                  final unit = PropertyPriceType.suffixForLocale(
-                    pt,
-                    isArabic: isArabic,
-                  );
+                  final unit = priceSuffix(priceDisplay, isArabic);
                   final priceText = isArabic
                       ? 'السعر: ${_fmtPrice(price, localeStr)} د.ك$unit'
                       : 'Price: ${_fmtPrice(price, localeStr)} KWD$unit';

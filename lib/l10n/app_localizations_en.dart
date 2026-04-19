@@ -24,6 +24,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectGovernorateAndArea => 'Please select governorate and area first';
 
   @override
+  String get selectAreaToSearch => 'Select an area to search';
+
+  @override
+  String get areaSearchNoResults => 'No results found';
+
+  @override
   String get smartAssistantCtaTitle => 'Ask about any property in Kuwait';
 
   @override

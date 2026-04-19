@@ -13,7 +13,9 @@
     "cleanup:property-status": "FIREBASE_PROJECT_ID=aqarai-caf5d node scripts/propertyStatusCleanup.mjs",
     "cleanup:property-status:dry-run": "FIREBASE_PROJECT_ID=aqarai-caf5d node scripts/propertyStatusCleanup.mjs --dry-run",
     "backfill:price-type:dry-run": "node scripts/backfill_price_type.mjs --dry-run",
-    "backfill:price-type:commit": "node scripts/backfill_price_type.mjs --commit"
+    "backfill:price-type:commit": "node scripts/backfill_price_type.mjs --commit",
+    "backfill:chalet-type:dry-run": "node scripts/backfill_chalet_type.mjs --dry-run",
+    "backfill:chalet-type:commit": "node scripts/backfill_chalet_type.mjs --commit"
   },
   "engines": {
     "node": "20"
