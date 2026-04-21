@@ -651,7 +651,12 @@ service cloud.firestore {
     match /wanted_requests/{docId} {
 
       // 👀 القراءة:
-      allow read: if resource.data.approved == true || isAdmin();
+      // - عام: فقط المعتمد.
+      // - أدمن: كل شيء.
+      // - المالك: إعلاناته الخاصة (حتى قبل الاعتماد) — يدعم صفحة "إعلاناتي".
+      allow read: if resource.data.approved == true
+        || isAdmin()
+        || (isSignedIn() && resource.data.ownerId == request.auth.uid);
 
       // ➕ الإضافة:
       allow create: if isSignedIn()
@@ -670,8 +675,14 @@ service cloud.firestore {
       // ➕ إنشاء:
       allow create: if isSignedIn();
 
-      // 👀 / ✏️ / ❌:
-      allow read, update, delete: if isAdmin();
+      // 👀 القراءة:
+      // - أدمن: كل التقييمات.
+      // - المالك: تقييماته الخاصة — يدعم صفحة "إعلاناتي".
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.ownerId == request.auth.uid);
+
+      // ✏️ / ❌:
+      allow update, delete: if isAdmin();
     }
 
     /* ============================================================

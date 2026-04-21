@@ -542,9 +542,20 @@ class _PropertyListState extends State<PropertyList> {
     required String locale,
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> properties,
   }) {
+    // PERF — hoist the locale-aware number formatter out of the item
+    // builder so we don't re-instantiate ICU rules for every card on
+    // every scroll/build.
+    final numberFmt = NumberFormat.decimalPattern(locale);
+    final isArLocale = locale == 'ar';
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: properties.length,
+      // Larger cache window so the next few cards are ready before they
+      // enter the viewport during fast scrolling.
+      cacheExtent: 600,
+      // Cards are pure / stateless — keep-alives would just pin memory
+      // without any benefit.
+      addAutomaticKeepAlives: false,
       itemBuilder: (context, index) {
         final doc = properties[index];
         final data = doc.data();
@@ -604,9 +615,7 @@ class _PropertyListState extends State<PropertyList> {
         final serviceRaw = (data['serviceType'] ?? '').toString();
         final serviceLabel = _serviceTypeLabel(loc, serviceRaw);
         final statusLabel = _statusBadgeLabel(loc, locale, data);
-        final priceText = NumberFormat.decimalPattern(
-          locale,
-        ).format(price);
+        final priceText = numberFmt.format(price);
         final displayType = resolveDisplayPriceType(
           serviceType: data['serviceType']?.toString(),
           priceType: data['priceType']?.toString(),
@@ -746,13 +755,9 @@ class _PropertyListState extends State<PropertyList> {
                           const SizedBox(height: 6),
                           Builder(
                             builder: (context) {
-                              final totalText = NumberFormat.decimalPattern(
-                                locale,
-                              ).format(priceNum * nh);
-                              final nightsText = NumberFormat.decimalPattern(
-                                locale,
-                              ).format(nh);
-                              final line = locale == 'ar'
+                              final totalText = numberFmt.format(priceNum * nh);
+                              final nightsText = numberFmt.format(nh);
+                              final line = isArLocale
                                   ? '$totalText د.ك إجمالي ($nightsText ${nh == 1 ? 'ليلة' : 'ليالي'})'
                                   : 'KWD $totalText total ($nightsText ${nh == 1 ? 'night' : 'nights'})';
                               return Text(

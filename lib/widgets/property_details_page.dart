@@ -140,7 +140,24 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
   @override
   void initState() {
     super.initState();
+    // ignore: avoid_print
+    print(
+        '[LIFECYCLE] PropertyDetailsPage initState propertyId=${widget.propertyId} stayStart=${widget.stayStart} stayEnd=${widget.stayEnd}');
     _bookingController.reset();
+    if (widget.stayStart != null && widget.stayEnd != null) {
+      // ignore: avoid_print
+      print(
+          '[SEED] PropertyDetailsPage seed called start=${widget.stayStart} end=${widget.stayEnd}');
+      _bookingController.seed(
+        startDate: widget.stayStart,
+        endDate: widget.stayEnd,
+        nights: widget.stayEnd!.difference(widget.stayStart!).inDays,
+      );
+    } else {
+      // ignore: avoid_print
+      print(
+          '[SEED] PropertyDetailsPage seed SKIPPED (stayStart or stayEnd is null)');
+    }
   }
 
   @override
@@ -1203,7 +1220,6 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                 final cur = isAr ? 'د.ك' : 'KWD';
                 final checkoutMorning = e != null
                     ? DateTime(e.year, e.month, e.day)
-                        .add(const Duration(days: 1))
                     : null;
                 final ppn = price.toDouble();
                 final breakdownLine = nights > 0
@@ -1331,7 +1347,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
               imageUrl: imageUrl,
               controller: _bookingController,
               useExternalBookingBar: true,
-              minNights: 2,
+              minNights: 1,
               weekendPricePerNight: chaletWeekendPrice,
               peakNightWeekdays: chaletPeakWeekdays,
               compactLayoutForPropertyDetails: true,

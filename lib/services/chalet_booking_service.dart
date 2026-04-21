@@ -178,6 +178,24 @@ class ChaletBookingConfirmationPayResult {
 }
 
 /// Reads/callables for chalet reservations (Firestore rules block direct writes).
+/// Snapshot of a single property's busy ranges plus the wall-clock time
+/// they were fetched, used by [ChaletBookingService]'s in-memory TTL
+/// cache. Internal — kept private to the service file.
+///
+/// The monotonically increasing [version] lets callers / tests tell a
+/// fresh entry apart from a TTL-refreshed one even if the contents are
+/// identical (e.g. no new bookings arrived between polls).
+class _CachedBusyRanges {
+  const _CachedBusyRanges({
+    required this.ranges,
+    required this.fetchedAt,
+    required this.version,
+  });
+  final List<ChaletBookedRange> ranges;
+  final DateTime fetchedAt;
+  final int version;
+}
+
 abstract final class ChaletBookingService {
   ChaletBookingService._();
 
@@ -299,20 +317,97 @@ abstract final class ChaletBookingService {
     }
   }
 
+  /// In-memory TTL cache for [getChaletBusyDateRanges]. Keyed by
+  /// `propertyId` and refreshed on demand. The cache lets repeated visits
+  /// to the same chalet (in the same session) skip the Cloud Function
+  /// round-trip when the data is still fresh, without compromising the
+  /// 45-second background refresh in `_ChaletBookingFirestoreGate`
+  /// (which calls with `forceRefresh: true`).
+  ///
+  /// Uses a `LinkedHashMap` so iteration order reflects insertion order —
+  /// this lets [_storeInCache] implement cheap FIFO-LRU eviction once
+  /// [_maxBusyCacheEntries] is exceeded (we evict the oldest entry).
+  ///
+  /// Visible for testing only. Do not mutate from production code.
+  static final Map<String, _CachedBusyRanges> _busyRangesCache =
+      <String, _CachedBusyRanges>{};
+
+  /// How long a cached busy-ranges payload is considered fresh.
+  static const Duration _busyRangesTtl = Duration(minutes: 5);
+
+  /// Upper bound on cached properties. Prevents unbounded growth if a
+  /// session browses many chalets in sequence. Cheap bound — each entry
+  /// is a short list of date pairs, but we still cap it.
+  static const int _maxBusyCacheEntries = 50;
+
+  /// Process-wide monotonic version counter. Incremented on every
+  /// successful cache write so callers (and tests) can detect a
+  /// refresh even when the payload is byte-identical.
+  static int _busyRangesVersionCounter = 0;
+
+  /// Clears the in-memory busy-ranges cache. Used by tests and by callers
+  /// that know external state has changed (e.g. after a successful
+  /// booking).
+  static void invalidateBusyRangesCache({String? propertyId}) {
+    if (propertyId == null) {
+      _busyRangesCache.clear();
+    } else {
+      _busyRangesCache.remove(propertyId);
+    }
+  }
+
+  /// Writes [ranges] for [propertyId] into the cache, bumping the global
+  /// [_busyRangesVersionCounter] and evicting the oldest entry when the
+  /// map grows past [_maxBusyCacheEntries].
+  static _CachedBusyRanges _storeInCache(
+    String propertyId,
+    List<ChaletBookedRange> ranges,
+  ) {
+    _busyRangesVersionCounter++;
+    final entry = _CachedBusyRanges(
+      ranges: List<ChaletBookedRange>.unmodifiable(ranges),
+      fetchedAt: DateTime.now(),
+      version: _busyRangesVersionCounter,
+    );
+    _busyRangesCache[propertyId] = entry;
+    while (_busyRangesCache.length > _maxBusyCacheEntries) {
+      // `Map.keys` preserves insertion order for the default map impl
+      // used by the Dart VM, so `.first` is always the oldest entry.
+      final oldest = _busyRangesCache.keys.first;
+      _busyRangesCache.remove(oldest);
+    }
+    return entry;
+  }
+
   /// Server-only busy intervals from `bookings` (milliseconds, no PII). Merge with Firestore `blocked_dates` in the client.
   /// Returns null on failure; on repeated failures callers may keep the last successful list.
+  ///
+  /// Set [forceRefresh] to bypass the in-memory TTL cache (used by the
+  /// background poller). Successful network responses always update the
+  /// cache so a subsequent fast read is served instantly.
   static Future<List<ChaletBookedRange>?> getChaletBusyDateRanges({
     required String propertyId,
+    bool forceRefresh = false,
   }) async {
+    final cachedAtCallTime = _busyRangesCache[propertyId];
+    if (!forceRefresh && cachedAtCallTime != null) {
+      final age = DateTime.now().difference(cachedAtCallTime.fetchedAt);
+      if (age < _busyRangesTtl) return cachedAtCallTime.ranges;
+    }
     try {
       final callable = _functions().httpsCallable('getChaletBusyDateRanges');
       final res = await callable.call<dynamic>({
         'propertyId': propertyId,
       });
       final raw = res.data;
-      if (raw is! Map) return null;
+      if (raw is! Map) {
+        // Server answered but with a payload we can't parse — prefer a
+        // stale-but-correct answer (if any) over returning null to the
+        // UI, which would otherwise look like a full reload.
+        return cachedAtCallTime?.ranges;
+      }
       final list = raw['ranges'];
-      if (list is! List) return null;
+      if (list is! List) return cachedAtCallTime?.ranges;
       final out = <ChaletBookedRange>[];
       for (final item in list) {
         if (item is! Map) continue;
@@ -329,11 +424,15 @@ abstract final class ChaletBookingService {
         ).toLocal();
         out.add(ChaletBookedRange(start: start, end: end));
       }
-      return out;
+      final stored = _storeInCache(propertyId, out);
+      return stored.ranges;
     } on FirebaseFunctionsException {
-      return null;
+      // Network / server error: fall back to the last known good data
+      // for this property if we have any, so the UI keeps working
+      // offline and mid-glitch. The background poller will retry.
+      return cachedAtCallTime?.ranges;
     } catch (_) {
-      return null;
+      return cachedAtCallTime?.ranges;
     }
   }
 

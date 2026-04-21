@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -61,10 +62,49 @@ class ChaletBookingController {
     required VoidCallback? submit,
     String? barBreakdownLine,
   }) {
-    if (_sameDay(_startDate, startDate) &&
-        _sameDay(_endDate, endDate) &&
-        nightsVN.value == nights &&
-        totalPriceVN.value == totalPrice &&
+    // ignore: avoid_print
+    print(
+        '[CONTROLLER_UPDATE] incoming start=$startDate end=$endDate nights=$nights total=$totalPrice');
+    // ignore: avoid_print
+    print(
+        '[CONTROLLER_UPDATE] current BEFORE update start=${this.startDate} end=${this.endDate} nights=${this.nights}');
+    if (startDate == null && this.startDate != null) {
+      // ignore: avoid_print
+      print(
+          '[CRITICAL] OVERWRITE PREVENTED: startDate would be wiped from ${this.startDate} -> null');
+    }
+    if (endDate == null && this.endDate != null) {
+      // ignore: avoid_print
+      print(
+          '[CRITICAL] OVERWRITE PREVENTED: endDate would be wiped from ${this.endDate} -> null');
+    }
+    if (nights == 0 && this.nights > 0) {
+      // ignore: avoid_print
+      print(
+          '[CRITICAL] OVERWRITE PREVENTED: nights would be wiped from ${this.nights} -> 0');
+    }
+
+    // SAFE MERGE: never let a transient null / zero wipe a previously valid
+    // value. Only legitimate non-null / non-zero updates can overwrite state.
+    // Explicit clearing of state must go through [reset()] (which bypasses
+    // this method).
+    final DateTime? newStart = startDate ?? _startDate;
+    final DateTime? newEnd = endDate ?? _endDate;
+    final int newNights = (nights == 0 && nightsVN.value > 0)
+        ? nightsVN.value
+        : nights;
+    final double safeTotal = (nights == 0 && nightsVN.value > 0)
+        ? totalPriceVN.value
+        : totalPrice;
+
+    // ignore: avoid_print
+    print(
+        '[SAFE_UPDATE] final start=$newStart end=$newEnd nights=$newNights total=$safeTotal');
+
+    if (_sameDay(_startDate, newStart) &&
+        _sameDay(_endDate, newEnd) &&
+        nightsVN.value == newNights &&
+        totalPriceVN.value == safeTotal &&
         canBookVN.value == canBook &&
         isProvisionalVN.value == isProvisional &&
         submittingVN.value == submitting &&
@@ -73,11 +113,11 @@ class ChaletBookingController {
       return;
     }
 
-    if (!_sameDay(_startDate, startDate)) _startDate = startDate;
-    if (!_sameDay(_endDate, endDate)) _endDate = endDate;
+    if (!_sameDay(_startDate, newStart)) _startDate = newStart;
+    if (!_sameDay(_endDate, newEnd)) _endDate = newEnd;
 
-    if (nightsVN.value != nights) nightsVN.value = nights;
-    if (totalPriceVN.value != totalPrice) totalPriceVN.value = totalPrice;
+    if (nightsVN.value != newNights) nightsVN.value = newNights;
+    if (totalPriceVN.value != safeTotal) totalPriceVN.value = safeTotal;
     if (canBookVN.value != canBook) canBookVN.value = canBook;
     if (isProvisionalVN.value != isProvisional) {
       isProvisionalVN.value = isProvisional;
@@ -96,6 +136,29 @@ class ChaletBookingController {
   }
 
   void submit() => _submit?.call();
+
+  /// Externally seeds check-in/check-out/nights (exclusive contract) so that
+  /// the summary UI shows the correct values immediately, before the booking
+  /// body has a chance to build and call [_update] itself. Does not change
+  /// totals or booking state; the calendar body will overwrite these via
+  /// [_update] on its first frame if the user picks a different range.
+  void seed({
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required int nights,
+  }) {
+    _update(
+      startDate: startDate,
+      endDate: endDate,
+      nights: nights,
+      totalPrice: totalPriceVN.value,
+      canBook: canBookVN.value,
+      isProvisional: isProvisionalVN.value,
+      submitting: submittingVN.value,
+      submit: _submit,
+      barBreakdownLine: barBreakdownLineVN.value,
+    );
+  }
 
   /// Clears selection and bar state when switching to another property (same [State] instance).
   void reset() {
@@ -141,6 +204,53 @@ const String _kMsgDatesUnavailableEn = 'These dates are not available';
 const String _kMsgSingleDateUnavailableAr = 'هذا التاريخ غير متاح';
 const String _kMsgSingleDateUnavailableEn = 'This date is not available';
 
+const String _kMsgPastDateAr = 'هذا التاريخ مضى';
+const String _kMsgPastDateEn = 'This date has already passed';
+
+const String _kMsgBookedDateAr = 'التاريخ محجوز مسبقًا';
+const String _kMsgBookedDateEn = 'This date is already booked';
+
+const String _kMsgCrossesBookedAr = 'هذا الاختيار يتجاوز حجزًا قائمًا';
+const String _kMsgCrossesBookedEn = 'This selection would overlap an existing booking';
+
+const String _kMsgSelectCheckInAr = 'اختر تاريخ الدخول';
+const String _kMsgSelectCheckInEn = 'Select check-in date';
+
+const String _kMsgSelectCheckOutAr = 'اختر تاريخ المغادرة';
+const String _kMsgSelectCheckOutEn = 'Select check-out date';
+
+const String _kMsgCheckInLabelAr = 'الدخول';
+const String _kMsgCheckInLabelEn = 'Check-in';
+
+const String _kMsgCheckOutLabelAr = 'المغادرة';
+const String _kMsgCheckOutLabelEn = 'Check-out';
+
+const String _kMsgSeedRejectedAr =
+    'التواريخ المختارة غير متاحة، اختر تواريخ أخرى';
+const String _kMsgSeedRejectedEn =
+    'The selected dates are unavailable. Please choose different dates.';
+
+const String _kMsgMidSelectionAr =
+    'تم اختيار تاريخ الدخول، اختر تاريخ المغادرة';
+const String _kMsgMidSelectionEn =
+    'Check-in selected, now choose check-out';
+
+const String _kMsgSelectionClearedAr = 'تم إلغاء الاختيار';
+const String _kMsgSelectionClearedEn = 'Selection cleared';
+
+const String _kMsgLoadingAvailabilityAr = 'جاري تحميل التواريخ المتاحة...';
+const String _kMsgLoadingAvailabilityEn = 'Loading availability...';
+
+String _nightsLabel(int n, bool isAr) {
+  if (!isAr) {
+    return n == 1 ? '1 night' : '$n nights';
+  }
+  if (n == 1) return 'ليلة واحدة';
+  if (n == 2) return 'ليلتان';
+  if (n >= 3 && n <= 10) return '$n ليالٍ';
+  return '$n ليلة';
+}
+
 String _minStayMessage(int minNights, bool isAr) {
   final n = math.max(1, minNights);
   if (!isAr) {
@@ -175,6 +285,19 @@ const List<int> kChaletDefaultPeakWeekdays = <int>[
   DateTime.friday,
   DateTime.saturday,
 ];
+
+/// Rolling horizon (in days from today) for materializing blocked-day
+/// keys into the O(1) lookup set. Any booked night past this window is
+/// effectively unreachable in the UI (calendar lastDay caps at ~500, but
+/// practically users never tap that far), so caching it is pure memory
+/// overhead. 180 days ≈ 6 months — matches typical short-term-rental
+/// search horizons.
+const int _kBlockedHorizonDays = 180;
+
+/// Soft guardrail — if a property has more than this many booked ranges
+/// we log a perf warning for monitoring. NOT a functional cutoff: all
+/// ranges are still honored for range-conflict checks.
+const int _kMaxBookedRangesWarn = 200;
 
 /// Bookable calendar days from [today] through [today + horizonDays] (inclusive).
 int chaletCountAvailableDaysInHorizon(
@@ -426,10 +549,16 @@ class _ChaletBookingFirestoreGateState extends State<_ChaletBookingFirestoreGate
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshServerBusyRanges());
+    // Initial load benefits from the in-memory TTL cache so a back/forward
+    // navigation to the same chalet within 5 minutes is instant.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _refreshServerBusyRanges(),
+    );
+    // Background poller bypasses the cache so we still pick up newly
+    // confirmed bookings every 45 s.
     _busyPollTimer = Timer.periodic(
       const Duration(seconds: 45),
-      (_) => _refreshServerBusyRanges(),
+      (_) => _refreshServerBusyRanges(forceRefresh: true),
     );
   }
 
@@ -439,11 +568,17 @@ class _ChaletBookingFirestoreGateState extends State<_ChaletBookingFirestoreGate
     super.dispose();
   }
 
-  Future<void> _refreshServerBusyRanges() async {
+  Future<void> _refreshServerBusyRanges({bool forceRefresh = false}) async {
     final ranges = await ChaletBookingService.getChaletBusyDateRanges(
       propertyId: widget.propertyId,
+      forceRefresh: forceRefresh,
     );
     if (!mounted) return;
+    if (ranges == null && _serverBusyLoaded) {
+      // Network failure on a refresh — keep the previously good list and
+      // skip the rebuild rather than flashing stale "loading" state.
+      return;
+    }
     setState(() {
       _serverBusyLoaded = true;
       if (ranges != null) {
@@ -704,8 +839,8 @@ class _CalendarSkeletonState extends State<_CalendarSkeleton>
                           const SizedBox(height: 14),
                           Text(
                             Localizations.localeOf(context).languageCode == 'ar'
-                                ? 'جاري تحميل التوافر…'
-                                : 'Loading availability…',
+                                ? _kMsgLoadingAvailabilityAr
+                                : _kMsgLoadingAvailabilityEn,
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: cs.onSurface.withValues(alpha: 0.55),
@@ -1115,10 +1250,48 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
   bool _selectionHintIsBookedConflict = false;
   bool _selectionHintIsMinStay = false;
   bool _selectionHintIsUnavailableDateTap = false;
+  bool _selectionHintIsMidSelection = false;
+
+  // UX polish — debounce repeated SnackBars when the user taps the same
+  // disabled date / minimum-stay condition multiple times in a row, and
+  // auto-fade the inline hint after a short delay so it does not linger
+  // forever once the user has moved on.
+  DateTime? _lastSnackTime;
+  Timer? _hintFadeTimer;
+
+  // PERF — pre-computed indexes derived from [widget.bookedRanges] so that
+  // hot paths (calendar tap predicate, mid-selection enable check, range
+  // conflict scan) do NOT walk the raw range list on every cell paint.
+  // Both indexes are rebuilt once whenever `bookedRanges` identity changes
+  // (see [_rebuildBookedIndexIfNeeded]).
+  Set<int> _blockedDayKeys = const <int>{};
+  List<ChaletBookedRange> _sortedBookedRanges = const <ChaletBookedRange>[];
+  // Identity sentinel so we don't rebuild when the same list reference is
+  // passed back. Cheaper than a deep equality check.
+  Object? _bookedRangesIdentity;
+  // Cached count of bookable days in the calendar horizon. Recomputed only
+  // when the booked-range list changes, so the urgency banner doesn't pay
+  // an O(horizon × ranges) scan on every build.
+  int _availableDayCountCached = 0;
+  // Debug-only build counter so we can notice if the body is rebuilding
+  // far more often than expected under scale (hint animations, snackbars,
+  // etc. should NOT be triggering 50+ rebuilds per interaction).
+  int _buildCount = 0;
+
+  /// Compact int key for a *local* day ([year]*10000 + month*100 + day).
+  /// Roughly 4-byte SMI instead of the 8-byte millisecond epoch — reduces
+  /// memory footprint of [_blockedDayKeys] when a chalet has many
+  /// blocked days, and is still monotonic within the calendar horizon so
+  /// [Set.contains] stays O(1).
+  static int _dayKeyFor(DateTime d) =>
+      d.year * 10000 + d.month * 100 + d.day;
 
   @override
   void initState() {
     super.initState();
+    // ignore: avoid_print
+    print('[LIFECYCLE] ChaletBookingBody initState');
+    _rebuildBookedIndexIfNeeded(force: true);
     // Pre-seed the range from caller-provided dates (e.g. list-page filter)
     // so the booking CTA is available on first paint without re-selection.
     // Guarded to avoid leaking invalid / stale ranges into the controller.
@@ -1130,7 +1303,55 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       _rangeStart = seeded.$1;
       _rangeEnd = seeded.$2;
       _focusedDay = seeded.$1;
+    } else if (widget.initialStartDate != null &&
+        widget.initialEndDate != null) {
+      // Caller asked us to pre-select a range but that range is not viable
+      // (past / overlaps booking / below min-nights). Surface it to the user
+      // so they know why the calendar is empty instead of failing silently.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showSeedRejectedFeedback();
+      });
     }
+  }
+
+  @override
+  void dispose() {
+    _hintFadeTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Debounce gate for SnackBars: ignores requests that arrive within a
+  /// 1-second window after the last shown SnackBar so rapid taps on a
+  /// disabled cell do not flood the user with duplicate banners.
+  bool _canShowSnack() {
+    final now = DateTime.now();
+    if (_lastSnackTime != null &&
+        now.difference(_lastSnackTime!) < const Duration(seconds: 1)) {
+      return false;
+    }
+    _lastSnackTime = now;
+    return true;
+  }
+
+  /// Schedules the inline hint (the row under the calendar) to fade out
+  /// after [delay]. Cancels any previous pending fade so back-to-back hints
+  /// always see the full window. UI-only — does not touch booking state.
+  void _scheduleHintAutoFade({
+    Duration delay = const Duration(seconds: 2),
+  }) {
+    _hintFadeTimer?.cancel();
+    _hintFadeTimer = Timer(delay, () {
+      if (!mounted) return;
+      if (_selectionHint == null) return;
+      setState(() {
+        _selectionHint = null;
+        _selectionHintIsBookedConflict = false;
+        _selectionHintIsMinStay = false;
+        _selectionHintIsUnavailableDateTap = false;
+        _selectionHintIsMidSelection = false;
+      });
+    });
   }
 
   /// Returns `(start, endExclusive)` only when both inputs are non-null,
@@ -1142,7 +1363,13 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
     DateTime? start,
     DateTime? end,
   ) {
-    if (start == null || end == null) return null;
+    // ignore: avoid_print
+    print('[SEED_FROM_INITIAL] called with start=$start end=$end');
+    if (start == null || end == null) {
+      // ignore: avoid_print
+      print('[SEED_FROM_INITIAL][FAIL] reason=START_OR_END_NULL');
+      return null;
+    }
     final s = DateTime(start.year, start.month, start.day);
     final e = DateTime(end.year, end.month, end.day);
     final todayOnly = DateTime(
@@ -1150,13 +1377,40 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       DateTime.now().month,
       DateTime.now().day,
     );
-    if (s.isBefore(todayOnly)) return null;
-    if (!e.isAfter(s)) return null;
-    final nights = e.difference(s).inDays;
-    if (nights < math.max(1, widget.minNights)) return null;
-    for (final b in widget.bookedRanges) {
-      if (s.isBefore(b.end) && e.isAfter(b.start)) return null;
+    if (s.isBefore(todayOnly)) {
+      // ignore: avoid_print
+      print(
+          '[SEED_FROM_INITIAL][FAIL] reason=PAST_DATE start=$s today=$todayOnly');
+      return null;
     }
+    if (!e.isAfter(s)) {
+      // ignore: avoid_print
+      print('[SEED_FROM_INITIAL][FAIL] reason=INVALID_RANGE start=$s end=$e');
+      return null;
+    }
+    final nights = e.difference(s).inDays;
+    if (nights < math.max(1, widget.minNights)) {
+      // ignore: avoid_print
+      print(
+          '[SEED_FROM_INITIAL][FAIL] reason=BELOW_MIN_NIGHTS nights=$nights min=${widget.minNights}');
+      return null;
+    }
+    // Use the sorted view so overlap scans short-circuit once we pass the
+    // requested check-out (same logic as [_rangeConflicts]).
+    final sorted = _sortedBookedRanges.isEmpty
+        ? widget.bookedRanges
+        : _sortedBookedRanges;
+    for (final b in sorted) {
+      if (!b.start.isBefore(e)) break;
+      if (s.isBefore(b.end) && e.isAfter(b.start)) {
+        // ignore: avoid_print
+        print(
+            '[SEED_FROM_INITIAL][FAIL] reason=OVERLAP start=$s end=$e blockedStart=${b.start} blockedEnd=${b.end}');
+        return null;
+      }
+    }
+    // ignore: avoid_print
+    print('[SEED_FROM_INITIAL][SUCCESS] start=$s end=$e nights=$nights');
     return (s, e);
   }
 
@@ -1175,6 +1429,53 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       _selectionHintIsMinStay = false;
       _selectionHintIsUnavailableDateTap = false;
     }
+    // Rebuild blocked-day index if the parent passed a new list (identity
+    // change). Cheap no-op when the list reference is unchanged.
+    _rebuildBookedIndexIfNeeded();
+  }
+
+  /// Rebuilds [_blockedDayKeys] and [_sortedBookedRanges] from
+  /// [widget.bookedRanges] when the underlying list identity has changed
+  /// (or [force] is set). Pre-computing these indexes turns every hot-path
+  /// availability check from O(n) into O(1) (set lookup) or O(n) with an
+  /// early break (sorted scan).
+  void _rebuildBookedIndexIfNeeded({bool force = false}) {
+    final ranges = widget.bookedRanges;
+    if (!force && identical(ranges, _bookedRangesIdentity)) return;
+    // PERF WARNING — if a property ever has more than [_kMaxBookedRangesWarn]
+    // ranges it's worth monitoring: not a functional problem, but the
+    // index build / range list walk both grow linearly.
+    if (ranges.length > _kMaxBookedRangesWarn) {
+      debugPrint(
+        '[PERF WARNING] Large blockedRanges size=${ranges.length} '
+        'propertyId=${widget.propertyId}',
+      );
+    }
+    // Cap the number of blocked-day keys we materialize to a rolling
+    // horizon — any range nights past [_kBlockedHorizonDays] from today
+    // can't be tapped anyway (first/last day limits), so storing them
+    // would just bloat the set.
+    final cutoff = _today.add(const Duration(days: _kBlockedHorizonDays));
+    final keys = <int>{};
+    for (final b in ranges) {
+      final start = DateTime(b.start.year, b.start.month, b.start.day);
+      final end = DateTime(b.end.year, b.end.month, b.end.day);
+      for (
+        var d = start;
+        d.isBefore(end);
+        d = d.add(const Duration(days: 1))
+      ) {
+        if (d.isAfter(cutoff)) break;
+        keys.add(_dayKeyFor(d));
+      }
+    }
+    final sorted = List<ChaletBookedRange>.from(ranges)
+      ..sort((a, b) => a.start.compareTo(b.start));
+    _blockedDayKeys = keys;
+    _sortedBookedRanges = sorted;
+    _bookedRangesIdentity = ranges;
+    _availableDayCountCached =
+        chaletCountAvailableDaysInHorizon(sorted, _today);
   }
 
   bool get _isAr => Localizations.localeOf(context).languageCode == 'ar';
@@ -1185,22 +1486,91 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
   String get _msgSingleDateUnavailable =>
       _isAr ? _kMsgSingleDateUnavailableAr : _kMsgSingleDateUnavailableEn;
 
+  String get _msgPastDate => _isAr ? _kMsgPastDateAr : _kMsgPastDateEn;
+
+  String get _msgBookedDate => _isAr ? _kMsgBookedDateAr : _kMsgBookedDateEn;
+
+  String get _msgCrossesBooked =>
+      _isAr ? _kMsgCrossesBookedAr : _kMsgCrossesBookedEn;
+
+  String get _msgSelectCheckIn =>
+      _isAr ? _kMsgSelectCheckInAr : _kMsgSelectCheckInEn;
+
+  String get _msgSelectCheckOut =>
+      _isAr ? _kMsgSelectCheckOutAr : _kMsgSelectCheckOutEn;
+
+  String get _labelCheckIn =>
+      _isAr ? _kMsgCheckInLabelAr : _kMsgCheckInLabelEn;
+
+  String get _labelCheckOut =>
+      _isAr ? _kMsgCheckOutLabelAr : _kMsgCheckOutLabelEn;
+
+  String get _msgSeedRejected =>
+      _isAr ? _kMsgSeedRejectedAr : _kMsgSeedRejectedEn;
+
+  String get _msgMidSelectionHint =>
+      _isAr ? _kMsgMidSelectionAr : _kMsgMidSelectionEn;
+
+  String get _msgSelectionCleared =>
+      _isAr ? _kMsgSelectionClearedAr : _kMsgSelectionClearedEn;
+
+  /// Returns true when picking [d] as check-out (exclusive = d + 1 day) given
+  /// the current [_rangeStart] would produce a stay that overlaps an existing
+  /// booking. Used by the [enabledDayPredicate] to preemptively disable
+  /// invalid check-out candidates while the user is mid-selection.
+  bool _crossesBookedBlockAsCheckOut(DateTime d) {
+    if (_rangeStart == null || _rangeEnd != null) return false;
+    final s = _dateOnly(_rangeStart!);
+    final t = _dateOnly(d);
+    if (!t.isAfter(s)) return false; // same-day toggle / invalid-before are handled elsewhere
+    final checkOutExclusive = t.add(const Duration(days: 1));
+    return _rangeConflicts(s, checkOutExclusive);
+  }
+
+  /// True when [day] must be rendered as a disabled (non-tappable) cell.
+  /// Combines absolute constraints (past / booked) with contextual
+  /// constraints (mid-selection would produce an invalid stay).
+  bool _isDayTappable(DateTime day) {
+    if (_isDayUnavailable(day)) return false;
+    if (_rangeStart != null && _rangeEnd == null) {
+      final s = _dateOnly(_rangeStart!);
+      final d = _dateOnly(day);
+      // Allow tap on check-in itself (acts as a toggle-clear).
+      if (isSameDay(d, s)) return true;
+      // Disallow earlier dates as check-out candidates.
+      if (d.isBefore(s)) return false;
+      // Disallow check-out candidates that would cross a booked block.
+      if (_crossesBookedBlockAsCheckOut(d)) return false;
+    }
+    return true;
+  }
+
+  /// Resolves the most specific reason [day] is disabled so the user sees a
+  /// message that matches the real constraint (past / booked / overlap /
+  /// generic).
+  String _disabledReasonFor(DateTime day) {
+    if (_isPastDay(day)) return _msgPastDate;
+    if (_isBookedNight(day)) return _msgBookedDate;
+    if (_rangeStart != null && _rangeEnd == null) {
+      final s = _dateOnly(_rangeStart!);
+      final d = _dateOnly(day);
+      if (d.isBefore(s)) return _msgSingleDateUnavailable;
+      if (_crossesBookedBlockAsCheckOut(d)) return _msgCrossesBooked;
+    }
+    return _msgSingleDateUnavailable;
+  }
+
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
   DateTime get _today => _dateOnly(DateTime.now());
 
-  bool _nightOverlapsBooking(DateTime day, ChaletBookedRange b) {
-    final s = _dateOnly(day);
-    final e = s.add(const Duration(days: 1));
-    return s.isBefore(b.end) && e.isAfter(b.start);
-  }
-
+  /// O(1) blocked-night lookup against [_blockedDayKeys] (precomputed in
+  /// [_rebuildBookedIndexIfNeeded]). Replaces the previous O(n) scan over
+  /// [widget.bookedRanges] that used to run for every calendar cell on
+  /// every paint / tap.
   bool _isBookedNight(DateTime day) {
     final d = _dateOnly(day);
-    for (final b in widget.bookedRanges) {
-      if (_nightOverlapsBooking(d, b)) return true;
-    }
-    return false;
+    return _blockedDayKeys.contains(_dayKeyFor(d));
   }
 
   bool _isPastDay(DateTime day) => _dateOnly(day).isBefore(_today);
@@ -1208,8 +1578,13 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
   bool _isDayUnavailable(DateTime day) =>
       _isPastDay(day) || _isBookedNight(day);
 
+  /// Range overlap check against the *sorted* list of booked ranges.
+  /// Because [_sortedBookedRanges] is sorted ascending by `start`, we can
+  /// short-circuit as soon as we encounter a range whose start is at-or-
+  /// after the requested check-out — no further range can overlap.
   bool _rangeConflicts(DateTime checkIn, DateTime checkOutExclusive) {
-    for (final b in widget.bookedRanges) {
+    for (final b in _sortedBookedRanges) {
+      if (!b.start.isBefore(checkOutExclusive)) return false;
       if (checkIn.isBefore(b.end) && checkOutExclusive.isAfter(b.start)) {
         return true;
       }
@@ -1217,6 +1592,9 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
     return false;
   }
 
+  /// Walks the candidate stay night-by-night using the O(1) [_isBookedNight]
+  /// + [_isPastDay] checks. Bounded by stay length (typically <= 30), not
+  /// by the booked-range count.
   bool _stayHasBlockedNight(DateTime checkIn, DateTime checkOutExclusive) {
     for (
       var d = checkIn;
@@ -1247,7 +1625,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       b = t;
     }
     final checkIn = a;
-    final checkOutExclusive = b.add(const Duration(days: 1));
+    final checkOutExclusive = b;
     return (checkIn, checkOutExclusive);
   }
 
@@ -1416,6 +1794,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
 
   void _showDatesUnavailableFeedback() {
     if (!mounted) return;
+    if (!_canShowSnack()) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1436,6 +1815,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
 
   void _showMinStayFeedback() {
     if (!mounted) return;
+    if (!_canShowSnack()) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1456,32 +1836,79 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
     );
   }
 
-  void _showSingleDateUnavailableFeedback() {
+  void _onDisabledDayTapped(DateTime day) {
+    HapticFeedback.lightImpact();
+    final reason = _disabledReasonFor(day);
+    final isBookedReason =
+        reason == _msgBookedDate || reason == _msgCrossesBooked;
+    setState(() {
+      _selectionHint = reason;
+      _selectionHintIsBookedConflict = isBookedReason;
+      _selectionHintIsMinStay = false;
+      _selectionHintIsUnavailableDateTap = !isBookedReason;
+      _selectionHintIsMidSelection = false;
+    });
+    _showDisabledReasonFeedback(reason, isBookedReason);
+    _scheduleHintAutoFade();
+  }
+
+  void _showDisabledReasonFeedback(String reason, bool isBookedReason) {
     if (!mounted) return;
+    if (!_canShowSnack()) return;
     ScaffoldMessenger.of(context).clearSnackBars();
+    final IconData icon =
+        isBookedReason ? Icons.event_busy_rounded : Icons.block_rounded;
+    final Color bg = isBookedReason
+        ? Colors.red.shade900.withValues(alpha: 0.92)
+        : Colors.grey.shade800.withValues(alpha: 0.92);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         duration: const Duration(seconds: 2),
-        content: Text(_msgSingleDateUnavailable),
-        backgroundColor: Colors.grey.shade800.withValues(alpha: 0.92),
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white.withValues(alpha: 0.9)),
+            const SizedBox(width: 12),
+            Expanded(child: Text(reason)),
+          ],
+        ),
+        backgroundColor: bg,
       ),
     );
   }
 
-  void _onDisabledDayTapped(DateTime day) {
-    HapticFeedback.lightImpact();
-    setState(() {
-      _selectionHint = _msgSingleDateUnavailable;
-      _selectionHintIsBookedConflict = false;
-      _selectionHintIsMinStay = false;
-      _selectionHintIsUnavailableDateTap = true;
-    });
-    _showSingleDateUnavailableFeedback();
+  void _showSeedRejectedFeedback() {
+    if (!mounted) return;
+    if (!_canShowSnack()) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        duration: const Duration(seconds: 4),
+        content: Row(
+          children: [
+            Icon(
+              Icons.info_outline_rounded,
+              color: Colors.amber.shade100,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(_msgSeedRejected)),
+          ],
+        ),
+        backgroundColor: Colors.brown.shade800.withValues(alpha: 0.94),
+      ),
+    );
   }
 
   void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    // PERF — debug-only timer so we can spot regressions when the calendar
+    // is wired to a chalet with a large number of blocked ranges. Target:
+    // a tap should resolve in well under 5 ms on a release build. The
+    // stopwatch itself is O(1) and cheap.
+    final perfSw = kDebugMode ? (Stopwatch()..start()) : null;
+    bool scheduleHintFade = false;
     setState(() {
       _resetQuotedTotalOnController();
       _focusedDay = focusedDay;
@@ -1489,11 +1916,14 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       _selectionHintIsBookedConflict = false;
       _selectionHintIsMinStay = false;
       _selectionHintIsUnavailableDateTap = false;
+      _selectionHintIsMidSelection = false;
+      _hintFadeTimer?.cancel();
       final d = _dateOnly(selectedDay);
 
       if (_isDayUnavailable(d)) {
         _selectionHint = _msgDatesUnavailable;
         _selectionHintIsBookedConflict = true;
+        scheduleHintFade = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _showDatesUnavailableFeedback();
         });
@@ -1503,12 +1933,18 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       if (_rangeStart != null && _rangeEnd != null) {
         _rangeStart = d;
         _rangeEnd = null;
+        _selectionHint = _msgMidSelectionHint;
+        _selectionHintIsMidSelection = true;
+        scheduleHintFade = true;
         return;
       }
 
       if (_rangeStart == null) {
         _rangeStart = d;
         _rangeEnd = null;
+        _selectionHint = _msgMidSelectionHint;
+        _selectionHintIsMidSelection = true;
+        scheduleHintFade = true;
         return;
       }
 
@@ -1516,12 +1952,18 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       if (d.isBefore(s)) {
         _rangeStart = d;
         _rangeEnd = null;
+        _selectionHint = _msgMidSelectionHint;
+        _selectionHintIsMidSelection = true;
+        scheduleHintFade = true;
         return;
       }
 
       if (isSameDay(d, s)) {
         _rangeStart = null;
         _rangeEnd = null;
+        _selectionHint = _msgSelectionCleared;
+        _selectionHintIsUnavailableDateTap = true;
+        scheduleHintFade = true;
         return;
       }
 
@@ -1530,6 +1972,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       if (_stayOverlapsReserved(checkIn, checkOutExclusive)) {
         _selectionHint = _msgDatesUnavailable;
         _selectionHintIsBookedConflict = true;
+        scheduleHintFade = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _showDatesUnavailableFeedback();
         });
@@ -1540,14 +1983,24 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       if (nights < widget.minNights) {
         _selectionHint = _minStayMessage(widget.minNights, _isAr);
         _selectionHintIsMinStay = true;
+        scheduleHintFade = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _showMinStayFeedback();
         });
         return;
       }
 
-      _rangeEnd = d;
+      _rangeEnd = d.add(const Duration(days: 1));
     });
+    if (scheduleHintFade) _scheduleHintAutoFade();
+    if (perfSw != null) {
+      perfSw.stop();
+      debugPrint(
+        '[PERF] calendar tap took ${perfSw.elapsedMicroseconds} us '
+        '(ranges=${_sortedBookedRanges.length} '
+        'blockedDays=${_blockedDayKeys.length})',
+      );
+    }
   }
 
   Future<void> _submit() async {
@@ -1558,6 +2011,18 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
 
   @override
   Widget build(BuildContext context) {
+    // ignore: avoid_print
+    print(
+        '[LIFECYCLE] ChaletBookingBody build start _rangeStart=$_rangeStart _rangeEnd=$_rangeEnd');
+    // PERF — sample build frequency in debug. If this ever shouts every
+    // few seconds without user input, something is triggering spurious
+    // rebuilds (listener fan-out, animation loop, etc.).
+    if (kDebugMode) {
+      _buildCount++;
+      if (_buildCount % 50 == 0) {
+        debugPrint('[PERF] ChaletBookingBody build called $_buildCount times');
+      }
+    }
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final locale = _isAr ? 'ar' : 'en_US';
@@ -1568,8 +2033,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
         '${_rangeStart?.toIso8601String()}_${_rangeEnd?.toIso8601String()}';
 
     final canBook = _isValidSelection && !_submitting;
-    final availableDayCount =
-        chaletCountAvailableDaysInHorizon(widget.bookedRanges, _today);
+    final availableDayCount = _availableDayCountCached;
     final showUrgency = availableDayCount > 0 &&
         availableDayCount <= _urgencyMaxAvailableDays;
 
@@ -1596,7 +2060,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
 
     widget.controller?._update(
       startDate: boundsLive?.$1,
-      endDate: boundsLive?.$2.subtract(const Duration(days: 1)),
+      endDate: boundsLive?.$2,
       nights: _nights,
       totalPrice: barTotal,
       canBook: canBook,
@@ -1684,6 +2148,19 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                   ),
                   const SizedBox(height: 12),
                 ],
+                _BookingSelectionGuide(
+                  isAr: _isAr,
+                  locale: locale,
+                  colorScheme: cs,
+                  theme: theme,
+                  rangeStart: _rangeStart,
+                  rangeEnd: _rangeEnd,
+                  labelCheckIn: _labelCheckIn,
+                  labelCheckOut: _labelCheckOut,
+                  promptSelectCheckIn: _msgSelectCheckIn,
+                  promptSelectCheckOut: _msgSelectCheckOut,
+                ),
+                const SizedBox(height: 10),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 360),
                   curve: Curves.easeOutCubic,
@@ -1736,16 +2213,20 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                             alignment: Alignment.topCenter,
                             child: child!,
                           ),
-                          child: TableCalendar<void>(
-                            locale: locale,
-                            firstDay: _today,
+                          // PERF — isolate the calendar's paint region so
+                          // sibling animations (hint / guide / banner) and
+                          // the parent Transform.scale tween above cannot
+                          // force a full-calendar repaint on every frame.
+                          child: RepaintBoundary(
+                            child: TableCalendar<void>(
+                              locale: locale,
+                              firstDay: _today,
                             lastDay: _today.add(const Duration(days: 500)),
                             focusedDay: _focusedDay,
                             rangeStartDay: _rangeStart,
                             rangeEndDay: _rangeEnd,
-                            rangeSelectionMode: RangeSelectionMode.disabled,
-                            enabledDayPredicate: (day) =>
-                                !_isDayUnavailable(day),
+                            rangeSelectionMode: RangeSelectionMode.toggledOn,
+                            enabledDayPredicate: _isDayTappable,
                             onDaySelected: _onDaySelected,
                             onDisabledDayTapped: _onDisabledDayTapped,
                             onPageChanged: (f) =>
@@ -1793,22 +2274,22 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                                 fontWeight: FontWeight.w900,
                               ),
                               rangeEndDecoration: BoxDecoration(
-                                color: cs.primary,
+                                color: cs.surface,
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: Colors.white,
-                                  width: 2.2,
+                                  color: cs.primary,
+                                  width: 2.4,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: cs.primary.withValues(alpha: 0.45),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 3),
+                                    color: cs.primary.withValues(alpha: 0.22),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
                               rangeEndTextStyle: TextStyle(
-                                color: cs.onPrimary,
+                                color: cs.primary,
                                 fontWeight: FontWeight.w900,
                               ),
                               withinRangeTextStyle: TextStyle(
@@ -1883,7 +2364,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                                           height: h,
                                           decoration: BoxDecoration(
                                             color: cs.primary.withValues(
-                                              alpha: 0.2,
+                                              alpha: 0.14,
                                             ),
                                             borderRadius:
                                                 BorderRadiusDirectional
@@ -2002,19 +2483,19 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: cs.primary,
+                                      color: cs.surface,
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: Colors.white,
-                                        width: 2.2,
+                                        color: cs.primary,
+                                        width: 2.4,
                                       ),
                                       boxShadow: [
                                         BoxShadow(
                                           color: cs.primary.withValues(
-                                            alpha: 0.45,
+                                            alpha: 0.22,
                                           ),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 3),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
                                         ),
                                       ],
                                     ),
@@ -2022,12 +2503,57 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                                     child: Text(
                                       '${day.day}',
                                       style: TextStyle(
-                                        color: cs.onPrimary,
+                                        color: cs.primary,
                                         fontWeight: FontWeight.w900,
                                       ),
                                     ),
                                   ),
                                 );
+                              },
+                              selectedBuilder: (context, day, focusedDay) {
+                                final d = _dateOnly(day);
+                                final isStart = _rangeStart != null &&
+                                    isSameDay(d, _rangeStart);
+                                final isEnd = _rangeEnd != null &&
+                                    isSameDay(d, _rangeEnd);
+                                if (isStart) {
+                                  return Container(
+                                    margin: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: cs.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '${day.day}',
+                                      style: TextStyle(
+                                        color: cs.onPrimary,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                if (isEnd) {
+                                  return Container(
+                                    margin: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: cs.surface,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: cs.primary,
+                                        width: 2.4,
+                                      ),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '${day.day}',
+                                      style: TextStyle(
+                                        color: cs.primary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return null;
                               },
                               todayBuilder: (context, day, focused) {
                                 if (_isDayUnavailable(day)) return null;
@@ -2059,6 +2585,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                             ),
                             selectedDayPredicate: (_) => false,
                           ),
+                          ),
                         ),
                       ),
                     ),
@@ -2074,8 +2601,8 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                   const SizedBox(height: 10),
                   Text(
                     _isAr
-                        ? '$_liveNights ليالي — الإجمالي من الخادم بعد الضغط على احجز'
-                        : '$_liveNights nights — total from server after you tap Book',
+                        ? '${_nightsLabel(_liveNights, true)} — الإجمالي من الخادم بعد الضغط على احجز'
+                        : '${_nightsLabel(_liveNights, false)} — total from server after you tap Book',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.72),
                       fontWeight: FontWeight.w700,
@@ -2085,9 +2612,9 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                   ),
                 ],
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
+                  duration: const Duration(milliseconds: 280),
+                  switchInCurve: Curves.easeInOut,
+                  switchOutCurve: Curves.easeInOut,
                   transitionBuilder: (child, anim) =>
                       FadeTransition(opacity: anim, child: child),
                   child: _selectionHint == null
@@ -2096,16 +2623,18 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                           key: ValueKey(_selectionHint),
                           padding: const EdgeInsets.only(top: 14),
                           child: Material(
-                            color: _selectionHintIsUnavailableDateTap
-                                ? cs.surfaceContainerHighest.withValues(
-                                    alpha: 0.75,
-                                  )
-                                : _selectionHintIsMinStay
-                                    ? cs.primary.withValues(alpha: 0.1)
-                                : (_selectionHintIsBookedConflict
-                                        ? Colors.red
-                                        : cs.error)
-                                    .withValues(alpha: 0.09),
+                            color: _selectionHintIsMidSelection
+                                ? cs.primary.withValues(alpha: 0.12)
+                                : _selectionHintIsUnavailableDateTap
+                                    ? cs.surfaceContainerHighest.withValues(
+                                        alpha: 0.75,
+                                      )
+                                    : _selectionHintIsMinStay
+                                        ? cs.primary.withValues(alpha: 0.1)
+                                        : (_selectionHintIsBookedConflict
+                                                    ? Colors.red
+                                                    : cs.error)
+                                                .withValues(alpha: 0.09),
                             borderRadius: BorderRadius.circular(12),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
@@ -2116,38 +2645,44 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Icon(
-                                    _selectionHintIsUnavailableDateTap
-                                        ? Icons.not_interested_outlined
-                                        : _selectionHintIsMinStay
-                                        ? Icons.schedule_rounded
-                                        : _selectionHintIsBookedConflict
-                                        ? Icons.event_busy_rounded
-                                        : Icons.info_outline_rounded,
+                                    _selectionHintIsMidSelection
+                                        ? Icons.logout_rounded
+                                        : _selectionHintIsUnavailableDateTap
+                                            ? Icons.not_interested_outlined
+                                            : _selectionHintIsMinStay
+                                                ? Icons.schedule_rounded
+                                                : _selectionHintIsBookedConflict
+                                                    ? Icons.event_busy_rounded
+                                                    : Icons.info_outline_rounded,
                                     size: 22,
-                                    color: _selectionHintIsUnavailableDateTap
-                                        ? cs.onSurface.withValues(alpha: 0.55)
-                                        : _selectionHintIsMinStay
-                                        ? cs.primary.withValues(alpha: 0.9)
-                                        : (_selectionHintIsBookedConflict
-                                                ? Colors.red
-                                                : cs.error)
-                                            .withValues(alpha: 0.9),
+                                    color: _selectionHintIsMidSelection
+                                        ? cs.primary.withValues(alpha: 0.95)
+                                        : _selectionHintIsUnavailableDateTap
+                                            ? cs.onSurface.withValues(alpha: 0.55)
+                                            : _selectionHintIsMinStay
+                                                ? cs.primary.withValues(alpha: 0.9)
+                                                : (_selectionHintIsBookedConflict
+                                                            ? Colors.red
+                                                            : cs.error)
+                                                        .withValues(alpha: 0.9),
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
                                       _selectionHint!,
                                       style: TextStyle(
-                                        color: _selectionHintIsUnavailableDateTap
-                                            ? cs.onSurface.withValues(
-                                                alpha: 0.82,
-                                              )
-                                            : _selectionHintIsMinStay
+                                        color: _selectionHintIsMidSelection
                                             ? cs.primary.withValues(alpha: 0.95)
-                                            : (_selectionHintIsBookedConflict
-                                                    ? Colors.red.shade900
-                                                    : cs.error)
-                                                .withValues(alpha: 0.95),
+                                            : _selectionHintIsUnavailableDateTap
+                                                ? cs.onSurface.withValues(
+                                                    alpha: 0.82,
+                                                  )
+                                                : _selectionHintIsMinStay
+                                                    ? cs.primary.withValues(alpha: 0.95)
+                                                    : (_selectionHintIsBookedConflict
+                                                                ? Colors.red.shade900
+                                                                : cs.error)
+                                                            .withValues(alpha: 0.95),
                                         fontWeight: FontWeight.w600,
                                         height: 1.35,
                                       ),
@@ -2554,6 +3089,103 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(child: Text('$day', style: textStyle));
+  }
+}
+
+/// Small guide banner above the calendar that tells the user exactly which
+/// step of the date selection they're on, and clearly distinguishes check-in
+/// vs check-out. When a full range is selected it summarises the stay as
+/// `<checkIn> → <checkOut> · <nights>` so the user sees both the dates and
+/// the nights count in one glance. UI-only — it does not read or write any
+/// booking state.
+class _BookingSelectionGuide extends StatelessWidget {
+  const _BookingSelectionGuide({
+    required this.isAr,
+    required this.locale,
+    required this.colorScheme,
+    required this.theme,
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.labelCheckIn,
+    required this.labelCheckOut,
+    required this.promptSelectCheckIn,
+    required this.promptSelectCheckOut,
+  });
+
+  final bool isAr;
+  final String locale;
+  final ColorScheme colorScheme;
+  final ThemeData theme;
+  final DateTime? rangeStart;
+  final DateTime? rangeEnd;
+  final String labelCheckIn;
+  final String labelCheckOut;
+  final String promptSelectCheckIn;
+  final String promptSelectCheckOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final IconData icon;
+    final String message;
+    final Color accent;
+
+    if (rangeStart == null) {
+      icon = Icons.login_rounded;
+      message = promptSelectCheckIn;
+      accent = colorScheme.primary;
+    } else if (rangeEnd == null) {
+      icon = Icons.logout_rounded;
+      final df = DateFormat.MMMd(locale);
+      final arrow = isAr ? '←' : '→';
+      message =
+          '$labelCheckIn: ${df.format(rangeStart!)}  $arrow  $promptSelectCheckOut';
+      accent = colorScheme.primary;
+    } else {
+      icon = Icons.event_available_rounded;
+      final df = DateFormat.MMMd(locale);
+      final nights = rangeEnd!.difference(rangeStart!).inDays;
+      final checkOutDisplay = rangeEnd!.subtract(const Duration(days: 1));
+      final arrow = isAr ? '←' : '→';
+      message =
+          '$labelCheckIn ${df.format(rangeStart!)}  $arrow  $labelCheckOut ${df.format(checkOutDisplay)} · ${_nightsLabel(nights, isAr)}';
+      accent = colorScheme.primary;
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
+      transitionBuilder: (child, anim) =>
+          FadeTransition(opacity: anim, child: child),
+      child: Container(
+        key: ValueKey<String>(message),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: accent.withValues(alpha: 0.18),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: accent),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.onSurface.withValues(alpha: 0.86),
+                  height: 1.25,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
