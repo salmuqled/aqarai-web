@@ -24,7 +24,10 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
-import { ensureChaletLedgerForConfirmedBooking } from "./chalet_booking_finance";
+import {
+  ensureChaletLedgerForConfirmedBooking,
+  COMMISSION_RATE,
+} from "./chalet_booking_finance";
 import { writeExceptionLog } from "./exceptionLogs";
 import { sendNotificationToUser } from "./sendUserNotification";
 
@@ -402,6 +405,73 @@ export async function isDateRangeAvailable(
   return true;
 }
 
+/**
+ * Defense-in-depth overlap re-check used when a booking is being transitioned
+ * to `confirmed`. Must be called inside a Firestore transaction BEFORE any
+ * writes. Re-verifies that no other active booking (`confirmed` or valid
+ * `pending_payment` hold) and no `blocked_dates` range overlaps the booking's
+ * [start, end) on the same property.
+ *
+ * This is a defense-in-depth layer: `createBooking` already enforces the
+ * same invariant transactionally, but we re-check at confirmation time to
+ * survive:
+ *   - Manual admin/owner writes to `blocked_dates` during a payment session.
+ *   - Any future out-of-band writer to `bookings` / `blocked_dates`.
+ *   - Clock skew on `expiresAt` around the hold boundary.
+ *
+ * Throws `HttpsError("failed-precondition", "DATES_NOT_AVAILABLE")` on any
+ * overlap so payment confirmation is aborted before the status flips.
+ */
+async function assertNoFinalizationOverlapInTx(
+  tx: admin.firestore.Transaction,
+  propertyId: string,
+  start: admin.firestore.Timestamp,
+  end: admin.firestore.Timestamp,
+  excludeBookingId: string
+): Promise<void> {
+  const pid = propertyId.trim();
+  if (!pid) {
+    throw new HttpsError("failed-precondition", "Property is not available for booking");
+  }
+  if (start.toMillis() >= end.toMillis()) {
+    throw new HttpsError("failed-precondition", "Booking dates are invalid");
+  }
+
+  const bookingsQ = db
+    .collection("bookings")
+    .where("propertyId", "==", pid)
+    .where("status", "in", ["pending_payment", "confirmed"]);
+  const existing = await tx.get(bookingsQ);
+  const nowMs = Date.now();
+  for (const doc of existing.docs) {
+    if (doc.id === excludeBookingId) continue;
+    const d = doc.data();
+    const st = typeof d.status === "string" ? d.status.trim() : "";
+    if (st === "pending_payment" && !pendingPaymentStillHolds(d, nowMs)) continue;
+    const bs = d.startDate as admin.firestore.Timestamp | undefined;
+    const be = d.endDate as admin.firestore.Timestamp | undefined;
+    if (!bs || !be) continue;
+    if (rangesOverlap(start, end, bs, be)) {
+      throw new HttpsError("failed-precondition", "DATES_NOT_AVAILABLE");
+    }
+  }
+
+  const blocksQ = db
+    .collection("blocked_dates")
+    .where("propertyId", "==", pid)
+    .where("startDate", "<=", end);
+  const blocks = await tx.get(blocksQ);
+  for (const doc of blocks.docs) {
+    const d = doc.data();
+    const bs = d.startDate as admin.firestore.Timestamp | undefined;
+    const be = d.endDate as admin.firestore.Timestamp | undefined;
+    if (!bs || !be) continue;
+    if (rangesOverlap(start, end, bs, be)) {
+      throw new HttpsError("failed-precondition", "DATES_NOT_AVAILABLE");
+    }
+  }
+}
+
 /** Use inside catch blocks for non-client failures (Firestore, unexpected runtime). */
 function logBookingError(err: unknown, propertyId: string): void {
   const e = err instanceof Error ? err : null;
@@ -751,10 +821,132 @@ export type FinalizeBookingAfterPaymentMode =
   | { kind: "owner_confirm"; uid: string; isAdmin: boolean }
   | { kind: "guest_simulate"; uid: string; isAdmin: boolean };
 
+/** Platform/owner ledger write outcome, echoed back onto the booking doc. */
+export interface FinancialPostingResult {
+  adminLedgerId: string;
+  ownerLedgerId: string;
+  commissionRate: number;
+  commissionAmount: number;
+  ownerNet: number;
+  grossAmount: number;
+}
+
+/**
+ * INTERNAL: single source of truth for platform + owner ledger writes during
+ * booking finalization. Every confirmation path (fake, MyFatoorah verify,
+ * guest simulate) MUST call this so admin_metrics roll-up
+ * ([onAdminLedgerCreatedFinanceMetrics]) fires and owner payout is queued.
+ *
+ * Transaction ordering contract: caller MUST have issued every `tx.get` it
+ * needs BEFORE calling this helper (Firestore forbids reads after writes).
+ * The legacy `transactions/{bookingId}` snapshot must be read by the caller
+ * and passed in via [legacyTxSnap] + [legacyTxRef].
+ *
+ * Idempotency: when [existingAdminLedgerId] / [existingOwnerLedgerId] are
+ * provided (e.g. a fake-pay retry resuming a partially-applied state), the
+ * same doc IDs are reused instead of allocating fresh ones.
+ */
+function postFinancialRecordsInTx(args: {
+  tx: admin.firestore.Transaction;
+  bookingId: string;
+  propertyId: string;
+  ownerId: string;
+  totalPrice: number;
+  paymentId: string;
+  legacyTxRef: admin.firestore.DocumentReference;
+  legacyTxSnap: admin.firestore.DocumentSnapshot;
+  existingAdminLedgerId?: string;
+  existingOwnerLedgerId?: string;
+}): FinancialPostingResult {
+  const {
+    tx,
+    bookingId,
+    propertyId,
+    ownerId,
+    totalPrice,
+    paymentId,
+    legacyTxRef,
+    legacyTxSnap,
+    existingAdminLedgerId,
+    existingOwnerLedgerId,
+  } = args;
+
+  const gross =
+    Number.isFinite(totalPrice) && totalPrice > 0 ? totalPrice : 0;
+  const commissionRate = COMMISSION_RATE;
+  const commissionAmount = round3(gross * commissionRate);
+  const ownerNet = round3(gross - commissionAmount);
+
+  const adminLedgerRef = existingAdminLedgerId
+    ? db.collection("admin_ledger").doc(existingAdminLedgerId)
+    : db.collection("admin_ledger").doc();
+  const ownerLedgerRef = existingOwnerLedgerId
+    ? db.collection("owner_ledger").doc(existingOwnerLedgerId)
+    : db.collection("owner_ledger").doc();
+
+  tx.set(
+    adminLedgerRef,
+    {
+      type: "booking_commission",
+      bookingId,
+      propertyId,
+      ownerId,
+      amount: commissionAmount,
+      currency: "KWD",
+      source: "chalet_booking",
+      paymentReference: paymentId,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    { merge: false }
+  );
+
+  tx.set(
+    ownerLedgerRef,
+    {
+      ownerId,
+      bookingId,
+      propertyId,
+      grossAmount: gross,
+      commission: commissionAmount,
+      netAmount: ownerNet,
+      currency: "KWD",
+      status: "pending_payout",
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    { merge: false }
+  );
+
+  if (legacyTxSnap.exists) {
+    tx.update(legacyTxRef, {
+      paymentReference: paymentId,
+      commissionRate,
+      commissionAmount,
+      netAmount: ownerNet,
+      platformRevenue: commissionAmount,
+      ownerPayoutAmount: ownerNet,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  return {
+    adminLedgerId: adminLedgerRef.id,
+    ownerLedgerId: ownerLedgerRef.id,
+    commissionRate,
+    commissionAmount,
+    ownerNet,
+    grossAmount: gross,
+  };
+}
+
 /**
  * INTERNAL: single writer for `status: "confirmed"` on `bookings/{bookingId}`.
  * All confirmation paths (guest simulate, fake pay, MyFatoorah verify)
  * must route through this function so `status: "confirmed"` is not set elsewhere.
+ *
+ * Financial invariant: every branch calls [postFinancialRecordsInTx] inside
+ * the same transaction before updating the booking, so admin_ledger +
+ * owner_ledger are always written and admin_metrics rollup is always
+ * triggered via [onAdminLedgerCreatedFinanceMetrics].
  */
 export async function finalizeBookingAfterPayment(
   bookingId: string,
@@ -821,6 +1013,53 @@ export async function finalizeBookingAfterPayment(
         const propSnapMf = await tx.get(db.collection("properties").doc(propertyIdMf));
         assertPropertyPublicForGuestBookingPayment(propSnapMf.data());
 
+        const startMf = data.startDate as admin.firestore.Timestamp | undefined;
+        const endMf = data.endDate as admin.firestore.Timestamp | undefined;
+        if (!startMf || !endMf) {
+          throw new HttpsError("failed-precondition", "Booking data is invalid");
+        }
+        await assertNoFinalizationOverlapInTx(tx, propertyIdMf, startMf, endMf, bid);
+
+        const ownerIdMf =
+          typeof data.ownerId === "string" ? data.ownerId.trim() : "";
+        if (!ownerIdMf) {
+          throw new HttpsError("failed-precondition", "Booking data is invalid");
+        }
+        const totalPriceMfRaw =
+          typeof data.totalPrice === "number"
+            ? data.totalPrice
+            : Number(data.totalPrice);
+        const totalPriceMf = Number.isFinite(totalPriceMfRaw)
+          ? totalPriceMfRaw
+          : 0;
+        const existingAdminLedgerIdMf =
+          typeof data.adminLedgerId === "string"
+            ? data.adminLedgerId.trim()
+            : "";
+        const existingOwnerLedgerIdMf =
+          typeof data.ownerLedgerId === "string"
+            ? data.ownerLedgerId.trim()
+            : "";
+
+        // All reads before writes (Firestore tx rule).
+        const legacyTxRefMf = db.collection("transactions").doc(bid);
+        const legacyTxSnapMf = await tx.get(legacyTxRefMf);
+
+        const postedMf = postFinancialRecordsInTx({
+          tx,
+          bookingId: bid,
+          propertyId: propertyIdMf,
+          ownerId: ownerIdMf,
+          totalPrice: totalPriceMf,
+          paymentId: mode.paymentId,
+          legacyTxRef: legacyTxRefMf,
+          legacyTxSnap: legacyTxSnapMf,
+          existingAdminLedgerId: existingAdminLedgerIdMf || undefined,
+          existingOwnerLedgerId: existingOwnerLedgerIdMf || undefined,
+        });
+
+        outPaymentId = mode.paymentId;
+
         tx.update(bookingRef, {
           status: "confirmed" as BookingStatus,
           confirmedAt: FieldValue.serverTimestamp(),
@@ -829,6 +1068,13 @@ export async function finalizeBookingAfterPayment(
           paymentStatus: "paid",
           paymentVerifiedAt: FieldValue.serverTimestamp(),
           paymentGatewayStatus: mode.paymentGatewayStatus,
+          paidAt: FieldValue.serverTimestamp(),
+          commissionRate: postedMf.commissionRate,
+          commissionAmount: postedMf.commissionAmount,
+          ownerNet: postedMf.ownerNet,
+          adminLedgerId: postedMf.adminLedgerId,
+          ownerLedgerId: postedMf.ownerLedgerId,
+          financialLedgerVersion: 1,
           updatedAt: FieldValue.serverTimestamp(),
         });
         transitionedToConfirmed = true;
@@ -882,51 +1128,68 @@ export async function finalizeBookingAfterPayment(
         }
         assertPropertyPublicForGuestBookingPayment(propDataBooking);
 
-        const q = db
-          .collection("bookings")
-          .where("propertyId", "==", propertyId)
-          .where("status", "==", "confirmed");
-        const confirmed = await tx.get(q);
+        await assertNoFinalizationOverlapInTx(tx, propertyId, start, end, bid);
 
-        for (const doc of confirmed.docs) {
-          if (doc.id === bid) continue;
-          const d = doc.data();
-          const bs = d.startDate as admin.firestore.Timestamp | undefined;
-          const be = d.endDate as admin.firestore.Timestamp | undefined;
-          if (!bs || !be) continue;
-          if (rangesOverlap(start, end, bs, be)) {
-            throw new HttpsError("failed-precondition", "Dates already booked");
-          }
-        }
+        const totalPriceSimRaw =
+          typeof data.totalPrice === "number"
+            ? data.totalPrice
+            : Number(data.totalPrice);
+        const totalPriceSim = Number.isFinite(totalPriceSimRaw)
+          ? totalPriceSimRaw
+          : 0;
+        const existingAdminLedgerIdSim =
+          typeof data.adminLedgerId === "string"
+            ? data.adminLedgerId.trim()
+            : "";
+        const existingOwnerLedgerIdSim =
+          typeof data.ownerLedgerId === "string"
+            ? data.ownerLedgerId.trim()
+            : "";
+        const existingPaymentIdSim =
+          typeof data.paymentId === "string" ? data.paymentId.trim() : "";
 
-        const pq = db
-          .collection("bookings")
-          .where("propertyId", "==", propertyId)
-          .where("status", "==", "pending_payment");
-        const otherPending = await tx.get(pq);
-        const nowPending = Date.now();
-        for (const doc of otherPending.docs) {
-          if (doc.id === bid) continue;
-          const d = doc.data();
-          if (!pendingPaymentStillHolds(d, nowPending)) continue;
-          const bs = d.startDate as admin.firestore.Timestamp | undefined;
-          const be = d.endDate as admin.firestore.Timestamp | undefined;
-          if (!bs || !be) continue;
-          if (rangesOverlap(start, end, bs, be)) {
-            throw new HttpsError("failed-precondition", "Dates already booked");
-          }
-        }
+        const legacyTxRefSim = db.collection("transactions").doc(bid);
+        const legacyTxSnapSim = await tx.get(legacyTxRefSim);
 
-        if (bookingAlreadyHasConfirmedAt(data)) {
-          tx.update(bookingRef, {
-            status: "confirmed" as BookingStatus,
-          });
-        } else {
-          tx.update(bookingRef, {
-            status: "confirmed" as BookingStatus,
-            confirmedAt: FieldValue.serverTimestamp(),
-          });
-        }
+        const paymentIdSim =
+          existingPaymentIdSim ||
+          `simulate_${bid}_${Date.now()}_${Math.random()
+            .toString(16)
+            .slice(2, 10)}`;
+
+        const postedSim = postFinancialRecordsInTx({
+          tx,
+          bookingId: bid,
+          propertyId,
+          ownerId,
+          totalPrice: totalPriceSim,
+          paymentId: paymentIdSim,
+          legacyTxRef: legacyTxRefSim,
+          legacyTxSnap: legacyTxSnapSim,
+          existingAdminLedgerId: existingAdminLedgerIdSim || undefined,
+          existingOwnerLedgerId: existingOwnerLedgerIdSim || undefined,
+        });
+
+        outPaymentId = paymentIdSim;
+
+        tx.update(bookingRef, {
+          status: "confirmed" as BookingStatus,
+          paymentProvider: "simulate",
+          paymentId: paymentIdSim,
+          paymentStatus: "paid",
+          paidAt: FieldValue.serverTimestamp(),
+          paymentVerifiedAt: FieldValue.serverTimestamp(),
+          commissionRate: postedSim.commissionRate,
+          commissionAmount: postedSim.commissionAmount,
+          ownerNet: postedSim.ownerNet,
+          adminLedgerId: postedSim.adminLedgerId,
+          ownerLedgerId: postedSim.ownerLedgerId,
+          financialLedgerVersion: 1,
+          updatedAt: FieldValue.serverTimestamp(),
+          ...(bookingAlreadyHasConfirmedAt(data)
+            ? {}
+            : { confirmedAt: FieldValue.serverTimestamp() }),
+        });
         transitionedToConfirmed = true;
         return;
       }
@@ -993,29 +1256,13 @@ export async function finalizeBookingAfterPayment(
       }
       assertPropertyPublicForGuestBookingPayment(propDataFake);
 
-      const qFake = db
-        .collection("bookings")
-        .where("propertyId", "==", propertyIdFake)
-        .where("status", "==", "confirmed");
-      const confirmedFake = await tx.get(qFake);
-      for (const doc of confirmedFake.docs) {
-        if (doc.id === bid) continue;
-        const d = doc.data();
-        const bs = d.startDate as admin.firestore.Timestamp | undefined;
-        const be = d.endDate as admin.firestore.Timestamp | undefined;
-        if (!bs || !be) continue;
-        if (rangesOverlap(startFake, endFake, bs, be)) {
-          throw new HttpsError("failed-precondition", "Dates already booked");
-        }
-      }
+      await assertNoFinalizationOverlapInTx(tx, propertyIdFake, startFake, endFake, bid);
 
-      const commissionRate = 0.15;
-
-      const totalPrice =
-        typeof data.totalPrice === "number" ? data.totalPrice : Number(data.totalPrice);
-      const gross = Number.isFinite(totalPrice) ? totalPrice : 0;
-      const commissionAmount = round3(gross * commissionRate);
-      const ownerNet = round3(gross - commissionAmount);
+      const totalPriceRaw =
+        typeof data.totalPrice === "number"
+          ? data.totalPrice
+          : Number(data.totalPrice);
+      const totalPriceFake = Number.isFinite(totalPriceRaw) ? totalPriceRaw : 0;
 
       const paymentId =
         resultPaymentId ||
@@ -1023,61 +1270,23 @@ export async function finalizeBookingAfterPayment(
       resultPaymentId = paymentId;
       outPaymentId = paymentId;
 
-      const adminLedgerRef = existingAdminLedgerId
-        ? db.collection("admin_ledger").doc(existingAdminLedgerId)
-        : db.collection("admin_ledger").doc();
-      const ownerLedgerRef = existingOwnerLedgerId
-        ? db.collection("owner_ledger").doc(existingOwnerLedgerId)
-        : db.collection("owner_ledger").doc();
-
-      const adminLedgerId = adminLedgerRef.id;
-      const ownerLedgerId = ownerLedgerRef.id;
-
-      tx.set(
-        adminLedgerRef,
-        {
-          type: "booking_commission",
-          bookingId: bid,
-          propertyId: propertyIdFake,
-          ownerId: ownerIdFake,
-          amount: commissionAmount,
-          currency: "KWD",
-          source: "chalet_booking",
-          paymentReference: paymentId,
-          createdAt: FieldValue.serverTimestamp(),
-        },
-        { merge: false }
-      );
-
-      tx.set(
-        ownerLedgerRef,
-        {
-          ownerId: ownerIdFake,
-          bookingId: bid,
-          propertyId: propertyIdFake,
-          grossAmount: gross,
-          commission: commissionAmount,
-          netAmount: ownerNet,
-          currency: "KWD",
-          status: "pending_payout",
-          createdAt: FieldValue.serverTimestamp(),
-        },
-        { merge: false }
-      );
-
+      // Firestore transactions require all reads BEFORE any writes — snapshot
+      // the legacy ledger row here so the helper can issue its writes safely.
       const legacyTxRef = db.collection("transactions").doc(bid);
       const legacyTxSnap = await tx.get(legacyTxRef);
-      if (legacyTxSnap.exists) {
-        tx.update(legacyTxRef, {
-          paymentReference: paymentId,
-          commissionRate,
-          commissionAmount,
-          netAmount: ownerNet,
-          platformRevenue: commissionAmount,
-          ownerPayoutAmount: ownerNet,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
+
+      const postedFake = postFinancialRecordsInTx({
+        tx,
+        bookingId: bid,
+        propertyId: propertyIdFake,
+        ownerId: ownerIdFake,
+        totalPrice: totalPriceFake,
+        paymentId,
+        legacyTxRef,
+        legacyTxSnap,
+        existingAdminLedgerId: existingAdminLedgerId || undefined,
+        existingOwnerLedgerId: existingOwnerLedgerId || undefined,
+      });
 
       tx.update(bookingRef, {
         status: "confirmed" as BookingStatus,
@@ -1086,11 +1295,11 @@ export async function finalizeBookingAfterPayment(
         paymentProvider: "fake",
         paymentId: paymentId,
         paidAt: FieldValue.serverTimestamp(),
-        commissionRate,
-        commissionAmount,
-        ownerNet,
-        adminLedgerId,
-        ownerLedgerId,
+        commissionRate: postedFake.commissionRate,
+        commissionAmount: postedFake.commissionAmount,
+        ownerNet: postedFake.ownerNet,
+        adminLedgerId: postedFake.adminLedgerId,
+        ownerLedgerId: postedFake.ownerLedgerId,
         financialLedgerVersion: 1,
       });
       transitionedToConfirmed = true;
@@ -1166,8 +1375,19 @@ export async function finalizeBookingAfterPayment(
 }
 
 /**
- * Manual owner/admin confirmation without payment is disabled. Bookings are confirmed only
- * via payment paths (`fakePayChaletBooking`, `verifyBookingMyFatoorahPayment`, or QA `simulateChaletBookingPayment`).
+ * @deprecated DISABLED — manual booking confirmation is not allowed.
+ *
+ * Bookings can ONLY transition to `confirmed` via a payment path that runs
+ * through [finalizeBookingAfterPayment], which writes the financial ledgers
+ * atomically. Those paths are:
+ *   - `fakePayChaletBooking` (dev/QA, gated by `ALLOW_CHALET_FAKE_PAYMENT`)
+ *   - `simulateChaletBookingPayment` (dev/QA, same gate)
+ *   - `verifyBookingMyFatoorahPayment` (real gateway)
+ *
+ * This callable exists only to return a clear `permission-denied` error to any
+ * legacy client still invoking it. It will be removed once all clients have
+ * been verified to no longer reference the `confirmBooking` name. Do NOT add
+ * logic here — every caller must migrate to one of the payment paths above.
  */
 export const confirmBooking = onCall(
   { region: "us-central1" },
@@ -1180,8 +1400,19 @@ export const confirmBooking = onCall(
       throw new HttpsError("invalid-argument", "bookingId is required");
     }
 
-    console.warn("OWNER_CONFIRM_DISABLED", { bookingId });
-    throw new HttpsError("permission-denied", "Manual confirmation is disabled");
+    console.warn(
+      JSON.stringify({
+        tag: "confirmBooking.deprecated.invoked",
+        bookingId,
+        uid: request.auth?.uid ?? null,
+        hint:
+          "Use fakePayChaletBooking / simulateChaletBookingPayment / verifyBookingMyFatoorahPayment",
+      })
+    );
+    throw new HttpsError(
+      "permission-denied",
+      "Manual confirmation is disabled. Use a payment path (fakePayChaletBooking / verifyBookingMyFatoorahPayment)."
+    );
   }
 );
 

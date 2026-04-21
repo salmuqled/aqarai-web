@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,6 +13,7 @@ import 'package:aqarai_app/utils/property_area_display.dart';
 import 'package:aqarai_app/utils/property_listing_cover.dart';
 import 'package:aqarai_app/utils/property_price_display.dart';
 import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
+import 'package:aqarai_app/widgets/stay_dates_picker.dart';
 
 bool isValidAreaLabel(String? value) {
   if (value == null) return false;
@@ -143,6 +145,192 @@ class PropertyList extends StatefulWidget {
 }
 
 class _PropertyListState extends State<PropertyList> {
+  // --- Stay-dates availability filter (chalet + rent only). -----------------
+
+  /// Hard-ceiling: stop paginating `searchDailyProperties` after this many
+  /// property IDs so we don't spin on abnormally large result sets. Matches
+  /// the existing Firestore `.limit(100)` budget with a safety buffer.
+  static const int _availabilityIdCeiling = 200;
+
+  /// Max pages of `searchDailyProperties` we'll walk to collect available ids.
+  static const int _availabilityMaxPages = 15;
+
+  DateTime? _stayStart;
+  DateTime? _stayEnd;
+
+  /// When non-null, only property IDs in this set survive client-side
+  /// filtering — computed from [searchDailyProperties] when the user runs an
+  /// availability search. `null` means "no availability filter active".
+  Set<String>? _availabilityAllowedIds;
+
+  int _availabilitySearchToken = 0;
+  bool _availabilitySearching = false;
+  String? _availabilityErrorMessage;
+
+  /// Transparency flag: set when the Cloud Function walk hit
+  /// [_availabilityIdCeiling] / [_availabilityMaxPages], meaning some
+  /// available chalets may exist beyond what we fetched. UI-only hint.
+  bool _availabilityMayBeTruncated = false;
+
+  /// Page-level condition: picker + availability filtering are only enabled
+  /// for "chalet + rent + daily" filters. This gate drives three things:
+  ///
+  ///   1. Whether [StayDatesPicker] is rendered at all.
+  ///   2. Whether [_runAvailabilitySearch] (→ `searchDailyProperties`) can
+  ///      fire — the callback is simply not wired when the picker is hidden.
+  ///   3. Whether the banner + truncation hint are shown in the stream body.
+  ///
+  /// Monthly / yearly flows (`rentalType != 'daily'`) therefore render the
+  /// plain Firestore list with ZERO side-channel calls, ZERO nights math, and
+  /// ZERO availability filtering — matching the existing behavior for those
+  /// rental modes.
+  ///
+  /// Does NOT inspect individual items. Also treats the "chalet" governorate
+  /// shortcut as implicit `type=chalet` to match [buildFirestoreQuery].
+  bool get _isChaletRentMode {
+    final typeIsChalet =
+        widget.typeFilter == 'chalet' || widget.governorateCode == 'chalet';
+    final rt = widget.rentalType?.trim();
+    final isDaily = rt == 'daily';
+    return typeIsChalet && widget.serviceType == 'rent' && isDaily;
+  }
+
+  /// Effective allow-set used by the Firestore stream renderer. Combines any
+  /// parent-provided `allowedPropertyIds` with the picker's availability set
+  /// via intersection — the strictest filter wins.
+  Set<String>? get _effectiveAllowedIds {
+    final parent = widget.allowedPropertyIds;
+    final local = _availabilityAllowedIds;
+    if (parent == null) return local;
+    if (local == null) return parent;
+    return parent.intersection(local);
+  }
+
+  int? get _stayNights {
+    final s = _stayStart;
+    final e = _stayEnd;
+    if (s == null || e == null) return null;
+    final a = DateTime(s.year, s.month, s.day);
+    final b = DateTime(e.year, e.month, e.day);
+    final n = b.difference(a).inDays;
+    return n > 0 ? n : null;
+  }
+
+  /// Nights derived from the in-page picker, ONLY when this page is in
+  /// chalet + rent + daily mode. Monthly/yearly and non-chalet flows never
+  /// reach this branch — see [_isChaletRentMode]. Returns null when dates
+  /// aren't selected or the range is non-positive.
+  int? get _pickerNights {
+    if (!_isChaletRentMode) return null;
+    return _stayNights;
+  }
+
+  Future<void> _runAvailabilitySearch(DateTime start, DateTime end) async {
+    final token = ++_availabilitySearchToken;
+    setState(() {
+      _stayStart = start;
+      _stayEnd = end;
+      _availabilitySearching = true;
+      _availabilityErrorMessage = null;
+      _availabilityMayBeTruncated = false;
+    });
+
+    try {
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('searchDailyProperties');
+
+      // Calendar-day UTC bounds match the contract enforced by daily_rent_page
+      // and the Cloud Function itself.
+      final startUtc = DateTime.utc(start.year, start.month, start.day);
+      final endUtc =
+          DateTime.utc(end.year, end.month, end.day, 23, 59, 59, 999);
+
+      final collected = <String>{};
+      String? cursor;
+      bool hasMore = true;
+      int page = 0;
+
+      while (hasMore &&
+          page < _availabilityMaxPages &&
+          collected.length < _availabilityIdCeiling) {
+        final payload = <String, dynamic>{
+          'rentalType': 'daily',
+          'startDate': startUtc.toIso8601String(),
+          'endDate': endUtc.toIso8601String(),
+          if (cursor != null) 'cursor': cursor,
+        };
+
+        final raw = await callable.call(payload);
+        if (!mounted || token != _availabilitySearchToken) return;
+
+        final data = raw.data;
+        if (data is! Map) {
+          throw Exception('Invalid searchDailyProperties response');
+        }
+        final m = Map<String, dynamic>.from(data);
+        if (m['success'] != true) {
+          throw Exception('searchDailyProperties was not successful');
+        }
+
+        final rawList = m['properties'];
+        if (rawList is List) {
+          for (final item in rawList) {
+            if (item is Map) {
+              final id = item['id'] ?? item['propertyId'] ?? item['uid'];
+              if (id is String && id.isNotEmpty) {
+                collected.add(id);
+                if (collected.length >= _availabilityIdCeiling) break;
+              }
+            }
+          }
+        }
+
+        final next = m['nextCursor'];
+        hasMore = m['hasMore'] == true &&
+            next is String &&
+            next.isNotEmpty;
+        cursor = hasMore ? next : null;
+        page++;
+      }
+
+      if (!mounted || token != _availabilitySearchToken) return;
+      // Mark as potentially truncated if we hit either the id ceiling or the
+      // page ceiling while the backend still had more pages to serve.
+      final truncated = collected.length >= _availabilityIdCeiling ||
+          (page >= _availabilityMaxPages && hasMore);
+      setState(() {
+        _availabilityAllowedIds = collected;
+        _availabilitySearching = false;
+        _availabilityMayBeTruncated = truncated;
+      });
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted || token != _availabilitySearchToken) return;
+      setState(() {
+        _availabilitySearching = false;
+        _availabilityErrorMessage = e.message ?? e.code;
+      });
+    } catch (_) {
+      if (!mounted || token != _availabilitySearchToken) return;
+      setState(() {
+        _availabilitySearching = false;
+        _availabilityErrorMessage = 'Could not check availability.';
+      });
+    }
+  }
+
+  void _clearAvailability() {
+    _availabilitySearchToken++;
+    setState(() {
+      _stayStart = null;
+      _stayEnd = null;
+      _availabilityAllowedIds = null;
+      _availabilitySearching = false;
+      _availabilityErrorMessage = null;
+      _availabilityMayBeTruncated = false;
+    });
+  }
+
   String _serviceTypeLabel(AppLocalizations loc, String raw) {
     switch (raw.toLowerCase().trim()) {
       case 'sale':
@@ -251,37 +439,100 @@ class _PropertyListState extends State<PropertyList> {
             )
             .toList(); // defense-in-depth vs rules
 
-        if (widget.allowedPropertyIds != null) {
-          final allow = widget.allowedPropertyIds!;
+        final effectiveAllow = _effectiveAllowedIds;
+        if (effectiveAllow != null) {
           properties =
-              properties.where((doc) => allow.contains(doc.id)).toList();
+              properties.where((doc) => effectiveAllow.contains(doc.id)).toList();
         }
 
         if (properties.isEmpty) {
-          final filteredByAvailability = widget.allowedPropertyIds != null;
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                filteredByAvailability
-                    ? (locale == 'ar'
-                        ? 'لا توجد عقارات متاحة في هذه الفترة.'
-                        : 'No properties available for these dates.')
-                    : loc.searchResultsForArea(widget.areaLabel),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 18),
+          final filteredByAvailability = effectiveAllow != null;
+          return _wrapStreamResult(
+            context,
+            filteredCount: 0,
+            content: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  filteredByAvailability
+                      ? (locale == 'ar'
+                          ? 'لا توجد عقارات متاحة في هذه الفترة.'
+                          : 'No properties available for these dates.')
+                      : loc.searchResultsForArea(widget.areaLabel),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 18),
+                ),
               ),
             ),
           );
         }
 
-        return _propertyListCards(
-          context: context,
-          loc: loc,
-          locale: locale,
-          properties: properties,
+        return _wrapStreamResult(
+          context,
+          filteredCount: properties.length,
+          content: _propertyListCards(
+            context: context,
+            loc: loc,
+            locale: locale,
+            properties: properties,
+          ),
         );
       },
+    );
+  }
+
+  /// Wraps the filtered stream [content] with the availability banner + the
+  /// optional "top results" truncation hint, so the banner count always
+  /// reflects what the user actually sees (post-intersection).
+  Widget _wrapStreamResult(
+    BuildContext context, {
+    required int filteredCount,
+    required Widget content,
+  }) {
+    final banner = _buildAvailabilityBanner(context, filteredCount);
+    final hint = _buildTruncationHint(context);
+    final hasBanner = banner is! SizedBox;
+    final hasHint = hint is! SizedBox;
+    if (!hasBanner && !hasHint) return content;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        banner,
+        hint,
+        Expanded(child: content),
+      ],
+    );
+  }
+
+  Widget _buildTruncationHint(BuildContext context) {
+    if (!_availabilityMayBeTruncated) return const SizedBox.shrink();
+    final locale = Localizations.localeOf(context).languageCode;
+    final isAr = locale == 'ar';
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(20, 0, 20, 8),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 13,
+            color: scheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              isAr
+                  ? 'عرض أفضل النتائج المتاحة'
+                  : 'Showing top available results',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                  ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -365,7 +616,23 @@ class _PropertyListState extends State<PropertyList> {
           locale.startsWith('ar'),
         );
         final num? priceNum = price is num ? price : num.tryParse('$price');
-        final nh = widget.nightsForTotalHint;
+        // Nights for the "total" line. Picker-selected dates take priority
+        // when active (chalet + rent + daily mode); otherwise we fall back to
+        // any nights hint the parent may have supplied. Monthly/yearly and
+        // unset states yield `null`, which the gate below treats as "hide".
+        final int? nh = _pickerNights ?? widget.nightsForTotalHint;
+        // Total row is visible only when ALL conditions hold — this is the
+        // single source of truth for the booking-style price hierarchy.
+        final bool totalVisible = displayType == DisplayPriceType.daily &&
+            nh != null &&
+            nh > 0 &&
+            priceNum != null &&
+            priceNum > 0;
+        // "Best for short stays" chip — page-level gate (chalet + rent +
+        // daily) AND per-item daily pricing. Does not depend on dates being
+        // selected.
+        final bool chipVisible =
+            _isChaletRentMode && displayType == DisplayPriceType.daily;
         const spacing = 8.0;
 
         final isRtl = Directionality.of(context) == ui.TextDirection.rtl;
@@ -378,12 +645,20 @@ class _PropertyListState extends State<PropertyList> {
 
         return GestureDetector(
           onTap: () {
+            // Forward the in-page stay selection + rental filter so the
+            // details page can pre-seed its chalet picker and show the
+            // "Book Now" CTA immediately (only for daily chalet rentals).
+            // Non-chalet / non-daily flows still pass null dates — the
+            // details page falls back to its previous behavior.
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => PropertyDetailsPage(
                   propertyId: doc.id,
                   leadSource: widget.leadSource,
+                  stayStart: _isChaletRentMode ? _stayStart : null,
+                  stayEnd: _isChaletRentMode ? _stayEnd : null,
+                  rentalType: widget.rentalType,
                 ),
               ),
             );
@@ -441,30 +716,82 @@ class _PropertyListState extends State<PropertyList> {
                           ),
                         ),
                         const SizedBox(height: spacing),
+                        // Per-night line. When the TOTAL row is also visible,
+                        // this line steps down in weight/size/color so the
+                        // total stands out (booking-app hierarchy). When only
+                        // the per-night line is shown, it keeps its original
+                        // prominence — nothing changes for monthly / yearly /
+                        // sale cards.
                         Text(
-                          'KWD $priceText$priceUnit',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green[700],
-                            height: 1.2,
-                          ),
+                          totalVisible
+                              ? (locale == 'ar'
+                                  ? '$priceText د.ك لكل ليلة'
+                                  : 'KWD $priceText per night')
+                              : 'KWD $priceText$priceUnit',
+                          style: totalVisible
+                              ? TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green[600],
+                                  height: 1.2,
+                                )
+                              : TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green[700],
+                                  height: 1.2,
+                                ),
                         ),
-                        if (displayType == DisplayPriceType.daily &&
-                            nh != null &&
-                            nh > 0 &&
-                            priceNum != null &&
-                            priceNum > 0) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            locale == 'ar'
-                                ? 'الإجمالي: ${NumberFormat.decimalPattern(locale).format(priceNum * nh)} د.ك'
-                                : 'Total: ${NumberFormat.decimalPattern(locale).format(priceNum * nh)} KWD',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey[700],
-                              height: 1.2,
+                        if (totalVisible) ...[
+                          const SizedBox(height: 6),
+                          Builder(
+                            builder: (context) {
+                              final totalText = NumberFormat.decimalPattern(
+                                locale,
+                              ).format(priceNum * nh);
+                              final nightsText = NumberFormat.decimalPattern(
+                                locale,
+                              ).format(nh);
+                              final line = locale == 'ar'
+                                  ? '$totalText د.ك إجمالي ($nightsText ${nh == 1 ? 'ليلة' : 'ليالي'})'
+                                  : 'KWD $totalText total ($nightsText ${nh == 1 ? 'night' : 'nights'})';
+                              return Text(
+                                line,
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.green[800],
+                                  height: 1.2,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                        if (chipVisible) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Colors.green.withValues(alpha: 0.22),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              locale == 'ar'
+                                  ? 'مناسب للإيجار القصير'
+                                  : 'Best for short stays',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green[800],
+                                height: 1.1,
+                              ),
                             ),
                           ),
                         ],
@@ -530,10 +857,117 @@ class _PropertyListState extends State<PropertyList> {
     );
   }
 
+  Widget _buildAvailabilityBanner(BuildContext context, int filteredCount) {
+    final locale = Localizations.localeOf(context).languageCode;
+    final isAr = locale == 'ar';
+    final scheme = Theme.of(context).colorScheme;
+
+    if (_availabilityErrorMessage != null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Material(
+          color: scheme.errorContainer.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, size: 18, color: scheme.error),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _availabilityErrorMessage!,
+                    style: TextStyle(
+                      color: scheme.onErrorContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final start = _stayStart;
+    final end = _stayEnd;
+    final ids = _availabilityAllowedIds;
+    if (start == null || end == null || ids == null) {
+      return const SizedBox.shrink();
+    }
+
+    final fmt = DateFormat('dd/MM');
+    final range = '${fmt.format(start)} → ${fmt.format(end)}';
+    final nights = _stayNights ?? 0;
+
+    // Count reflects the list actually rendered to the user (post
+    // area/governorate intersection + discoverability filter), not the raw
+    // CF-returned ID set — so banner + list always agree.
+    final count = filteredCount;
+    final label = isAr
+        ? '$count ${count == 1 ? 'شاليه متاح' : 'شاليهات متاحة'} من $range · $nights ${nights == 1 ? 'ليلة' : 'ليالٍ'}'
+        : '$count chalet${count == 1 ? '' : 's'} available from $range · $nights night${nights == 1 ? '' : 's'}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Material(
+        color: scheme.primaryContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.event_available_rounded,
+                size: 18,
+                color: scheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
-    final body = _resultsStreamBody(_firestoreQuery());
+    final streamBody = _resultsStreamBody(_firestoreQuery());
+
+    Widget body = streamBody;
+    if (_isChaletRentMode) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: StayDatesPicker(
+              initialStartDate: _stayStart,
+              initialEndDate: _stayEnd,
+              isSearching: _availabilitySearching,
+              onSearch: _runAvailabilitySearch,
+              onClear: _clearAvailability,
+            ),
+          ),
+          // Availability banner + truncation hint are rendered inside
+          // `_resultsStreamBody` so the count reflects the actually-visible
+          // (post-intersection) list length.
+          Expanded(child: streamBody),
+        ],
+      );
+    }
 
     if (!widget.useScaffold) {
       return body;

@@ -13,8 +13,14 @@ import { formatKwdForNotification, sendNotificationToUser } from "./sendUserNoti
 
 const db = admin.firestore();
 
-/** Centralized platform commission on gross booking total (frozen on ledger write). */
-const COMMISSION_RATE = 0.1;
+/**
+ * Centralized platform commission on gross booking total (frozen on ledger write).
+ *
+ * Single source of truth for commission across every confirmation path
+ * (fake, MyFatoorah, guest simulate) and both ledgers (`admin_ledger`,
+ * `owner_ledger`) plus the canonical `transactions/{bookingId}` row.
+ */
+export const COMMISSION_RATE = 0.15;
 
 /**
  * Guest refund (gross) before checkIn snapshot, admin-only execution on ledger.

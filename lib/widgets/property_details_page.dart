@@ -98,6 +98,21 @@ class PropertyDetailsPage extends StatefulWidget {
   /// Optional sanity check against [PublicAuctionLot.auctionId].
   final String? auctionId;
 
+  /// Optional check-in pre-selected by the caller (e.g. list page filter).
+  /// Treated as a calendar day; time component is ignored.
+  final DateTime? stayStart;
+
+  /// Optional check-out (exclusive) pre-selected by the caller. Matches the
+  /// semantics used in `property_list.dart` where
+  /// `nights = stayEnd.difference(stayStart).inDays`.
+  final DateTime? stayEnd;
+
+  /// Rental filter propagated from the search/list screen (e.g. `"daily"` or
+  /// `"monthly_yearly"`). When explicitly non-daily, the booking CTA is
+  /// suppressed as an extra UX safety net on top of the server-parity check
+  /// in [canShowBookingUI]. Null means "unknown / defer to listing data".
+  final String? rentalType;
+
   const PropertyDetailsPage({
     super.key,
     required this.propertyId,
@@ -106,6 +121,9 @@ class PropertyDetailsPage extends StatefulWidget {
     this.captionTrackingId,
     this.auctionLotId,
     this.auctionId,
+    this.stayStart,
+    this.stayEnd,
+    this.rentalType,
   });
 
   @override
@@ -470,7 +488,21 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
           final bool isAdmin = widget.isAdminView;
 
           final bool isChaletRentListing = canShowBookingUI(data);
-          final bool canSeeBooking = isChaletRentListing && !isOwner && !isAdmin;
+          // When the caller explicitly passes a non-"daily" rentalType (e.g.
+          // the list page was filtering monthly/yearly), we must not surface
+          // the booking CTA. Missing/unknown rentalType defers to the
+          // listing-level `canShowBookingUI` gate which already mirrors the
+          // server's `effectiveChaletMode == "daily"` check.
+          final String? rentalTypeHint =
+              widget.rentalType?.trim().toLowerCase();
+          final bool rentalTypeAllowsBooking =
+              rentalTypeHint == null ||
+                  rentalTypeHint.isEmpty ||
+                  rentalTypeHint == 'daily';
+          final bool canSeeBooking = isChaletRentListing &&
+              rentalTypeAllowsBooking &&
+              !isOwner &&
+              !isAdmin;
 
           final int roomCount = (data['roomCount'] ?? 0) as int;
           final int masterRoomCount = (data['masterRoomCount'] ?? 0) as int;
@@ -503,9 +535,31 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
               ],
             ),
             bottomNavigationBar: canSeeBooking
-                ? BookingBar(
-                    controller: _bookingController,
-                    pricePerNight: price.toDouble(),
+                ? ListenableBuilder(
+                    // Show the sticky CTA only once the user has a valid
+                    // date range (or is mid-submit). Keeps the spec promise
+                    // "no empty bar frame when dates are not picked" and
+                    // avoids rendering a disabled placeholder button.
+                    listenable: Listenable.merge([
+                      _bookingController.canBookVN,
+                      _bookingController.submittingVN,
+                      _bookingController.nightsVN,
+                    ]),
+                    builder: (context, _) {
+                      final hasDates = _bookingController.nights > 0;
+                      final canBook = _bookingController.canBook;
+                      final submitting = _bookingController.submitting;
+                      // canBook already encodes: dates picked AND valid AND
+                      // available AND not currently submitting. Combining
+                      // with [submitting] keeps the bar visible through the
+                      // CTA's loading state without flickering.
+                      final visible = hasDates && (canBook || submitting);
+                      if (!visible) return const SizedBox.shrink();
+                      return BookingBar(
+                        controller: _bookingController,
+                        pricePerNight: price.toDouble(),
+                      );
+                    },
                   )
                 : null,
             body: ListView(
@@ -534,6 +588,8 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                     typeLabel: _translateType(context, type),
                     imageUrl: images.isNotEmpty ? images.first.toString() : '',
                     listingData: data,
+                    initialStayStart: widget.stayStart,
+                    initialStayEnd: widget.stayEnd,
                   ),
                 ],
                 if (showOwnerTools && // ignore: dead_code
@@ -1060,6 +1116,8 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     required String typeLabel,
     required String imageUrl,
     required Map<String, dynamic> listingData,
+    DateTime? initialStayStart,
+    DateTime? initialStayEnd,
   }) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -1278,6 +1336,8 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
               peakNightWeekdays: chaletPeakWeekdays,
               compactLayoutForPropertyDetails: true,
               allowPublicBooking: listingDataIsPubliclyDiscoverable(listingData),
+              initialStartDate: initialStayStart,
+              initialEndDate: initialStayEnd,
             ),
             const SizedBox(height: 18),
             Text(

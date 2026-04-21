@@ -211,6 +211,13 @@ class ChaletBookingWidget extends StatelessWidget {
     this.compactLayoutForPropertyDetails = false,
     /// When false, blocks client booking actions (non-public listing); server also enforces.
     this.allowPublicBooking = true,
+    /// Pre-selected check-in (calendar day). Paired with [initialEndDate].
+    /// Uses check-out-exclusive semantics to match [property_list.dart]
+    /// (`nights = initialEndDate.difference(initialStartDate).inDays`).
+    this.initialStartDate,
+    /// Pre-selected check-out (exclusive). Ignored unless both initial dates
+    /// are provided, in the future, and span at least [minNights] nights.
+    this.initialEndDate,
   });
 
   final String propertyId;
@@ -238,6 +245,13 @@ class ChaletBookingWidget extends StatelessWidget {
 
   /// Guest booking allowed only when the listing is publicly discoverable.
   final bool allowPublicBooking;
+
+  /// Optional pre-selected check-in. Only applied once on the first
+  /// successful calendar render when paired with a valid [initialEndDate].
+  final DateTime? initialStartDate;
+
+  /// Optional pre-selected check-out (exclusive). See [initialStartDate].
+  final DateTime? initialEndDate;
 
   static List<ChaletBookedRange> _blockedRangesFromSnapshot(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
@@ -347,6 +361,8 @@ class ChaletBookingWidget extends StatelessWidget {
                       errorTextStyle: TextStyle(color: cs.error),
                       isAr: isAr,
                       allowPublicBooking: allowPublicBooking,
+                      initialStartDate: initialStartDate,
+                      initialEndDate: initialEndDate,
                     ),
                   ),
                 ],
@@ -376,6 +392,8 @@ class _ChaletBookingFirestoreGate extends StatefulWidget {
     required this.errorTextStyle,
     required this.isAr,
     required this.allowPublicBooking,
+    this.initialStartDate,
+    this.initialEndDate,
   });
 
   final String propertyId;
@@ -391,6 +409,8 @@ class _ChaletBookingFirestoreGate extends StatefulWidget {
   final TextStyle errorTextStyle;
   final bool isAr;
   final bool allowPublicBooking;
+  final DateTime? initialStartDate;
+  final DateTime? initialEndDate;
 
   @override
   State<_ChaletBookingFirestoreGate> createState() =>
@@ -506,6 +526,8 @@ class _ChaletBookingFirestoreGateState extends State<_ChaletBookingFirestoreGate
               minNights: math.max(1, widget.minNights),
               showFullyAvailableBanner: bookingRanges.isEmpty,
               allowPublicBooking: widget.allowPublicBooking,
+              initialStartDate: widget.initialStartDate,
+              initialEndDate: widget.initialEndDate,
             );
           }
         }
@@ -1057,6 +1079,8 @@ class _ChaletBookingBody extends StatefulWidget {
     required this.showFullyAvailableBanner,
     this.controller,
     required this.allowPublicBooking,
+    this.initialStartDate,
+    this.initialEndDate,
   });
 
   final String propertyId;
@@ -1072,6 +1096,8 @@ class _ChaletBookingBody extends StatefulWidget {
   final bool showFullyAvailableBanner;
   final ChaletBookingController? controller;
   final bool allowPublicBooking;
+  final DateTime? initialStartDate;
+  final DateTime? initialEndDate;
 
   @override
   State<_ChaletBookingBody> createState() => _ChaletBookingBodyState();
@@ -1089,6 +1115,50 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
   bool _selectionHintIsBookedConflict = false;
   bool _selectionHintIsMinStay = false;
   bool _selectionHintIsUnavailableDateTap = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-seed the range from caller-provided dates (e.g. list-page filter)
+    // so the booking CTA is available on first paint without re-selection.
+    // Guarded to avoid leaking invalid / stale ranges into the controller.
+    final seeded = _seedFromInitial(
+      widget.initialStartDate,
+      widget.initialEndDate,
+    );
+    if (seeded != null) {
+      _rangeStart = seeded.$1;
+      _rangeEnd = seeded.$2;
+      _focusedDay = seeded.$1;
+    }
+  }
+
+  /// Returns `(start, endExclusive)` only when both inputs are non-null,
+  /// today-or-future, strictly ordered, meet [widget.minNights], and do not
+  /// overlap any [widget.bookedRanges]. Otherwise returns `null` so the
+  /// caller falls back to the default unseeded flow. Uses the same
+  /// check-out-exclusive semantics as [property_list.dart].
+  (DateTime, DateTime)? _seedFromInitial(
+    DateTime? start,
+    DateTime? end,
+  ) {
+    if (start == null || end == null) return null;
+    final s = DateTime(start.year, start.month, start.day);
+    final e = DateTime(end.year, end.month, end.day);
+    final todayOnly = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    if (s.isBefore(todayOnly)) return null;
+    if (!e.isAfter(s)) return null;
+    final nights = e.difference(s).inDays;
+    if (nights < math.max(1, widget.minNights)) return null;
+    for (final b in widget.bookedRanges) {
+      if (s.isBefore(b.end) && e.isAfter(b.start)) return null;
+    }
+    return (s, e);
+  }
 
   @override
   void didUpdateWidget(covariant _ChaletBookingBody oldWidget) {

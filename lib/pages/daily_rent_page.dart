@@ -1,11 +1,10 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
+import 'package:aqarai_app/widgets/stay_dates_picker.dart';
 
 /// Daily rental browse: list data from [searchDailyProperties] (Cloud Function).
 class DailyRentPage extends StatefulWidget {
@@ -185,199 +184,14 @@ class _DailyRentPageState extends State<DailyRentPage> {
     super.dispose();
   }
 
-  Future<void> _pickDateRange() async {
-    if (!mounted) return;
-    final locale = Localizations.localeOf(context).languageCode;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: today,
-      lastDate: today.add(const Duration(days: 365)),
-      initialDateRange: (startDate != null && endDate != null)
-          ? DateTimeRange(
-              start: DateTime(startDate!.year, startDate!.month, startDate!.day),
-              end: DateTime(endDate!.year, endDate!.month, endDate!.day),
-            )
-          : null,
-      helpText: locale == 'ar' ? 'اختر فترة الإيجار' : 'Select rental period',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF0EA5E9),
-              brightness: Theme.of(context).brightness,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (!mounted || picked == null) return;
+  /// Stay-dates picker callback — mirrors the previous auto-debounced reload
+  /// that used to fire both from the day-strip taps and the calendar dialog.
+  void _onStayDatesSearch(DateTime start, DateTime end) {
     setState(() {
-      startDate = picked.start;
-      endDate = picked.end;
+      startDate = start;
+      endDate = end;
     });
     _scheduleDebouncedCfReload();
-  }
-
-  int? _stayNightCount() {
-    if (startDate == null || endDate == null) return null;
-    final s = DateTime(startDate!.year, startDate!.month, startDate!.day);
-    final e = DateTime(endDate!.year, endDate!.month, endDate!.day);
-    final n = e.difference(s).inDays;
-    return n > 0 ? n : null;
-  }
-
-  String _formatDate(DateTime? d, String locale) {
-    if (d == null) {
-      return locale == 'ar' ? 'اختر التاريخ' : 'Add date';
-    }
-    return DateFormat.MMMEd(locale == 'ar' ? 'ar' : 'en').format(d);
-  }
-
-  Widget _bookingDateColumn({
-    required BuildContext context,
-    required String label,
-    required DateTime? date,
-    required String locale,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
-              ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          _formatDate(date, locale),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                height: 1.2,
-              ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBookingStayDatesCard(BuildContext context, String locale, bool isAr) {
-    final scheme = Theme.of(context).colorScheme;
-    final nights = _stayNightCount();
-    return Material(
-      color: scheme.surface,
-      elevation: 0,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: _pickDateRange,
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.85)),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                scheme.surfaceContainerHighest.withValues(alpha: 0.2),
-                scheme.surface,
-              ],
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: scheme.primaryContainer.withValues(alpha: 0.65),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.calendar_month_rounded,
-                      color: scheme.primary,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _bookingDateColumn(
-                            context: context,
-                            label: isAr ? 'الوصول' : 'Check-in',
-                            date: startDate,
-                            locale: locale,
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 20),
-                          child: Icon(
-                            Directionality.of(context) == ui.TextDirection.rtl
-                                ? Icons.arrow_back_rounded
-                                : Icons.arrow_forward_rounded,
-                            size: 18,
-                            color: scheme.onSurfaceVariant.withValues(alpha: 0.7),
-                          ),
-                        ),
-                        Expanded(
-                          child: _bookingDateColumn(
-                            context: context,
-                            label: isAr ? 'المغادرة' : 'Check-out',
-                            date: endDate,
-                            locale: locale,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    Icons.expand_more_rounded,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
-              if (nights != null) ...[
-                const SizedBox(height: 10),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: scheme.secondaryContainer.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      child: Text(
-                        isAr
-                            ? '$nights ${nights == 1 ? 'ليلة' : 'ليالٍ'}'
-                            : '$nights night${nights == 1 ? '' : 's'}',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: scheme.onSecondaryContainer,
-                            ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   void _clearDatesAndFilters() {
@@ -496,11 +310,11 @@ class _DailyRentPageState extends State<DailyRentPage> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Material(
                 color: Colors.white,
-                elevation: 1,
-                shadowColor: Colors.black26,
-                borderRadius: BorderRadius.circular(16),
+                elevation: 1.5,
+                shadowColor: Colors.black.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(18),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -512,7 +326,8 @@ class _DailyRentPageState extends State<DailyRentPage> {
                           ),
                           ButtonSegment<String>(
                             value: 'monthly',
-                            label: Text(isAr ? 'شهري / سنوي' : 'Monthly / Yearly'),
+                            label: Text(
+                                isAr ? 'شهري / سنوي' : 'Monthly / Yearly'),
                           ),
                         ],
                         selected: {selectedRentalType},
@@ -528,7 +343,21 @@ class _DailyRentPageState extends State<DailyRentPage> {
                         emptySelectionAllowed: false,
                         showSelectedIcon: false,
                       ),
-                      const SizedBox(height: 14),
+                      if (selectedRentalType == 'daily') ...[
+                        const SizedBox(height: 12),
+                        // Reusable date strip. We keep the page-level Search
+                        // button below (monthly mode needs it too) by passing
+                        // showSearchButton: false — preserves existing layout.
+                        StayDatesPicker(
+                          initialStartDate: startDate,
+                          initialEndDate: endDate,
+                          isSearching: isSearching,
+                          showSearchButton: false,
+                          onSearch: _onStayDatesSearch,
+                          onClear: _clearDatesAndFilters,
+                        ),
+                      ],
+                      const SizedBox(height: 12),
                       FilledButton.icon(
                         onPressed: _cfFetching
                             ? null
@@ -540,13 +369,20 @@ class _DailyRentPageState extends State<DailyRentPage> {
                             ? const SizedBox(
                                 width: 22,
                                 height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.search_rounded, size: 22),
                         label: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 2),
                           child: Text(
-                            isAr ? 'بحث' : 'Search',
+                            selectedRentalType == 'daily' &&
+                                    startDate != null &&
+                                    endDate != null
+                                ? (isAr
+                                    ? 'بحث عن الشاليهات المتاحة'
+                                    : 'Find available chalets')
+                                : (isAr ? 'بحث' : 'Search'),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -563,23 +399,6 @@ class _DailyRentPageState extends State<DailyRentPage> {
                     ],
                   ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    isAr ? 'تواريخ الإقامة' : 'Stay dates',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: isAr ? 0 : -0.2,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildBookingStayDatesCard(context, locale, isAr),
-                ],
               ),
             ),
             if (isSearching && startDate != null && endDate != null)
