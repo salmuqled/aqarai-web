@@ -992,10 +992,17 @@ class _AdminChaletPayoutsPageState extends State<AdminChaletPayoutsPage> {
           backgroundColor: const Color(0xFFF7F7F7),
           appBar: AppBar(
             title: Text(loc.adminChaletPayoutsTitle),
-            actions: [
+          ),
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Segment filter moved out of AppBar.actions so the page
+              // title stays legible. Sits just below the title and above
+              // the pending-total summary card.
               Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Center(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Align(
+                  alignment: Alignment.center,
                   child: SegmentedButton<bool>(
                     emptySelectionAllowed: false,
                     multiSelectionEnabled: false,
@@ -1017,13 +1024,18 @@ class _AdminChaletPayoutsPageState extends State<AdminChaletPayoutsPage> {
                   ),
                 ),
               ),
-            ],
-          ),
-          body: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+              // Everything below the segment shares a single scroll
+               // surface — otherwise the pending-total card + "this
+               // month" analytics + filter dropdowns easily exceed the
+               // viewport and the remaining `Expanded(ListView)` gets
+               // squeezed to zero height, producing a RenderFlex
+               // overflow at the bottom.
+               Expanded(
+                 child: ListView(
+                   padding: EdgeInsets.zero,
+                   children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: ChaletBookingTransactionService.adminBookingLedgerPendingPayoutsQuery()
                       .snapshots(),
@@ -1213,15 +1225,26 @@ class _AdminChaletPayoutsPageState extends State<AdminChaletPayoutsPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: query.snapshots(),
-                  builder: (context, snap) {
+              // Transaction list lives inside the outer scroll (parent
+              // ListView above). We therefore render its children
+              // inline as a non-scrolling `Column` instead of a nested
+              // ListView — this avoids double-scroll jank and is the
+               // only way to keep the analytics + list scrolling as one
+               // coherent surface.
+               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                 stream: query.snapshots(),
+                 builder: (context, snap) {
                     if (snap.hasError) {
-                      return Center(child: Text('${snap.error}'));
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                        child: Center(child: Text('${snap.error}')),
+                      );
                     }
                     if (snap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 48),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
                     }
                     final docs = snap.data?.docs ?? const [];
                     final rows = <TransactionModel>[];
@@ -1232,16 +1255,24 @@ class _AdminChaletPayoutsPageState extends State<AdminChaletPayoutsPage> {
                       rows.add(row);
                     }
                     if (rows.isEmpty) {
-                      return _buildEmptyState(loc);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: _buildEmptyState(loc),
+                      );
                     }
 
                     final children = _buildGroupedList(context, rows, loc);
 
-                    return ListView(
+                    return Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                      children: children,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: children,
+                      ),
                     );
                   },
+                ),
+                  ],
                 ),
               ),
             ],

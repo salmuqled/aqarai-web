@@ -23,6 +23,7 @@ import 'package:aqarai_app/models/deal_pipeline.dart';
 import 'package:aqarai_app/models/support_ticket.dart';
 import 'package:aqarai_app/services/deal_admin_service.dart';
 import 'package:aqarai_app/utils/financial_rules.dart';
+import 'package:aqarai_app/utils/listing_display.dart';
 
 const String kFunctionsRegion = 'us-central1';
 
@@ -537,6 +538,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     final area = (d['area'] ?? d['area_id'] ?? '-').toString();
     final cover = _coverFrom(d['coverUrl'], d['images']);
     final typeLabel = _translateType(context, typeEn);
+    final chaletName = listingChaletName(d);
 
     final approveKey = "approve:$id";
     final rejectKey = "reject:$id";
@@ -570,13 +572,40 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '$area • $typeLabel',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                    // Surface the owner-provided chalet name to the admin
+                    // reviewing the submission — they need to see it clearly
+                    // so the name itself is part of the approve/reject
+                    // decision. When absent, keep the historical
+                    // "area • type" bold title unchanged.
+                    if (chaletName.isNotEmpty) ...[
+                      Text(
+                        chaletName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$area • $typeLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ] else
+                      Text(
+                        '$area • $typeLabel',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
 
                     const SizedBox(height: 6),
 
@@ -688,6 +717,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     final String? chaletModeEffective = listingDataIsChalet(d)
         ? PropertyListingChaletMode.fromListingData(d).effectiveChaletMode
         : null;
+    final chaletName = listingChaletName(d);
 
     return GestureDetector(
       onTap: () {
@@ -716,13 +746,39 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '$area • $typeLabel',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                    // Owner-named chalets get their name as the bold title
+                    // with the historical "area • type" demoted to a small
+                    // subtitle. Non-named listings keep their original
+                    // single-line title exactly.
+                    if (chaletName.isNotEmpty) ...[
+                      Text(
+                        chaletName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$area • $typeLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ] else
+                      Text(
+                        '$area • $typeLabel',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
 
                     const SizedBox(height: 6),
 

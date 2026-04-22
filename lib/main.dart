@@ -107,6 +107,24 @@ class MyApp extends StatelessWidget {
                 : const Locale('ar');
           },
 
+          // Global "tap-outside-to-dismiss keyboard" at the Navigator root so
+          // every screen (including pushed routes and modal bottom sheets)
+          // inherits the behavior. `HitTestBehavior.translucent` lets child
+          // widgets still receive their own taps first — buttons, links and
+          // TextFields keep working normally, and this handler only fires
+          // when a tap lands on inert space. Child widgets that call
+          // [FocusScope.requestFocus] after this handler runs also work as
+          // expected (e.g. another TextField stealing focus mid-tap).
+          builder: (context, child) {
+            return GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                FocusManager.instance.primaryFocus?.unfocus();
+              },
+              child: child,
+            );
+          },
+
           home: const AuthGate(),
         );
       },

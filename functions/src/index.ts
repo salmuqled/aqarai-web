@@ -584,6 +584,11 @@ export {
   fakePayChaletBooking,
 } from "./chalet_booking";
 export { cancelExpiredPendingBookings } from "./chalet_booking_expiry_schedule";
+export { onBookingConfirmedNotifyOwner } from "./bookingConfirmedOwnerNotification";
+export { cleanupLegacyPendingBookings } from "./cleanup_legacy_pending_bookings";
+export { sendBookingCustomerEmail } from "./sendBookingCustomerEmail";
+export { sendBookingOwnerEmail } from "./sendBookingOwnerEmail";
+export { sendBookingAdminEmail } from "./sendBookingAdminEmail";
 export {
   createBookingMyFatoorahPayment,
   verifyBookingMyFatoorahPayment,

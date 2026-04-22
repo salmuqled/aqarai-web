@@ -9,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../widgets/property_details_page.dart';
 import 'package:aqarai_app/data/kuwait_areas.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
+import 'package:aqarai_app/utils/listing_display.dart';
 import 'package:aqarai_app/utils/property_area_display.dart';
 import 'package:aqarai_app/utils/property_listing_cover.dart';
 import 'package:aqarai_app/utils/property_price_display.dart';
@@ -60,6 +61,20 @@ class PropertyList extends StatefulWidget {
   /// When non-null, only documents whose id is in this set are shown (after discoverability).
   final Set<String>? allowedPropertyIds;
 
+  /// Optional, chalet-only: a pre-normalized (trimmed + lowercased) prefix
+  /// applied to the Firestore `chaletNameLower` field as a range query.
+  /// Empty / null means "no name filter" — the existing behavior is unchanged.
+  final String? chaletNameQuery;
+
+  /// Optional, chalet-only: a pre-normalized (Arabic-aware) prefix applied to
+  /// the Firestore `chaletNameSearch` field as a range query. Empty / null
+  /// means "no name filter". When BOTH this and [chaletNameQuery] are
+  /// provided, this one wins (it's the strictly-more-forgiving path).
+  ///
+  /// Must be produced with [normalizeArabic] so the query side of the range
+  /// matches the save side byte-for-byte; see [search_box.dart].
+  final String? chaletNameSearchQuery;
+
   const PropertyList({
     super.key,
     required this.governorateLabel,
@@ -73,6 +88,8 @@ class PropertyList extends StatefulWidget {
     this.rentalType,
     this.useScaffold = true,
     this.allowedPropertyIds,
+    this.chaletNameQuery,
+    this.chaletNameSearchQuery,
   });
 
   /// Same query as the list stream (including [orderBy] + [limit]) — for one-off reads (e.g. availability).
@@ -82,6 +99,8 @@ class PropertyList extends StatefulWidget {
     String? typeFilter,
     String? serviceType,
     String? rentalType,
+    String? chaletNameQuery,
+    String? chaletNameSearchQuery,
   }) {
     final bool chaletMode =
         governorateCode == 'chalet' ||
@@ -135,6 +154,42 @@ class PropertyList extends StatefulWidget {
 
     if (rentalType != null && rentalType.isNotEmpty) {
       query = query.where('rentalType', isEqualTo: rentalType);
+    }
+
+    // Optional chalet-name prefix search. Firestore requires the first
+    // [orderBy] to be on the same field as a range filter, so we sort by
+    // the searched field first, then fall back to `createdAt desc` so within
+    // a given prefix window users still see the newest matching chalets
+    // first (expected UX). These queries need composite indexes
+    // (search-field asc + `createdAt` desc, plus the active equality
+    // filters); Firestore surfaces a one-click creation link the first time
+    // each query runs. Listings without the search field are naturally
+    // excluded from name-search results, which matches the spec.
+    //
+    // Priority: the Arabic-normalized `chaletNameSearch` path (more forgiving
+    // — collapses أ/إ/آ / ؤ / ئ / ة / tashkeel) wins when present. The legacy
+    // lowercase-only `chaletNameLower` path is preserved intact for callers
+    // that haven't migrated.
+    final String? nameSearchPrefix = chaletNameSearchQuery?.trim();
+    if (nameSearchPrefix != null && nameSearchPrefix.isNotEmpty) {
+      return query
+          .where('chaletNameSearch', isGreaterThanOrEqualTo: nameSearchPrefix)
+          .where('chaletNameSearch',
+              isLessThanOrEqualTo: '$nameSearchPrefix\uf8ff')
+          .orderBy('chaletNameSearch')
+          .orderBy('createdAt', descending: true)
+          .limit(100);
+    }
+
+    final String? namePrefix = chaletNameQuery?.trim();
+    if (namePrefix != null && namePrefix.isNotEmpty) {
+      return query
+          .where('chaletNameLower', isGreaterThanOrEqualTo: namePrefix)
+          .where('chaletNameLower',
+              isLessThanOrEqualTo: '$namePrefix\uf8ff')
+          .orderBy('chaletNameLower')
+          .orderBy('createdAt', descending: true)
+          .limit(100);
     }
 
     return query.orderBy('createdAt', descending: true).limit(100);
@@ -380,6 +435,8 @@ class _PropertyListState extends State<PropertyList> {
       typeFilter: widget.typeFilter,
       serviceType: widget.serviceType,
       rentalType: rentalTypeFromParent,
+      chaletNameQuery: widget.chaletNameQuery,
+      chaletNameSearchQuery: widget.chaletNameSearchQuery,
     );
   }
 
@@ -615,6 +672,7 @@ class _PropertyListState extends State<PropertyList> {
         final serviceRaw = (data['serviceType'] ?? '').toString();
         final serviceLabel = _serviceTypeLabel(loc, serviceRaw);
         final statusLabel = _statusBadgeLabel(loc, locale, data);
+        final chaletName = listingChaletName(data);
         final priceText = numberFmt.format(price);
         final displayType = resolveDisplayPriceType(
           serviceType: data['serviceType']?.toString(),
@@ -691,39 +749,74 @@ class _PropertyListState extends State<PropertyList> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        RichText(
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          text: TextSpan(
-                            style: DefaultTextStyle.of(
-                              context,
-                            ).style.copyWith(height: 1.25),
-                            children: [
-                              TextSpan(
-                                text: typeLabel,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black,
-                                ),
+                        // When the owner provided a custom chalet name, show
+                        // it as a bold primary title with the old
+                        // "type • area" line demoted to a small subtitle.
+                        // Otherwise render the historical single-line
+                        // "type • area" RichText exactly as before so
+                        // non-named listings are pixel-identical.
+                        if (chaletName.isNotEmpty) ...[
+                          Text(
+                            chaletName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                              height: 1.2,
+                            ),
+                          ),
+                          if (typeLabel.isNotEmpty || areaName.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              areaName.isNotEmpty
+                                  ? '$areaName • $typeLabel'
+                                  : typeLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[600],
+                                height: 1.2,
                               ),
-                              if (areaName.isNotEmpty) ...[
-                                const TextSpan(
-                                  text: ' • ',
-                                  style: TextStyle(color: Colors.grey),
-                                ),
+                            ),
+                          ],
+                        ] else
+                          RichText(
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            text: TextSpan(
+                              style: DefaultTextStyle.of(
+                                context,
+                              ).style.copyWith(height: 1.25),
+                              children: [
                                 TextSpan(
-                                  text: areaName,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.grey[600],
+                                  text: typeLabel,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black,
                                   ),
                                 ),
+                                if (areaName.isNotEmpty) ...[
+                                  const TextSpan(
+                                    text: ' • ',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                  TextSpan(
+                                    text: areaName,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
-                        ),
                         const SizedBox(height: spacing),
                         // Per-night line. When the TOTAL row is also visible,
                         // this line steps down in weight/size/color so the

@@ -14,6 +14,8 @@ import 'package:aqarai_app/l10n/app_localizations.dart';
 // 🔥 التحويل الرسمي AR → EN (الاستخدام داخل صفحة الإضافة)
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 import 'package:aqarai_app/data/kuwait_areas.dart';
+import 'package:aqarai_app/utils/arabic_normalizer.dart';
+import 'package:aqarai_app/utils/google_maps_link.dart';
 
 import 'package:aqarai_app/pages/my_ads_page.dart';
 import 'package:aqarai_app/pages/terms_conditions_page.dart';
@@ -54,6 +56,17 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   // Controllers
   final fullNameController = TextEditingController();
   final ownerPhoneController = TextEditingController();
+
+  // Optional, chalet-only: owner-provided display name (e.g. "شاليه اللؤلؤة").
+  // Empty → field is omitted from the Firestore document on save.
+  final chaletNameController = TextEditingController();
+
+  // REQUIRED for chalet rentals (type=chalet, serviceType=rent): a Google
+  // Maps share URL so the booking-confirmation email can deep-link the
+  // customer to the chalet's exact location. Non-chalet or chalet-sale
+  // listings never read this controller — the field is not rendered for
+  // them and its value is not saved to Firestore.
+  final googleMapsLinkController = TextEditingController();
 
   final descriptionController = TextEditingController();
   final videoUrlController = TextEditingController();
@@ -96,6 +109,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   void dispose() {
     fullNameController.dispose();
     ownerPhoneController.dispose();
+    chaletNameController.dispose();
+    googleMapsLinkController.dispose();
     descriptionController.dispose();
     videoUrlController.dispose();
     roomCountController.dispose();
@@ -434,6 +449,31 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       return false;
     }
 
+    // Google Maps location: REQUIRED for chalet rentals only. Non-chalet
+    // listings and chalet sales never reach this branch, matching the
+    // product rule "Do not require for non-chalet listings". Two-step
+    // check keeps the toast messaging specific — empty vs. malformed gives
+    // the owner actionable feedback instead of one generic error.
+    if (selectedPropertyType == 'chalet' && selectedServiceType == 'rent') {
+      final mapsTrim = googleMapsLinkController.text.trim();
+      if (mapsTrim.isEmpty) {
+        _toast(
+          isAr
+              ? 'يرجى إدخال رابط موقع الشاليه من Google Maps'
+              : 'Please provide a Google Maps location link for the chalet',
+        );
+        return false;
+      }
+      if (!GoogleMapsLink.looksValid(mapsTrim)) {
+        _toast(
+          isAr
+              ? 'يرجى إدخال رابط صحيح من Google Maps'
+              : 'Please enter a valid Google Maps link',
+        );
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -518,6 +558,30 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
               _ => 'full',
             };
 
+      // Trim once to avoid inconsistent whitespace between stored fields.
+      // `chaletNameLower` is derived from this same trimmed value so the two
+      // copies can never diverge (e.g. stray trailing whitespace sneaking
+      // into one but not the other).
+      final String chaletNameTrimmed = selectedPropertyType == 'chalet'
+          ? chaletNameController.text.trim()
+          : '';
+
+      // Google Maps link — only captured for chalet rentals (the only flow
+      // where [_validate] requires it). We additionally attempt to pull
+      // `lat`/`lng` out of the share URL so the confirmation email and
+      // future server-side consumers don't have to re-parse the link.
+      // Extraction is best-effort: short links (maps.app.goo.gl) don't
+      // expose coords without a network redirect, so those listings save
+      // the link without coordinates — still fully functional.
+      final bool isChaletRent =
+          selectedPropertyType == 'chalet' && selectedServiceType == 'rent';
+      final String googleMapsLinkTrimmed =
+          isChaletRent ? googleMapsLinkController.text.trim() : '';
+      final ({double lat, double lng})? extractedLatLng =
+          googleMapsLinkTrimmed.isNotEmpty
+              ? GoogleMapsLink.tryExtractLatLng(googleMapsLinkTrimmed)
+              : null;
+
       final data = {
         "ownerId": user.uid,
         "fullName": fullNameController.text.trim(),
@@ -536,6 +600,35 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
 
         "type": selectedPropertyType,
         "serviceType": selectedServiceType,
+
+        // Owner-provided chalet name (optional, chalet-only). We persist the
+        // trimmed original for display plus a lowercased copy so we can later
+        // enable case-insensitive lookups without another migration. Field is
+        // intentionally OMITTED when empty — old listings stay identical.
+        if (chaletNameTrimmed.isNotEmpty) ...{
+          'chaletName': chaletNameTrimmed,
+          // Used for future case-insensitive search. DO NOT REMOVE.
+          'chaletNameLower': chaletNameTrimmed.toLowerCase(),
+          // Arabic-normalized copy (collapses أ/إ/آ→ا, ؤ→و, ئ→ي, ة→ه,
+          // strips tashkeel + whitespace). Drives spelling-tolerant search —
+          // e.g. query "اللولوه" matches stored "اللؤلؤة". Must stay in sync
+          // with the producer in [search_box.dart]; see [normalizeArabic].
+          'chaletNameSearch': normalizeArabic(chaletNameTrimmed),
+        },
+
+        // Chalet-rental-only: Google Maps location link + optional coords.
+        // Consumed by the server-side booking-confirmation email which
+        // prefers `googleMapsLink` directly and falls back to the area
+        // name only when this field is absent. Coordinates are written
+        // only when extraction succeeded — callers must treat them as
+        // optional, not a guarantee.
+        if (googleMapsLinkTrimmed.isNotEmpty) ...{
+          'googleMapsLink': googleMapsLinkTrimmed,
+          if (extractedLatLng != null) ...{
+            'lat': extractedLatLng.lat,
+            'lng': extractedLatLng.lng,
+          },
+        },
 
         "description": descriptionController.text.trim(),
 
@@ -1091,6 +1184,57 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                   groupValue: selectedChaletMode,
                   onChanged: (v) => setState(() => selectedChaletMode = v!),
                 ),
+
+                // Optional chalet display name. Shown only when the property
+                // type is "chalet" (daily/monthly/yearly or sale) so other
+                // categories never see it.
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: chaletNameController,
+                  maxLength: 60,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText:
+                        Localizations.localeOf(context).languageCode == 'ar'
+                            ? 'اسم الشاليه (يساعد على جذب العملاء)'
+                            : 'Chalet name (helps attract customers)',
+                    hintText:
+                        Localizations.localeOf(context).languageCode == 'ar'
+                            ? 'مثال: شاليه اللؤلؤة'
+                            : 'Example: Pearl Chalet',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+
+                // Google Maps location — REQUIRED for chalet rentals only.
+                // Rendered only when the owner has picked "For rent" at the
+                // top of the form; chalet-for-sale and non-chalet listings
+                // never see or submit this field. Validation + Firestore
+                // persistence both gate on the same pair of conditions, so
+                // the three checks (visibility, validation, save) stay in
+                // lockstep.
+                if (selectedServiceType == 'rent') ...[
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: googleMapsLinkController,
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.next,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: InputDecoration(
+                      labelText:
+                          Localizations.localeOf(context).languageCode == 'ar'
+                              ? 'رابط موقع الشاليه (Google Maps)'
+                              : 'Chalet location link (Google Maps)',
+                      hintText:
+                          Localizations.localeOf(context).languageCode == 'ar'
+                              ? 'الصق رابط الموقع من Google Maps'
+                              : 'Paste the location link from Google Maps',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.location_on_outlined),
+                    ),
+                  ),
+                ],
               ],
 
               const SizedBox(height: 12),

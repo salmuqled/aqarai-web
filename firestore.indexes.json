@@ -20,6 +20,37 @@
       "queryScope": "COLLECTION",
       "fields": [
         {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "governorateCode", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "chaletNameLower", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "governorateCode", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "rentalType", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "chaletNameLower", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
         {"fieldPath": "isActive", "order": "ASCENDING"},
         {"fieldPath": "listingCategory", "order": "ASCENDING"},
         {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
@@ -1070,6 +1101,14 @@
       "fields": [
         {"fieldPath": "status", "order": "ASCENDING"},
         {"fieldPath": "confirmedAt", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "expiresAt", "order": "ASCENDING"}
       ]
     },
     {

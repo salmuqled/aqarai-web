@@ -137,11 +137,16 @@ class ChaletBookingController {
 
   void submit() => _submit?.call();
 
-  /// Externally seeds check-in/check-out/nights (exclusive contract) so that
-  /// the summary UI shows the correct values immediately, before the booking
-  /// body has a chance to build and call [_update] itself. Does not change
-  /// totals or booking state; the calendar body will overwrite these via
-  /// [_update] on its first frame if the user picks a different range.
+  /// Externally seeds check-in / check-out / nights (hotel-industry
+  /// contract — `endDate` is the check-out day the user selected, which is
+  /// **exclusive** from the nights-counting perspective, i.e.
+  /// `nights = endDate.difference(startDate).inDays`). This matches what
+  /// the calendar UI stores in `_rangeEnd` and what [StayDatesPicker]
+  /// emits, so the summary shows the correct values immediately, before
+  /// the booking body has a chance to build and call [_update] itself.
+  /// Does not change totals or booking state; the calendar body will
+  /// overwrite these via [_update] on its first frame if the user picks a
+  /// different range.
   void seed({
     required DateTime? startDate,
     required DateTime? endDate,
@@ -335,11 +340,16 @@ class ChaletBookingWidget extends StatelessWidget {
     /// When false, blocks client booking actions (non-public listing); server also enforces.
     this.allowPublicBooking = true,
     /// Pre-selected check-in (calendar day). Paired with [initialEndDate].
-    /// Uses check-out-exclusive semantics to match [property_list.dart]
-    /// (`nights = initialEndDate.difference(initialStartDate).inDays`).
+    /// Uses the hotel-industry contract also used by [StayDatesPicker] and
+    /// `property_details_page.dart`:
+    /// `nights = initialEndDate.difference(initialStartDate).inDays`
+    /// (no +1 — check-out day is the morning the guest leaves, not a
+    /// stayed night).
     this.initialStartDate,
-    /// Pre-selected check-out (exclusive). Ignored unless both initial dates
-    /// are provided, in the future, and span at least [minNights] nights.
+    /// Pre-selected check-out — the morning the guest leaves (exclusive
+    /// from the nights-counting perspective). Ignored unless both initial
+    /// dates are provided, in the future, and span at least [minNights]
+    /// nights.
     this.initialEndDate,
   });
 
@@ -373,7 +383,10 @@ class ChaletBookingWidget extends StatelessWidget {
   /// successful calendar render when paired with a valid [initialEndDate].
   final DateTime? initialStartDate;
 
-  /// Optional pre-selected check-out (exclusive). See [initialStartDate].
+  /// Optional pre-selected check-out — the morning the guest leaves
+  /// (**exclusive** from the nights-counting perspective, matching the
+  /// hotel-industry convention used by [StayDatesPicker]). See
+  /// [initialStartDate].
   final DateTime? initialEndDate;
 
   static List<ChaletBookedRange> _blockedRangesFromSnapshot(
@@ -1354,11 +1367,17 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
     });
   }
 
-  /// Returns `(start, endExclusive)` only when both inputs are non-null,
-  /// today-or-future, strictly ordered, meet [widget.minNights], and do not
-  /// overlap any [widget.bookedRanges]. Otherwise returns `null` so the
-  /// caller falls back to the default unseeded flow. Uses the same
-  /// check-out-exclusive semantics as [property_list.dart].
+  /// Returns `(checkIn, checkOut)` — where `checkOut` is the morning the
+  /// guest leaves (**exclusive** from the nights-counting perspective) —
+  /// only when both inputs are non-null, today-or-future, ordered, meet
+  /// [widget.minNights], and do not overlap any [widget.bookedRanges].
+  /// Otherwise returns `null` so the caller falls back to the default
+  /// unseeded flow.
+  ///
+  /// The inputs ([initialStartDate] / [initialEndDate]) follow the
+  /// hotel-industry convention emitted by [StayDatesPicker]: a stay
+  /// tapped as 27 → 29 arrives here as `start=27, end=29` and maps
+  /// directly to `_rangeEnd = 29` with `nights = 2`.
   (DateTime, DateTime)? _seedFromInitial(
     DateTime? start,
     DateTime? end,
@@ -1388,6 +1407,8 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       print('[SEED_FROM_INITIAL][FAIL] reason=INVALID_RANGE start=$s end=$e');
       return null;
     }
+    // Hotel-industry nights formula: 27→29 ⇒ 2 nights (check-out day is
+    // the morning the guest leaves, not a stayed night).
     final nights = e.difference(s).inDays;
     if (nights < math.max(1, widget.minNights)) {
       // ignore: avoid_print
@@ -1395,8 +1416,9 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
           '[SEED_FROM_INITIAL][FAIL] reason=BELOW_MIN_NIGHTS nights=$nights min=${widget.minNights}');
       return null;
     }
-    // Use the sorted view so overlap scans short-circuit once we pass the
-    // requested check-out (same logic as [_rangeConflicts]).
+    // Booked ranges are stored with the same exclusive check-out
+    // convention (`b.end` is the morning the prior guest leaves), so the
+    // overlap check uses `e` directly.
     final sorted = _sortedBookedRanges.isEmpty
         ? widget.bookedRanges
         : _sortedBookedRanges;
@@ -1410,7 +1432,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       }
     }
     // ignore: avoid_print
-    print('[SEED_FROM_INITIAL][SUCCESS] start=$s end=$e nights=$nights');
+    print('[SEED_FROM_INITIAL][SUCCESS] start=$s checkOut=$e nights=$nights');
     return (s, e);
   }
 
@@ -1615,7 +1637,16 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
         _stayHasBlockedNight(checkIn, checkOutExclusive);
   }
 
-  (DateTime checkIn, DateTime checkOutExclusive)? _computeStayBounds() {
+  /// Returns the current selection as `(checkIn, checkOut)` where
+  /// `checkOut` is the morning the guest leaves (**exclusive** from the
+  /// nights-counting perspective). This is the hotel-industry convention
+  /// also used by [StayDatesPicker] and the server (`createBooking`
+  /// expects `endDate` as the exclusive check-out day).
+  ///
+  /// The calendar highlights `checkOut` visually as the last day of the
+  /// range (matching Airbnb / Booking.com), but it is not a stayed night —
+  /// `nights = checkOut.difference(checkIn).inDays`.
+  (DateTime checkIn, DateTime checkOut)? _computeStayBounds() {
     if (_rangeStart == null || _rangeEnd == null) return null;
     var a = _dateOnly(_rangeStart!);
     var b = _dateOnly(_rangeEnd!);
@@ -1624,33 +1655,36 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       a = b;
       b = t;
     }
-    final checkIn = a;
-    final checkOutExclusive = b;
-    return (checkIn, checkOutExclusive);
+    return (a, b);
   }
 
   int get _nights {
     final bounds = _computeStayBounds();
     if (bounds == null) return 0;
+    // Hotel-industry contract: a stay from 27 to 29 covers the nights of
+    // 27 and 28 (guest leaves on 29 morning) ⇒ 2 nights ⇒ (29 - 27).
     final days = bounds.$2.difference(bounds.$1).inDays;
     return math.max(0, days);
   }
 
-  /// In-range preview while check-in is set and user moves focus / selects check-out (UX only).
-  (DateTime checkIn, DateTime checkOutExclusive)? get _provisionalBounds {
+  /// In-range preview while check-in is set and user moves focus / selects
+  /// check-out (UX only). Returns `(checkIn, checkOut)` with `checkOut`
+  /// exclusive from the nights-counting perspective — matches
+  /// [_computeStayBounds].
+  (DateTime checkIn, DateTime checkOut)? get _provisionalBounds {
     if (_rangeStart == null || _rangeEnd != null) return null;
     final s = _dateOnly(_rangeStart!);
     final f = _dateOnly(_focusedDay);
     if (!f.isAfter(s)) return null;
     final checkIn = s;
-    final checkOutExclusive = f.add(const Duration(days: 1));
-    if (_stayOverlapsReserved(checkIn, checkOutExclusive)) return null;
-    final provNights = checkOutExclusive.difference(checkIn).inDays;
+    final checkOut = f;
+    if (_stayOverlapsReserved(checkIn, checkOut)) return null;
+    final provNights = checkOut.difference(checkIn).inDays;
     if (provNights < widget.minNights) return null;
-    return (checkIn, checkOutExclusive);
+    return (checkIn, checkOut);
   }
 
-  (DateTime checkIn, DateTime checkOutExclusive)? get _liveStayBounds =>
+  (DateTime checkIn, DateTime checkOut)? get _liveStayBounds =>
       _computeStayBounds() ?? _provisionalBounds;
 
   int get _liveNights {
@@ -1672,6 +1706,8 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
     final bounds = _computeStayBounds();
     if (bounds == null || _nights < 1) return false;
     if (_nights < widget.minNights) return false;
+    // `bounds.$2` is already the exclusive check-out day — the overlap
+    // scan expects exactly this convention.
     if (_stayOverlapsReserved(bounds.$1, bounds.$2)) return false;
     return true;
   }
@@ -1716,6 +1752,11 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
 
     setState(() => _submitting = true);
     try {
+      // `bounds.$2` is already the exclusive check-out day the server
+      // expects (hotel-industry convention — same as [StayDatesPicker]
+      // and `property_details_page.dart`). No conversion is needed; the
+      // UI, the controller, the server, and the email templates all
+      // agree on what "check-out" means.
       final created = await ChaletBookingService.createBooking(
         propertyId: widget.propertyId,
         startDate: bounds.$1,
@@ -1968,8 +2009,10 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       }
 
       final checkIn = s;
-      final checkOutExclusive = d.add(const Duration(days: 1));
-      if (_stayOverlapsReserved(checkIn, checkOutExclusive)) {
+      // `d` is the check-out day the user tapped (hotel-industry
+      // convention — the morning the guest leaves, not a stayed night).
+      // Use it directly for overlap + min-stay math; no shift needed.
+      if (_stayOverlapsReserved(checkIn, d)) {
         _selectionHint = _msgDatesUnavailable;
         _selectionHintIsBookedConflict = true;
         scheduleHintFade = true;
@@ -1979,7 +2022,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
         return;
       }
 
-      final nights = checkOutExclusive.difference(checkIn).inDays;
+      final nights = d.difference(checkIn).inDays;
       if (nights < widget.minNights) {
         _selectionHint = _minStayMessage(widget.minNights, _isAr);
         _selectionHintIsMinStay = true;
@@ -1990,7 +2033,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
         return;
       }
 
-      _rangeEnd = d.add(const Duration(days: 1));
+      _rangeEnd = d;
     });
     if (scheduleHintFade) _scheduleHintAutoFade();
     if (perfSw != null) {
@@ -2044,9 +2087,11 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
     final boundsLive = _liveStayBounds;
     String? datesChipLabel;
     if (boundsLive != null) {
-      final lastNight = boundsLive.$2.subtract(const Duration(days: 1));
+      // `boundsLive.$2` is the check-out day (the morning the guest
+      // leaves) — surface it verbatim so the chip reads as
+      // "check-in → check-out", matching the rest of the booking UX.
       datesChipLabel =
-          '${DateFormat.yMMMd(locale).format(boundsLive.$1)} → ${DateFormat.yMMMd(locale).format(lastNight)}';
+          '${DateFormat.yMMMd(locale).format(boundsLive.$1)} → ${DateFormat.yMMMd(locale).format(boundsLive.$2)}';
     }
 
     final String? breakdownLabel = (_liveNights > 0 && barTotal <= 0)
@@ -3143,11 +3188,14 @@ class _BookingSelectionGuide extends StatelessWidget {
     } else {
       icon = Icons.event_available_rounded;
       final df = DateFormat.MMMd(locale);
+      // [rangeEnd] is the check-out day (hotel-industry convention —
+      // the morning the guest leaves, not a stayed night). Nights follow
+      // `(checkOut - checkIn).inDays`, matching [StayDatesPicker] and
+      // the server's `daysCount`.
       final nights = rangeEnd!.difference(rangeStart!).inDays;
-      final checkOutDisplay = rangeEnd!.subtract(const Duration(days: 1));
       final arrow = isAr ? '←' : '→';
       message =
-          '$labelCheckIn ${df.format(rangeStart!)}  $arrow  $labelCheckOut ${df.format(checkOutDisplay)} · ${_nightsLabel(nights, isAr)}';
+          '$labelCheckIn ${df.format(rangeStart!)}  $arrow  $labelCheckOut ${df.format(rangeEnd!)} · ${_nightsLabel(nights, isAr)}';
       accent = colorScheme.primary;
     }
 

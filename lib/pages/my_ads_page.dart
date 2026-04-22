@@ -34,6 +34,7 @@ import 'package:aqarai_app/services/image_processing_service.dart';
 import 'package:aqarai_app/services/property_listing_image_service.dart';
 import 'package:aqarai_app/services/featured_property_service.dart';
 import 'package:aqarai_app/services/payment/payment_service_provider.dart';
+import 'package:aqarai_app/utils/listing_display.dart';
 import 'package:aqarai_app/pages/owner_chalet_finance_page.dart';
 import 'package:aqarai_app/pages/owner_dashboard_page.dart';
 
@@ -1266,6 +1267,8 @@ class _MyAdsPageState extends State<MyAdsPage> {
         (listingSt == ListingStatus.active ||
             listingSt == ListingStatus.approvedLegacy);
 
+    final chaletName = listingChaletName(d);
+
     late String typeLabel;
     if (locale == 'ar') {
       switch (typeEn.toLowerCase()) {
@@ -1313,13 +1316,39 @@ class _MyAdsPageState extends State<MyAdsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          "$area • $typeLabel",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                        // Owner-provided chalet name wins when present — it
+                        // becomes the bold title and the classic "area • type"
+                        // line moves to a secondary subtitle. Listings without
+                        // a custom name render exactly as before.
+                        if (chaletName.isNotEmpty) ...[
+                          Text(
+                            chaletName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "$area • $typeLabel",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ] else
+                          Text(
+                            "$area • $typeLabel",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         const SizedBox(height: 6),
                         Text(
                           "${loc.price}: ${_price(price)} KWD$priceUnit",

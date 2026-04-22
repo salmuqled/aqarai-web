@@ -9,6 +9,7 @@ import 'package:aqarai_app/l10n/app_localizations.dart';
 // Arabic governorate labels need Latin slug for [governorateCode] ([_code] is ASCII-only).
 import 'package:aqarai_app/data/ar_to_en_mapping.dart' show governorateArToEn;
 import 'package:aqarai_app/data/kuwait_areas.dart';
+import 'package:aqarai_app/utils/arabic_normalizer.dart';
 
 class AqarSearchBox extends StatefulWidget {
   final String? initialSearchType;
@@ -35,10 +36,21 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
   /// For [PropertyList] when searching [serviceType] rent (daily vs monthly).
   String selectedRentalType = 'daily';
 
+  /// Optional, chalet-only: owner-provided display name prefix. Non-empty
+  /// values are forwarded to [PropertyList] as a Firestore prefix filter on
+  /// `chaletNameLower`. Empty / whitespace input is treated as absent.
+  final TextEditingController _chaletNameController = TextEditingController();
+
   String? _lastLocaleCode;
   bool _appliedInitialSearchService = false;
 
   late List<String> localizedPropertyTypes;
+
+  @override
+  void dispose() {
+    _chaletNameController.dispose();
+    super.dispose();
+  }
 
   String _code(String s) {
     var v = s.trim().toLowerCase();
@@ -147,6 +159,16 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
     );
   }
 
+  /// True when the user is searching for chalets — either via the
+  /// chalet-specific entry point ([AqarSearchBox.isChaletMode]) or by picking
+  /// `propertyType_chalet` in the dropdown. Drives visibility of the
+  /// optional "search by chalet name" field.
+  bool _isChaletSearchActive(AppLocalizations loc) {
+    if (widget.isChaletMode) return true;
+    if (selectedProperty == null) return false;
+    return _mapPropertyToCode(selectedProperty!, loc) == 'chalet';
+  }
+
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context)!;
@@ -209,6 +231,46 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
             value: selectedProperty,
             onChanged: (value) => setState(() => selectedProperty = value),
           ),
+          if (_isChaletSearchActive(loc)) ...[
+            const SizedBox(height: 15),
+            TextField(
+              controller: _chaletNameController,
+              textInputAction: TextInputAction.search,
+              maxLength: 60,
+              style: const TextStyle(color: Colors.white),
+              cursorColor: Colors.white,
+              decoration: InputDecoration(
+                counterText: '',
+                hintText: isAr
+                    ? 'ابحث باسم الشاليه (اختياري)'
+                    : 'Search by chalet name (optional)',
+                hintStyle: const TextStyle(color: Colors.white70),
+                prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide:
+                      BorderSide(color: Colors.white.withOpacity(0.75)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: const BorderSide(color: Colors.white, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
+              ),
+              onChanged: (_) => setState(() {}),
+              // Dismiss keyboard on the IME "search" action. We intentionally
+              // do NOT auto-run the search here because the primary search
+              // button owns validation (governorate + area required); running
+              // from here would skip those checks. Keeping both paths routed
+              // through the ElevatedButton avoids behavior duplication.
+              onSubmitted: (_) {
+                FocusScope.of(context).unfocus();
+              },
+            ),
+          ],
           const SizedBox(height: 15),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -251,6 +313,31 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
               multiSelectionEnabled: false,
               emptySelectionAllowed: false,
               showSelectedIcon: false,
+              // High-contrast styling against the dark home-page background.
+              // Selected pill: solid white + bold dark text; unselected pill:
+              // faint tint + white70 label — both remain clearly readable.
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+                  (states) => states.contains(WidgetState.selected)
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.08),
+                ),
+                foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+                  (states) => states.contains(WidgetState.selected)
+                      ? Colors.black87
+                      : Colors.white70,
+                ),
+                textStyle: WidgetStateProperty.resolveWith<TextStyle?>(
+                  (states) => TextStyle(
+                    fontWeight: states.contains(WidgetState.selected)
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
+                ),
+                side: WidgetStateProperty.all(
+                  const BorderSide(color: Colors.white24, width: 1),
+                ),
+              ),
             ),
           ],
           const SizedBox(height: 20),
@@ -263,6 +350,11 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
               ),
             ),
             onPressed: () {
+              // Close the keyboard BEFORE any validation / navigation so the
+              // transition to the results screen isn't pushed up by the IME
+              // on slower devices. Safe no-op when no field has focus.
+              FocusScope.of(context).unfocus();
+
               final canSearch =
                   selectedGovernorate != null && selectedArea != null;
 
@@ -293,6 +385,17 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
               final propertyCode = selectedProperty != null
                   ? _mapPropertyToCode(selectedProperty!, loc)
                   : null;
+
+              // Arabic-aware normalization (see [normalizeArabic]): lowercases,
+              // collapses alef/ؤ/ئ/ة variants, strips tashkeel + whitespace.
+              // Matches the same transform run at save time in
+              // [add_property_page.dart], so the Firestore range query on
+              // `chaletNameSearch` can compare the two sides verbatim.
+              final String chaletNameSearch =
+                  normalizeArabic(_chaletNameController.text);
+              final bool applyChaletNameSearch =
+                  chaletNameSearch.isNotEmpty &&
+                      (widget.isChaletMode || propertyCode == 'chalet');
 
               if (kDebugMode) {
                 debugPrint(
@@ -331,6 +434,8 @@ class _AqarSearchBoxState extends State<AqarSearchBox> {
                     rentalType: selectedService == 'rent'
                         ? selectedRentalType
                         : null,
+                    chaletNameSearchQuery:
+                        applyChaletNameSearch ? chaletNameSearch : null,
                   ),
                 ),
               );

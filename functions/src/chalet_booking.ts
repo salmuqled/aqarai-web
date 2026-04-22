@@ -211,7 +211,7 @@ export function rangesOverlap(
 }
 
 /** Short area label for FCM body (Arabic-first, then EN / legacy `area`). */
-function propertyAreaArabicForNotification(
+export function propertyAreaArabicForNotification(
   pdata: admin.firestore.DocumentData | undefined
 ): string {
   if (!pdata) return "شاليهك";
@@ -780,19 +780,13 @@ export const createBooking = onCall(
       status: "pending_payment" as const,
     });
 
-    const areaLabel = propertyAreaArabicForNotification(pdata);
-    void sendNotificationToUser({
-      uid: bookable.ownerId,
-      title: "حجز جديد",
-      body: `📩 حجز جديد على شاليهك في ${areaLabel}`,
-      notificationType: "booking",
-      data: {
-        screen: "booking",
-        bookingId: bookingRef.id,
-        propertyId,
-        bookingAction: "created",
-      },
-    });
+    // NOTE: NO owner notification here. Bookings at this point are in
+    // `pending_payment` — the guest has not paid yet. Owner only learns
+    // about the booking AFTER payment succeeds, via the Firestore trigger
+    // `onBookingConfirmedNotifyOwner` (see ./bookingConfirmedOwnerNotification.ts)
+    // which fires on the atomic `pending_payment -> confirmed` transition
+    // performed by [finalizeBookingAfterPayment]. This matches our invariant
+    // that confirmation is ONLY set server-side after real payment verification.
 
     return {
       ok: true,

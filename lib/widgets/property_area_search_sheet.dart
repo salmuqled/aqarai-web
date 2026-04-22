@@ -80,6 +80,7 @@ void showPropertyAreaSearchSheet(
                   padding: const EdgeInsets.all(14),
                   child: TextField(
                     autofocus: true,
+                    textInputAction: TextInputAction.search,
                     decoration: InputDecoration(
                       hintText: isArabic ? 'ابحث عن المنطقة' : 'Search area',
                       prefixIcon: const Icon(Icons.search),
@@ -88,6 +89,12 @@ void showPropertyAreaSearchSheet(
                       ),
                     ),
                     onChanged: (v) => setModalState(() => query = v),
+                    // IME "search" action dismisses the keyboard so the user
+                    // can see the filtered list. Filtering itself is already
+                    // live via [onChanged]; this is purely a dismissal hook.
+                    onSubmitted: (_) {
+                      FocusScope.of(context).unfocus();
+                    },
                   ),
                 ),
                 Expanded(

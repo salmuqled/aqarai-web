@@ -383,6 +383,31 @@ class _HomePageState extends State<HomePage> {
 
                       const SizedBox(height: 20),
 
+                      // ⭐ شاليهات مميزة للبيع
+                      // Restored from the deleted `ChaletsPage`; previously
+                      // filtered out of the two carousels above because
+                      // `listingCategory.normal` excludes chalets.
+                      FeaturedCarousel(
+                        serviceType: 'sale',
+                        title: locale == 'ar'
+                            ? "شاليهات مميزة للبيع"
+                            : "Featured Chalets for Sale",
+                        listingCategory: ListingCategory.chalet,
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // ⭐ شاليهات مميزة للإيجار
+                      FeaturedCarousel(
+                        serviceType: 'rent',
+                        title: locale == 'ar'
+                            ? "شاليهات مميزة للإيجار"
+                            : "Featured Chalets for Rent",
+                        listingCategory: ListingCategory.chalet,
+                      ),
+
+                      const SizedBox(height: 20),
+
                       // ⭐ مطلوب مميز
                       const FeaturedWantedCarousel(),
 

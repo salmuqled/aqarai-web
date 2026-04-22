@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:aqarai_app/utils/listing_display.dart';
 
 class AdminPendingTab extends StatefulWidget {
   const AdminPendingTab({super.key});
@@ -152,20 +153,48 @@ class _AdminPendingTabState extends State<AdminPendingTab> {
             final area = (d['area'] ?? d['area_id'] ?? '-').toString();
             final price = d['price'];
             final cover = (d['coverUrl'] ?? (d['images']?['0']))?.toString();
+            // Owner-provided chalet name takes priority over the legacy
+            // `title` field and the synthesized "type • area" fallback so
+            // admins see the exact name they'll approve.
+            final chaletName = listingChaletName(d);
+            final displayTitle = chaletName.isNotEmpty
+                ? chaletName
+                : (title.isNotEmpty ? title : '$area • $type');
+            final subtitleLine = chaletName.isNotEmpty
+                ? '$area • $type'
+                : null;
 
             return Card(
               elevation: 1,
               child: ListTile(
                 leading: _Thumb(url: cover),
                 title: Text(
-                  title.isNotEmpty ? title : '$type • $area',
+                  displayTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(
-                  price == null
-                      ? (isArabic ? 'بدون سعر' : 'No price')
-                      : ((isArabic ? 'السعر: ' : 'Price: ') + price.toString()),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (subtitleLine != null)
+                      Text(
+                        subtitleLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    Text(
+                      price == null
+                          ? (isArabic ? 'بدون سعر' : 'No price')
+                          : ((isArabic ? 'السعر: ' : 'Price: ') +
+                              price.toString()),
+                    ),
+                  ],
                 ),
                 trailing: Wrap(
                   spacing: 8,

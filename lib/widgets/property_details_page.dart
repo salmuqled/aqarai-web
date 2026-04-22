@@ -19,6 +19,7 @@ import 'package:aqarai_app/services/interest_lead_flow_service.dart';
 import 'package:aqarai_app/widgets/interested_lead_confirmation_sheet.dart';
 import 'package:aqarai_app/widgets/chalet_booking_widget.dart';
 import 'package:aqarai_app/widgets/booking_bar.dart';
+import 'package:aqarai_app/widgets/booking_phone_capture_sheet.dart';
 import 'package:aqarai_app/widgets/owner_booking_tools.dart';
 import 'package:aqarai_app/services/featured_property_service.dart';
 import 'package:aqarai_app/services/featured_suggestion_tracking_service.dart';
@@ -27,6 +28,7 @@ import 'package:aqarai_app/services/ai_suggestions_auto_config_service.dart';
 import 'package:aqarai_app/pages/video_page.dart';
 import 'package:aqarai_app/utils/video_embed_url.dart';
 import 'package:aqarai_app/utils/booking_rules.dart';
+import 'package:aqarai_app/utils/listing_display.dart';
 import 'package:aqarai_app/utils/property_price_display.dart';
 
 /// Human-friendly featured expiry line for owner CTA (Arabic / English).
@@ -443,6 +445,10 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
 
+          // Read once per rebuild and reuse — avoids walking the map +
+          // trimming on every conditional widget.
+          final chaletName = listingChaletName(data);
+
           final List<String> images = (data['images'] as List<dynamic>? ?? [])
               .map((e) => e.toString())
               .toList();
@@ -588,6 +594,23 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
               ),
               children: [
                 _buildImageSlider(context, images),
+                // Optional owner-provided chalet name — shown as a large
+                // prominent heading right below the image. Only renders when
+                // the listing actually has a `chaletName`, so historical
+                // listings keep their layout identical.
+                if (chaletName.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    chaletName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
                 if (videoEmbed != null) ...[
                   const SizedBox(height: 12),
                   _PropertyVideoPreviewCard(videoUrl: videoUrlRaw),
@@ -1087,11 +1110,11 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     return isAr ? '$core د.ك$suffix' : '$core KWD$suffix';
   }
 
-  void _onChaletPrimaryCtaTap(
+  Future<void> _onChaletPrimaryCtaTap(
     BuildContext context,
     bool isAr,
     Map<String, dynamic> listingData,
-  ) {
+  ) async {
     if (!_bookingController.canBook) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1119,7 +1142,67 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
       return;
     }
     if (_bookingController.submitting) return;
+
+    // One-time phone-number capture. We keep this purely client-side and
+    // do NOT touch booking / payment logic: the phone is persisted to
+    // `users/{uid}.phone` (via InterestLeadFlowService.saveUserPhone), and
+    // the server-side admin-monitoring email already reads from that path.
+    final ok = await _ensureClientPhoneCaptured(context, isAr);
+    if (!ok) return;
+    if (!context.mounted) return;
+
+    // Re-check after the async gap — state may have changed while the
+    // bottom sheet was up (e.g. dates got invalidated, another submit was
+    // kicked off by the bar).
+    if (!_bookingController.canBook) return;
+    if (_bookingController.submitting) return;
     _bookingController.submit();
+  }
+
+  /// Guarantees the signed-in user has a valid saved Kuwaiti phone before
+  /// the booking proceeds. Returns `true` if the flow should continue,
+  /// `false` if the user dismissed / is not signed in / save failed.
+  ///
+  /// Behavior:
+  ///  - Missing / invalid stored phone → force the capture bottom sheet.
+  ///  - Valid stored phone → light "continue / edit" confirm sheet.
+  ///  - If the user is not signed in, we fall through `true` so the
+  ///    existing submit path can surface its own auth error (no change
+  ///    to existing booking logic).
+  Future<bool> _ensureClientPhoneCaptured(
+    BuildContext context,
+    bool isAr,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      // Let the normal submit path handle auth errors.
+      return true;
+    }
+
+    final existing = await readSavedUserPhone(user.uid);
+    if (!context.mounted) return false;
+
+    if (!BookingPhoneValidator.isValidKuwaiti(existing)) {
+      final captured = await showBookingPhoneCaptureSheet(
+        context,
+        initial: existing, // prefill if a legacy / partial value was present
+      );
+      return captured != null;
+    }
+
+    final choice = await showBookingPhoneConfirmSheet(
+      context,
+      existingPhone: existing,
+    );
+    if (choice == null) return false;
+    if (choice == BookingPhoneConfirmChoice.continueBooking) return true;
+
+    if (!context.mounted) return false;
+    final edited = await showBookingPhoneCaptureSheet(
+      context,
+      initial: existing,
+    );
+    return edited != null;
   }
 
   Widget _buildChaletBookingConversionCard({
@@ -1218,7 +1301,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                 final total = _bookingController.totalPrice;
                 final fmt = NumberFormat.decimalPattern(isAr ? 'ar' : 'en');
                 final cur = isAr ? 'د.ك' : 'KWD';
-                final checkoutMorning = e != null
+                final checkOutDisplay = e != null
                     ? DateTime(e.year, e.month, e.day)
                     : null;
                 final ppn = price.toDouble();
@@ -1267,8 +1350,8 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                checkoutMorning != null
-                                    ? dateFmt.format(checkoutMorning)
+                                checkOutDisplay != null
+                                    ? dateFmt.format(checkOutDisplay)
                                     : '—',
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.w700,
@@ -1343,7 +1426,11 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
             ChaletBookingWidget(
               propertyId: propertyId,
               pricePerNight: price.toDouble(),
-              propertyTitle: '$area • $typeLabel',
+              propertyTitle: listingDisplayTitle(
+                listingData,
+                areaLabel: area,
+                typeLabel: typeLabel,
+              ),
               imageUrl: imageUrl,
               controller: _bookingController,
               useExternalBookingBar: true,
