@@ -507,6 +507,40 @@ async function computeRankedTop3WithLabels(
 // ---------------------------------------------------------------------------
 
 const TOP_DEMAND_INTENT = "top_demand_chalets";
+
+/**
+ * Warm, type-aware clarifying question for when the customer hasn't told us
+ * the area yet. Keeps a single short question per ANALYZE_SYSTEM rule 3 —
+ * never a templated "which area?" wall.
+ */
+function buildAreaClarifyQuestion(rawType: string, locale: "ar" | "en"): string {
+  const t = (rawType || "").trim().toLowerCase();
+  if (locale === "ar") {
+    if (t === "chalet")
+      return "حياك الله 👌 تبي شاليه بأي منطقة، وكم ليلة ناوي؟ ولو عندك ميزانية في بالك قل لي.";
+    if (t === "apartment")
+      return "حياك الله 👌 تبي شقة بأي منطقة، وميزانيتك تقريباً كم؟";
+    if (t === "house" || t === "villa")
+      return "حياك الله 👌 تبي بأي منطقة، وميزانيتك تقريباً كم؟";
+    if (t === "land")
+      return "حياك الله 👌 تبي أرض بأي منطقة، وكم المساحة اللي تبيها؟";
+    if (t === "office" || t === "shop")
+      return "حياك الله 👌 بأي منطقة تبحث، وكم الميزانية تقريباً؟";
+    return "حياك الله 👌 تبي شاليه، شقة، ولا بيت؟ وبأي منطقة؟";
+  }
+  if (t === "chalet")
+    return "Welcome 👌 which area, how many nights, and any budget in mind?";
+  if (t === "apartment")
+    return "Welcome 👌 which area are you after, and roughly what's your budget?";
+  if (t === "house" || t === "villa")
+    return "Welcome 👌 which area are you after, and roughly what's your budget?";
+  if (t === "land")
+    return "Welcome 👌 which area are you after, and what size are you looking for?";
+  if (t === "office" || t === "shop")
+    return "Welcome 👌 which area are you after, and what's your budget?";
+  return "Welcome 👌 chalet, apartment, or house? And which area?";
+}
+
 /** Confirmed bookings in rolling window at or above this count get the high-demand line + label. */
 const TOP_DEMAND_HIGH_BOOKINGS = 5;
 /** Fetch extra chalet candidates so post-filters (e.g. budget) still allow ranking + fallback. */
@@ -1487,47 +1521,12 @@ export const aqaraiAgentAnalyze = onCall(
         clarifyingQuestionsFinal = [];
       }
 
-      // Top-demand is deprecated on the chat. If the LLM still returns it,
-      // we force a proper customer-centric search and — when we don't yet
-      // have an area — prepend a warm, type-aware clarifying question so
-      // the user lands on a concrete next step ("بأي منطقة؟") instead of
-      // a generic popularity list.
+      // Top-demand is deprecated on the chat. Any hallucinated top_demand
+      // intent is downgraded to search_property; the no-area clarify is
+      // handled uniformly by the HARD GUARD further below, so no duplicate
+      // prompt wall here.
       if (intent === TOP_DEMAND_INTENT) {
         intent = "search_property";
-        const paramsAreaMissing =
-          paramsPatch.areaCode == null || String(paramsPatch.areaCode).trim() === "";
-        const previousAreaMissing =
-          !currentFilters.areaCode || String(currentFilters.areaCode).trim() === "";
-        if (paramsAreaMissing && previousAreaMissing && !parsed.detectedAreaCode) {
-          const inferredType =
-            (typeof paramsPatch.type === "string" && paramsPatch.type.trim()) ||
-            (kuwaiti.propertyType ? String(kuwaiti.propertyType) : "") ||
-            "chalet";
-          isCompleteFinal = false;
-          if (clarifyingQuestionsFinal.length === 0) {
-            if (locale === "ar") {
-              clarifyingQuestionsFinal = [
-                inferredType === "chalet"
-                  ? "حياك الله 👌 خلني أفصّل لك حسب طلبك — تبي شاليه بأي منطقة، وكم ليلة ناوي؟ ولو عندك ميزانية في بالك قل لي."
-                  : inferredType === "apartment"
-                    ? "حياك الله 👌 خلني أفصّل لك حسب طلبك — أي منطقة، وميزانيتك تقريباً كم؟"
-                    : inferredType === "house" || inferredType === "villa"
-                      ? "حياك الله 👌 خلني أفصّل لك حسب طلبك — أي منطقة، وميزانيتك تقريباً كم؟"
-                      : "حياك الله 👌 في أي منطقة تبحث، وما اللي يناسبك بالضبط؟",
-              ];
-            } else {
-              clarifyingQuestionsFinal = [
-                inferredType === "chalet"
-                  ? "Welcome 👌 let me tailor this for you — which area, how many nights, and any budget in mind?"
-                  : inferredType === "apartment"
-                    ? "Welcome 👌 let me tailor this for you — which area, and roughly what budget?"
-                    : inferredType === "house" || inferredType === "villa"
-                      ? "Welcome 👌 let me tailor this for you — which area, and roughly what budget?"
-                      : "Welcome 👌 which area are you searching in, and what exactly do you need?",
-              ];
-            }
-          }
-        }
       }
 
       if (!paramsPatch.areaCode && parsed.detectedAreaCode) {
@@ -1588,6 +1587,39 @@ export const aqaraiAgentAnalyze = onCall(
       if (paramsPatch.investmentFlag != null) finalParamsPatch.investmentFlag = paramsPatch.investmentFlag;
 
       const finalResetFilters = parsed.isNewSearch ? true : resetFilters;
+
+      // HARD GUARD (no-area fallback).
+      //   The LLM occasionally sets is_complete=true on "ابي شاليه للايجار"
+      //   even though the user hasn't told us WHERE. That triggers a no-area
+      //   query, lands on zero results, and surfaces the "ما نزل شي" copy
+      //   while the normal search page is full of chalets — which is the
+      //   exact bug the product team flagged. We refuse to run a no-area
+      //   search and instead ask one warm, type-aware clarifying question.
+      //
+      //   Short-circuit intents (greeting/booking_intent/hesitation) already
+      //   returned above; reference_listing sets is_complete=true against a
+      //   concrete propertyId, so it has its own data and is excluded here.
+      const finalAreaCode =
+        typeof finalParamsPatch.areaCode === "string"
+          ? (finalParamsPatch.areaCode as string).trim()
+          : "";
+      if (
+        !referencedPropertyId &&
+        intent !== "greeting" &&
+        intent !== "booking_intent" &&
+        intent !== "hesitation" &&
+        finalAreaCode === ""
+      ) {
+        isCompleteFinal = false;
+        if (clarifyingQuestionsFinal.length === 0) {
+          const inferredType =
+            (typeof finalParamsPatch.type === "string" && (finalParamsPatch.type as string).trim()) ||
+            (typeof paramsPatch.type === "string" && (paramsPatch.type as string).trim()) ||
+            (kuwaiti.propertyType ? String(kuwaiti.propertyType) : "") ||
+            "";
+          clarifyingQuestionsFinal = [buildAreaClarifyQuestion(inferredType, locale)];
+        }
+      }
 
       const out: Record<string, unknown> = {
         intent,
