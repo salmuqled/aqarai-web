@@ -34,10 +34,11 @@ function buildPriceRangeInsight(
   locale: string
 ): string {
   if (!range) return "";
+  if (range.min === range.max) return "";
   if (locale === "ar") {
-    return `لاحظت أن أغلب العقارات في ${areaLabel} حالياً بين ${range.min.toLocaleString("ar")} و ${range.max.toLocaleString("ar")} دينار.`;
+    return `للمرجع: متوسط الأسعار في ${areaLabel} حالياً بين ${range.min.toLocaleString("ar")} و${range.max.toLocaleString("ar")} دينار.`;
   }
-  return `Most properties in ${areaLabel} are currently between ${range.min.toLocaleString()} and ${range.max.toLocaleString()} KWD.`;
+  return `For reference: prices in ${areaLabel} are running between ${range.min.toLocaleString()} and ${range.max.toLocaleString()} KWD.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,16 +110,18 @@ export async function getMarketSignal(
 }
 
 const MARKET_INSIGHT_AR: Record<MarketSignal, string> = {
-  high_demand_low_supply: "حالياً الطلب على هذا النوع من العقارات في {area} مرتفع والعروض قليلة.",
-  high_demand: "فيه طلب ملحوظ حالياً على هذا النوع من العقارات في {area}.",
-  low_demand: "حالياً الطلب منخفض نسبياً على هذا النوع من العقارات في {area}.",
+  high_demand_low_supply:
+    "بهالفترة الطلب على هالنوع في {area} مرتفع والمعروض محدود — والأسعار عادة تمشي أعلى شوي.",
+  high_demand: "بهالفترة فيه طلب ملحوظ على هالنوع في {area}.",
+  low_demand: "الطلب حالياً هادئ على هالنوع في {area} — يعني فرصة تفاوض أوسع.",
   normal: "",
 };
 
 const MARKET_INSIGHT_EN: Record<MarketSignal, string> = {
-  high_demand_low_supply: "Demand for this type of property in {area} is high right now and supply is low.",
-  high_demand: "There is noticeable demand for this type of property in {area} at the moment.",
-  low_demand: "Demand for this type of property in {area} is relatively low at the moment.",
+  high_demand_low_supply:
+    "Demand for this type in {area} is high right now and supply is tight — prices usually run a bit higher in this window.",
+  high_demand: "There's real pull on this type in {area} at the moment.",
+  low_demand: "Demand on this type in {area} is quieter right now — room to negotiate.",
   normal: "",
 };
 
@@ -144,9 +147,9 @@ function buildBestDealInsightText(
   const diff = Math.round(averagePrice - price);
   if (diff <= 0) return "";
   if (locale === "ar") {
-    return `ملاحظة: هذا العقار سعره أقل من متوسط السوق في ${areaLabel} بحوالي ${diff.toLocaleString("ar")} دينار.`;
+    return `إشارة مفيدة: سعره أقل من متوسط ${areaLabel} بحوالي ${diff.toLocaleString("ar")} دينار — يعتبر سعر مُريح.`;
   }
-  return `Note: this property is priced about ${diff.toLocaleString()} KWD below the average in ${areaLabel}.`;
+  return `Useful signal: priced about ${diff.toLocaleString()} KWD below the average in ${areaLabel} — solid value.`;
 }
 
 // ---------------------------------------------------------------------------

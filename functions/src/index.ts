@@ -169,56 +169,15 @@ export const setAdminClaim = onCall({ region: "us-central1" }, async (request) =
    Daily rental property search (callable; optional date availability)
 -------------------------------------------------------- */
 const SEARCH_DAILY_PROPERTIES_PAGE_SIZE = 20;
-const SEARCH_DAILY_PROPERTY_ID_IN_CHUNK = 30;
 const SEARCH_DAILY_MAX_SCAN_PAGES = 40;
 
-/** Same hold window as chalet booking `pending_payment` (must stay aligned). */
-const SEARCH_DAILY_PENDING_PAYMENT_HOLD_MS = 5 * 60 * 1000;
-
-function searchDailyPendingPaymentStillHolds(
-  data: admin.firestore.DocumentData,
-  nowMs: number
-): boolean {
-  const st = typeof data.status === "string" ? data.status.trim() : "";
-  if (st !== "pending_payment") return false;
-  const exp = data.expiresAt;
-  if (exp instanceof admin.firestore.Timestamp) {
-    return exp.toMillis() > nowMs;
-  }
-  const cr = data.createdAt;
-  if (cr instanceof admin.firestore.Timestamp) {
-    return cr.toMillis() + SEARCH_DAILY_PENDING_PAYMENT_HOLD_MS > nowMs;
-  }
-  return true;
-}
-
-function searchDailyRangesOverlap(
-  startA: admin.firestore.Timestamp,
-  endA: admin.firestore.Timestamp,
-  startB: admin.firestore.Timestamp,
-  endB: admin.firestore.Timestamp
-): boolean {
-  return startA.toMillis() < endB.toMillis() && endA.toMillis() > startB.toMillis();
-}
-
-function parseSearchDailyDateInput(v: unknown): admin.firestore.Timestamp | null {
-  if (v == null || v === "") return null;
-  if (v instanceof admin.firestore.Timestamp) return v;
-  if (typeof v === "object" && v !== null && "seconds" in v) {
-    const o = v as { seconds: number; nanoseconds?: number };
-    if (typeof o.seconds === "number") {
-      return new admin.firestore.Timestamp(o.seconds, o.nanoseconds ?? 0);
-    }
-  }
-  if (typeof v === "number" && !Number.isNaN(v)) {
-    return admin.firestore.Timestamp.fromMillis(Math.trunc(v));
-  }
-  if (typeof v === "string") {
-    const ms = Date.parse(v);
-    if (!Number.isNaN(ms)) return admin.firestore.Timestamp.fromMillis(ms);
-  }
-  return null;
-}
+// Availability primitives are owned by `./shared_availability`. Re-import the
+// ones this file still references so the only runtime dependency on them is a
+// single import (no duplicated overlap math anywhere else in the codebase).
+import {
+  parseIsoToTimestamp as parseSearchDailyDateInput,
+  fetchUnavailablePropertyIdsBatched as fetchUnavailablePropertyIdsSearchDaily,
+} from "./shared_availability";
 
 function buildSearchDailyBaseQuery(
   db: admin.firestore.Firestore,
@@ -232,51 +191,6 @@ function buildSearchDailyBaseQuery(
     .where("isActive", "==", true)
     .orderBy("createdAt", "desc")
     .orderBy(admin.firestore.FieldPath.documentId(), "desc");
-}
-
-async function fetchUnavailablePropertyIdsSearchDaily(
-  db: admin.firestore.Firestore,
-  propertyIds: string[],
-  reqStart: admin.firestore.Timestamp,
-  reqEnd: admin.firestore.Timestamp,
-  nowMs: number
-): Promise<Set<string>> {
-  const out = new Set<string>();
-  if (propertyIds.length === 0) return out;
-
-  for (let i = 0; i < propertyIds.length; i += SEARCH_DAILY_PROPERTY_ID_IN_CHUNK) {
-    const chunk = propertyIds.slice(i, i + SEARCH_DAILY_PROPERTY_ID_IN_CHUNK);
-    const [blocksSnap, bookingsSnap] = await Promise.all([
-      db
-        .collection("blocked_dates")
-        .where("propertyId", "in", chunk)
-        .where("startDate", "<=", reqEnd)
-        .get(),
-      db.collection("bookings").where("propertyId", "in", chunk).get(),
-    ]);
-
-    for (const doc of blocksSnap.docs) {
-      const d = doc.data();
-      const pid = typeof d.propertyId === "string" ? d.propertyId : "";
-      const bs = d.startDate as admin.firestore.Timestamp | undefined;
-      const be = d.endDate as admin.firestore.Timestamp | undefined;
-      if (!pid || !bs || !be) continue;
-      if (searchDailyRangesOverlap(reqStart, reqEnd, bs, be)) out.add(pid);
-    }
-
-    for (const doc of bookingsSnap.docs) {
-      const d = doc.data();
-      const pid = typeof d.propertyId === "string" ? d.propertyId : "";
-      const st = typeof d.status === "string" ? d.status.trim() : "";
-      if (st !== "pending_payment" && st !== "confirmed") continue;
-      if (st === "pending_payment" && !searchDailyPendingPaymentStillHolds(d, nowMs)) continue;
-      const bs = d.startDate as admin.firestore.Timestamp | undefined;
-      const be = d.endDate as admin.firestore.Timestamp | undefined;
-      if (!pid || !bs || !be) continue;
-      if (searchDailyRangesOverlap(reqStart, reqEnd, bs, be)) out.add(pid);
-    }
-  }
-  return out;
 }
 
 function computeSearchDailyScore(
@@ -595,6 +509,8 @@ export {
   cancelBookingPendingPayment,
 } from "./chalet_booking_payment_myfatoorah";
 export { getTopDemandChalets } from "./get_top_demand_chalets";
+export { filterChatAvailability } from "./chat_availability";
+export { generateChatSmartSuggestions } from "./smart_suggestions";
 export {
   markChaletBookingTransactionPaid,
   processChaletBookingRefund,

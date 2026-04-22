@@ -540,6 +540,9 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
           final bool hasDriverRoom = data['hasDriverRoom'] ?? false;
           final bool hasLaundryRoom = data['hasLaundryRoom'] ?? false;
           final bool hasGarden = data['hasGarden'] ?? false;
+          final bool hasPoolIndoor = data['hasPoolIndoor'] ?? false;
+          final bool hasPoolOutdoor = data['hasPoolOutdoor'] ?? false;
+          final bool isBeachfront = data['isBeachfront'] ?? false;
 
           return Scaffold(
             backgroundColor: const Color(0xFFF7F7F7),
@@ -877,6 +880,9 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   hasDriverRoom,
                   hasLaundryRoom,
                   hasGarden,
+                  hasPoolIndoor,
+                  hasPoolOutdoor,
+                  isBeachfront,
                 ),
 
                 const SizedBox(height: 16),
@@ -1686,6 +1692,9 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     bool hasDriverRoom,
     bool hasLaundryRoom,
     bool hasGarden,
+    bool hasPoolIndoor,
+    bool hasPoolOutdoor,
+    bool isBeachfront,
   ) {
     final loc = AppLocalizations.of(context)!;
 
@@ -1702,6 +1711,9 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
       _featureItem("${loc.hasDriverRoom}: ${hasDriverRoom ? "✓" : "✗"}"),
       _featureItem("${loc.hasLaundryRoom}: ${hasLaundryRoom ? "✓" : "✗"}"),
       _featureItem("${loc.hasGarden}: ${hasGarden ? "✓" : "✗"}"),
+      _featureItem("${loc.hasPoolIndoor}: ${hasPoolIndoor ? "✓" : "✗"}"),
+      _featureItem("${loc.hasPoolOutdoor}: ${hasPoolOutdoor ? "✓" : "✗"}"),
+      _featureItem("${loc.isBeachfront}: ${isBeachfront ? "✓" : "✗"}"),
     ];
 
     return Container(

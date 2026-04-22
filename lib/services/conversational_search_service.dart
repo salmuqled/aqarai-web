@@ -2,9 +2,11 @@
 // Phase 1: تحليل رسالة المستخدم (عربي/إنجليزي) واستخراج فلاتر + أسئلة توضيحية + بناء استعلام Firestore
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 import 'package:aqarai_app/data/governorates_data_ar.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
+import 'package:aqarai_app/services/chat_analytics_service.dart';
 
 /// نتيجة تحليل رسالة البحث المحادثي
 class ConversationalSearchResult {
@@ -20,6 +22,18 @@ class ConversationalSearchResult {
 }
 
 /// فلاتر مستخرجة من النص أو من خريطة الـ Agent
+///
+/// Date Intelligence Layer contract (mirrors `functions/src/search_context.ts`):
+/// - [startDate] is the inclusive check-in day (UTC midnight).
+/// - [endDate] is the **exclusive** check-out day (hotel convention — same as
+///   `chalet_booking_widget.dart` which calculates
+///   `nights = endDate.difference(startDate).inDays`).
+/// - [nights] is redundant with the two dates but carried alongside so any
+///   downstream UI / logger doesn't have to recompute.
+///
+/// Safety invariant: either ALL THREE fields are present and self-consistent
+/// (`endDate.isAfter(startDate) && nights >= 1`), or NONE of them are. Partial
+/// date triples are rejected at parse time — see [parseFiltersFromMap].
 class ParsedFilters {
   final String? areaCode;
   final String? governorateCode;
@@ -28,6 +42,16 @@ class ParsedFilters {
   final double? maxPrice;
   final int? bedrooms; // roomCount في Firestore
 
+  /// Inclusive check-in day (UTC midnight). Null when the user has not yet
+  /// provided a travel window in chat.
+  final DateTime? startDate;
+
+  /// Exclusive check-out day (UTC midnight), hotel convention.
+  final DateTime? endDate;
+
+  /// Whole nights between [startDate] and [endDate]. Always >= 1 when set.
+  final int? nights;
+
   const ParsedFilters({
     this.areaCode,
     this.governorateCode,
@@ -35,9 +59,20 @@ class ParsedFilters {
     this.propertyType,
     this.maxPrice,
     this.bedrooms,
+    this.startDate,
+    this.endDate,
+    this.nights,
   });
 
   bool get hasArea => areaCode != null && areaCode!.isNotEmpty;
+
+  /// True only when the full date triple is present AND consistent.
+  bool get hasDateRange =>
+      startDate != null &&
+      endDate != null &&
+      nights != null &&
+      nights! >= 1 &&
+      endDate!.isAfter(startDate!);
 }
 
 /// خدمة البحث المحادثي — تحليل محلي بدون Cloud Function
@@ -262,6 +297,7 @@ class ConversationalSearchService {
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchMarketplaceMerged(
     ParsedFilters filters, {
     int limitPerCategory = 60,
+    bool applyAvailabilityGate = true,
   }) async {
     final n = await _normalMarketplaceQuery(filters).limit(limitPerCategory).get();
     final c = await _chaletMarketplaceQuery(filters).limit(limitPerCategory).get();
@@ -272,14 +308,144 @@ class ConversationalSearchService {
     for (final d in c.docs) {
       byId[d.id] = d;
     }
-    final list = byId.values.toList();
+    var list = byId.values
+        .where((d) => listingDataIsPubliclyDiscoverable(d.data()))
+        .toList();
+
+    // Availability gate (AI chat). Only applies to date-based rental queries:
+    //   - `filters.hasDateRange` must be true (Date Intelligence Layer triple).
+    //   - `filters.serviceType == "rent"`.
+    // Within the result set, we further narrow to listings that are actually
+    // date-bookable (`type == 'chalet'` OR `rentalType == 'daily'`). Listings
+    // that don't match those rules (monthly rentals, sales) are passed through
+    // untouched — they have no booking calendar so availability has no meaning
+    // for them. This preserves pre-existing behavior for all non-daily flows.
+    //
+    // `applyAvailabilityGate: false` lets the Smart Suggestions pipeline fetch
+    // the *pre-gate* candidate pool so it can probe shifted windows against
+    // actual data (see assistant_page → `_fetchSmartSuggestions`).
+    if (applyAvailabilityGate) {
+      list = await _applyChatAvailabilityGate(list, filters);
+    }
+
     int ms(Timestamp? t) => t?.millisecondsSinceEpoch ?? 0;
     list.sort((a, b) => ms(b.data()['createdAt'] as Timestamp?).compareTo(
           ms(a.data()['createdAt'] as Timestamp?),
         ));
-    return list
-        .where((d) => listingDataIsPubliclyDiscoverable(d.data()))
-        .toList();
+
+    // Analytics: only emit `search_executed` / `search_empty` for gated
+    // (user-facing) searches. Pre-gate fetches driven by the Smart Suggestions
+    // engine (`applyAvailabilityGate: false`) are internal probes and would
+    // otherwise double-count every search.
+    if (applyAvailabilityGate) {
+      _logSearchEvents(filters: filters, resultCount: list.length);
+    }
+    return list;
+  }
+
+  /// Emits `search_executed` for every gated search, plus `search_empty` when
+  /// the result set is empty. Fully fire-and-forget — never awaited, never
+  /// throws.
+  void _logSearchEvents({
+    required ParsedFilters filters,
+    required int resultCount,
+  }) {
+    try {
+      final filtersPayload = <String, dynamic>{
+        if (filters.serviceType != null) 'serviceType': filters.serviceType,
+        if (filters.propertyType != null) 'propertyType': filters.propertyType,
+        if (filters.areaCode != null) 'areaCode': filters.areaCode,
+        if (filters.governorateCode != null)
+          'governorateCode': filters.governorateCode,
+        if (filters.maxPrice != null) 'maxPrice': filters.maxPrice,
+        if (filters.bedrooms != null) 'bedrooms': filters.bedrooms,
+        if (filters.nights != null) 'nights': filters.nights,
+      };
+      final svc = (filters.serviceType ?? '').trim().toLowerCase();
+
+      ChatAnalyticsService().logEvent(
+        ChatAnalyticsEvents.searchExecuted,
+        <String, dynamic>{
+          'resultCount': resultCount,
+          'filters': filtersPayload,
+          'hasDateRange': filters.hasDateRange,
+          'serviceType': svc.isEmpty ? null : svc,
+        },
+      );
+      if (resultCount == 0) {
+        ChatAnalyticsService().logEvent(
+          ChatAnalyticsEvents.searchEmpty,
+          <String, dynamic>{
+            'filters': filtersPayload,
+            'hasDateRange': filters.hasDateRange,
+          },
+        );
+      }
+    } catch (_) {
+      // never propagate analytics failures to the search path
+    }
+  }
+
+  /// Returns true when a listing document must pass the chat availability gate
+  /// (i.e. it's a date-bookable daily unit). Monthly rentals and sales short-
+  /// circuit and keep their current behavior.
+  static bool _isDateBookableDoc(Map<String, dynamic> d) {
+    final type = (d['type']?.toString() ?? '').trim().toLowerCase();
+    final rentalType = (d['rentalType']?.toString() ?? '').trim().toLowerCase();
+    return type == 'chalet' || rentalType == 'daily';
+  }
+
+  /// Calls the `filterChatAvailability` Cloud Function for the date-bookable
+  /// subset of [list] and returns a filtered list that only keeps:
+  ///   - non-date-bookable docs (sales, monthly rentals), unchanged, AND
+  ///   - date-bookable docs whose IDs are in the `allowedPropertyIds` response.
+  ///
+  /// The gate is a no-op when [filters] has no date range or is not a rental
+  /// query. All errors are swallowed (returns the input list unchanged) so a
+  /// transient availability-service outage cannot silently blank the chat.
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      _applyChatAvailabilityGate(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> list,
+    ParsedFilters filters,
+  ) async {
+    if (list.isEmpty) return list;
+    if (!filters.hasDateRange) return list;
+    final svc = (filters.serviceType ?? '').trim().toLowerCase();
+    if (svc != 'rent') return list;
+
+    final candidates = <String>[];
+    for (final d in list) {
+      if (_isDateBookableDoc(d.data())) candidates.add(d.id);
+    }
+    if (candidates.isEmpty) return list;
+
+    try {
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      final callable = functions.httpsCallable('filterChatAvailability');
+      final result = await callable.call(<String, dynamic>{
+        'propertyIds': candidates,
+        'startDate': filters.startDate!.toUtc().toIso8601String(),
+        'endDate': filters.endDate!.toUtc().toIso8601String(),
+      });
+      final data = result.data;
+      final raw = (data is Map && data['allowedPropertyIds'] is List)
+          ? (data['allowedPropertyIds'] as List)
+          : const <dynamic>[];
+      final allowed = <String>{
+        for (final x in raw)
+          if (x is String && x.isNotEmpty) x,
+      };
+      return list
+          .where((d) => !_isDateBookableDoc(d.data()) || allowed.contains(d.id))
+          .toList();
+    } catch (err) {
+      // Fail-open: on availability service outage, surface listings as-is
+      // rather than break the entire chat result set. The booking form itself
+      // is the final authoritative gate (`checkBookingAvailability`).
+      // ignore: avoid_print
+      print('chat_availability_gate_error: $err');
+      return list;
+    }
   }
 
   /// Nearby: sequential area scans (no `whereIn` on areaCode).
@@ -302,6 +468,9 @@ class ConversationalSearchService {
         propertyType: baseFilters.propertyType,
         maxPrice: baseFilters.maxPrice,
         bedrooms: baseFilters.bedrooms,
+        startDate: baseFilters.startDate,
+        endDate: baseFilters.endDate,
+        nights: baseFilters.nights,
       );
       final part = await fetchMarketplaceMerged(pf, limitPerCategory: limitPerAreaBranch);
       for (final d in part) {
@@ -365,6 +534,9 @@ class ConversationalSearchService {
               ? int.tryParse(filters['bedrooms'].toString())
               : null);
     final governorateCode = filters['governorateCode']?.toString().trim();
+
+    final dateTriple = _parseDateTriple(filters);
+
     return ParsedFilters(
       areaCode: areaCode?.isNotEmpty == true ? areaCode : null,
       governorateCode: governorateCode?.isNotEmpty == true ? governorateCode : null,
@@ -372,16 +544,69 @@ class ConversationalSearchService {
       propertyType: type?.isNotEmpty == true ? type : null,
       maxPrice: budget != null && budget > 0 ? budget : null,
       bedrooms: bedrooms != null && bedrooms > 0 ? bedrooms : null,
+      startDate: dateTriple?.startDate,
+      endDate: dateTriple?.endDate,
+      nights: dateTriple?.nights,
     );
+  }
+
+  /// Defensive parser for the `startDate / endDate / nights` triple coming from
+  /// either the Agent (`params_patch`) or persisted `_currentFilters` on the
+  /// client. Returns null unless BOTH dates parse successfully AND the derived
+  /// night count falls within a sane [1..365] window. Partial triples are
+  /// rejected (no assumption) — this mirrors the backend contract defined in
+  /// `functions/src/context_updater.ts`.
+  static _DateTriple? _parseDateTriple(Map<String, dynamic> filters) {
+    final start = _coerceIsoDate(filters['startDate']);
+    final end = _coerceIsoDate(filters['endDate']);
+    if (start == null || end == null) return null;
+    if (!end.isAfter(start)) return null;
+    final diff = end.difference(start).inDays;
+    if (diff < 1 || diff > 365) return null;
+    final rawNights = filters['nights'];
+    int nights = diff;
+    if (rawNights is int && rawNights > 0) {
+      nights = rawNights;
+    } else if (rawNights is num && rawNights > 0) {
+      nights = rawNights.round();
+    } else if (rawNights is String && rawNights.trim().isNotEmpty) {
+      nights = int.tryParse(rawNights.trim()) ?? diff;
+    }
+    if (nights <= 0) nights = diff;
+    return _DateTriple(startDate: start, endDate: end, nights: nights);
+  }
+
+  /// Coerces an arbitrary value into a UTC `DateTime`. Handles:
+  ///   - ISO-8601 strings (wire format used by `functions/src/search_context.ts`)
+  ///   - millis (num)
+  ///   - `DateTime`
+  ///   - Firestore `Timestamp`
+  /// Returns null on anything else.
+  static DateTime? _coerceIsoDate(dynamic v) {
+    if (v == null) return null;
+    if (v is DateTime) return v.toUtc();
+    if (v is Timestamp) return v.toDate().toUtc();
+    if (v is num) {
+      if (!v.isFinite) return null;
+      return DateTime.fromMillisecondsSinceEpoch(v.toInt(), isUtc: true);
+    }
+    if (v is String) {
+      final s = v.trim();
+      if (s.isEmpty) return null;
+      return DateTime.tryParse(s)?.toUtc();
+    }
+    return null;
   }
 
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchMarketplaceMergedFromMap(
     Map<String, dynamic> filters, {
     int limitPerCategory = 60,
+    bool applyAvailabilityGate = true,
   }) =>
       fetchMarketplaceMerged(
         parseFiltersFromMap(filters),
         limitPerCategory: limitPerCategory,
+        applyAvailabilityGate: applyAvailabilityGate,
       );
 
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> fetchNearbyMarketplaceMergedFromMap(
@@ -389,4 +614,17 @@ class ConversationalSearchService {
     List<String> nearbyAreaCodes,
   ) =>
       fetchNearbyMarketplaceMerged(parseFiltersFromMap(filters), nearbyAreaCodes);
+}
+
+/// Internal plain-old-data carrier for the validated date triple. Never
+/// exposed publicly — consumers use [ParsedFilters.startDate/endDate/nights].
+class _DateTriple {
+  final DateTime startDate;
+  final DateTime endDate;
+  final int nights;
+  const _DateTriple({
+    required this.startDate,
+    required this.endDate,
+    required this.nights,
+  });
 }

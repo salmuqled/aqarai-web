@@ -545,6 +545,24 @@ abstract class AppLocalizations {
   /// **'Garden'**
   String get hasGarden;
 
+  /// Indoor pool
+  ///
+  /// In en, this message translates to:
+  /// **'Indoor Pool'**
+  String get hasPoolIndoor;
+
+  /// Outdoor pool
+  ///
+  /// In en, this message translates to:
+  /// **'Outdoor Pool'**
+  String get hasPoolOutdoor;
+
+  /// Property sits directly on the sea
+  ///
+  /// In en, this message translates to:
+  /// **'Beachfront (on the sea)'**
+  String get isBeachfront;
+
   /// Description
   ///
   /// In en, this message translates to:

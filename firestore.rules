@@ -122,6 +122,9 @@ service cloud.firestore {
           'hasDriverRoom',
           'hasLaundryRoom',
           'hasGarden',
+          'hasPoolIndoor',
+          'hasPoolOutdoor',
+          'isBeachfront',
 
           // Media
           'images',
@@ -454,6 +457,30 @@ service cloud.firestore {
           'image_upload_retry',
           'image_upload_success'
         ];
+      allow update, delete: if false;
+    }
+
+    /* AI chat analytics stream (append-only; signed-in, owner-scoped writes).
+       Events: suggestion_impression / suggestion_click / suggestion_result /
+               search_executed / search_empty
+       Admin-only read; no update/delete to preserve BI integrity. */
+    match /analytics_events/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+             'eventType', 'userId', 'data',
+             'createdAt', 'clientEpochMs', 'serverReceivedAt'
+           ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.eventType is string
+        && request.resource.data.eventType in [
+             'suggestion_impression',
+             'suggestion_click',
+             'suggestion_result',
+             'search_executed',
+             'search_empty'
+           ]
+        && request.resource.data.data is map;
       allow update, delete: if false;
     }
 

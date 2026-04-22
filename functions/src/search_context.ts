@@ -23,10 +23,50 @@ export interface SearchContext {
   intent?: BuyerIntent;
   lastModifier?: string;
   conversationStage?: ConversationStage;
+
+  // Date Intelligence Layer — hotel convention: endDate is exclusive check-out.
+  // All three fields MUST be set together (parser enforces). Stored as ISO-8601
+  // UTC midnight strings to survive JSON transport between Functions and Flutter.
+  /** Inclusive check-in day, ISO-8601 UTC midnight. */
+  startDate?: string;
+  /** Exclusive check-out day, ISO-8601 UTC midnight. */
+  endDate?: string;
+  /** Whole nights (endDate - startDate). Always >= 1 when present. */
+  nights?: number;
 }
 
 export function createEmptySearchContext(): SearchContext {
   return {};
+}
+
+/**
+ * Coerce any raw date-ish input (ISO string, millis number, Firestore Timestamp
+ * POJO with `seconds`, Date) into an ISO-8601 UTC midnight string. Returns null
+ * on any parse failure or empty input — callers MUST treat null as "absent".
+ */
+export function coerceDateToIsoUtc(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return value.toISOString();
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    return new Date(value).toISOString();
+  }
+  if (typeof value === "string") {
+    const ms = Date.parse(value);
+    if (Number.isNaN(ms)) return null;
+    return new Date(ms).toISOString();
+  }
+  if (typeof value === "object") {
+    const rec = value as { seconds?: unknown; _seconds?: unknown };
+    const s = rec.seconds ?? rec._seconds;
+    if (typeof s === "number" && Number.isFinite(s)) {
+      return new Date(s * 1000).toISOString();
+    }
+  }
+  return null;
 }
 
 /** Build SearchContext from client currentFilters (type maps to propertyType). */
@@ -42,6 +82,23 @@ export function getSearchContextFromFilters(filters: Record<string, unknown>): S
   if (budget != null && typeof budget === "number" && !Number.isNaN(budget)) ctx.budget = budget;
   const bedrooms = filters.bedrooms;
   if (bedrooms != null && typeof bedrooms === "number" && !Number.isNaN(bedrooms)) ctx.bedrooms = bedrooms;
+
+  const start = coerceDateToIsoUtc(filters.startDate);
+  const end = coerceDateToIsoUtc(filters.endDate);
+  if (start && end) {
+    const diffMs = Date.parse(end) - Date.parse(start);
+    const nights = Math.round(diffMs / 86_400_000);
+    if (nights >= 1 && nights <= 365) {
+      ctx.startDate = start;
+      ctx.endDate = end;
+      const rawNights = filters.nights;
+      const parsedNights =
+        typeof rawNights === "number" && Number.isFinite(rawNights)
+          ? Math.round(rawNights)
+          : nights;
+      ctx.nights = parsedNights > 0 ? parsedNights : nights;
+    }
+  }
   return ctx;
 }
 
@@ -53,5 +110,16 @@ export function contextToQueryFilters(context: SearchContext): Record<string, un
   if (context.serviceType != null && context.serviceType !== "") q.serviceType = context.serviceType;
   if (context.budget != null && !Number.isNaN(Number(context.budget))) q.budget = context.budget;
   if (context.bedrooms != null && !Number.isNaN(Number(context.bedrooms))) q.bedrooms = context.bedrooms;
+  // Date Intelligence: only propagate when the full triple is present and consistent.
+  if (
+    context.startDate != null &&
+    context.endDate != null &&
+    context.nights != null &&
+    context.nights > 0
+  ) {
+    q.startDate = context.startDate;
+    q.endDate = context.endDate;
+    q.nights = context.nights;
+  }
   return q;
 }

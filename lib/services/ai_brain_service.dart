@@ -299,8 +299,10 @@ class AiBrainService {
   /// When [userAskedForMore] is true and there is only one result, backend returns
   /// a message offering to search nearby areas instead of repeating the property.
   /// [rawMessage] is the user's last message, used for buyer intent (investment vs residential).
-  /// When [intent] is `top_demand_chalets`, the backend loads trending chalets and returns [ComposeMarketingOutput.results].
   /// Pass [currentFilters] and [last8Messages] for personalized ranking (budget / area from chat).
+  /// NOTE: the `top_demand_chalets` intent is deprecated on the chat surface —
+  /// the AI always serves the user's own specs. Any stale caller that passes
+  /// that intent falls through to the standard customer-matched compose path.
   Future<ComposeMarketingOutput> composeMarketingReply({
     required List<Map<String, dynamic>> top3Results,
     bool isAr = true,
@@ -393,6 +395,46 @@ class AiBrainService {
     } on TimeoutException catch (e) {
       _logCallableFailure('aqaraiAgentRankAndCompose', e);
       rethrow;
+    }
+  }
+
+  /// Invokes `generateChatSmartSuggestions` when the chat just produced a thin
+  /// result set. Returns `null` on any failure — callers should fall back to
+  /// the pre-existing "no results" copy rather than surface a noisy error to
+  /// the user.
+  ///
+  /// Contract mirrors `functions/src/smart_suggestions.ts`:
+  ///   - `filters` is the Flutter-side filter map (same keys the chat already
+  ///     passes to `aqaraiAgentAnalyze`, plus the Date Intelligence triple).
+  ///   - `candidatePropertyIds` is the *post-discoverability, pre-rank* pool
+  ///     the chat just fetched. It is the pool the server's availability probe
+  ///     is allowed to read against — cap of 200 applies.
+  ///   - `nearbyAreaCodes` is the client-curated neighbor list (the server
+  ///     does not own an area graph).
+  ///
+  /// Returns decoded JSON including: `triggered`, `failureReason`,
+  /// `alternatives[]`, `banner_ar`, `banner_en`.
+  Future<Map<String, dynamic>?> generateChatSmartSuggestions({
+    required Map<String, dynamic> filters,
+    required int originalResultCount,
+    List<String> candidatePropertyIds = const [],
+    List<String> nearbyAreaCodes = const [],
+  }) async {
+    try {
+      final callable = _callable('generateChatSmartSuggestions');
+      final payload = <String, dynamic>{
+        'filters': filters,
+        'originalResultCount': originalResultCount,
+        'candidatePropertyIds': candidatePropertyIds,
+        'nearbyAreaCodes': nearbyAreaCodes,
+      };
+      final res = await callable
+          .call(payload)
+          .timeout(const Duration(seconds: 15));
+      return _asMap(res.data);
+    } catch (e) {
+      _logCallableFailure('generateChatSmartSuggestions', e);
+      return null;
     }
   }
 }

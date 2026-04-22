@@ -2,7 +2,7 @@
  * Pure SearchContext mutation. No Firestore, no I/O.
  */
 import type { SearchContext } from "./search_context";
-import { createEmptySearchContext } from "./search_context";
+import { createEmptySearchContext, coerceDateToIsoUtc } from "./search_context";
 import type { ParsedIntentResult } from "./intent_parser";
 
 /** Apply params patch onto context; new values override. Returns new context. */
@@ -26,6 +26,30 @@ export function applyParamsToContext(
   if (bedrooms != null && (typeof bedrooms === "number" || typeof bedrooms === "string")) {
     const n = typeof bedrooms === "number" ? bedrooms : Number(bedrooms);
     if (!Number.isNaN(n)) next.bedrooms = n;
+  }
+
+  // Date Intelligence Layer — only accept when both start/end are parseable AND
+  // end is strictly after start. A partial patch (start without end, or vice
+  // versa) is ignored to preserve the "do not assume" contract from the parser.
+  const start = coerceDateToIsoUtc(paramsPatch.startDate);
+  const end = coerceDateToIsoUtc(paramsPatch.endDate);
+  if (start && end) {
+    const diffMs = Date.parse(end) - Date.parse(start);
+    const nights = Math.round(diffMs / 86_400_000);
+    if (nights >= 1 && nights <= 365) {
+      next.startDate = start;
+      next.endDate = end;
+      const rawNights = paramsPatch.nights;
+      const parsedNights =
+        typeof rawNights === "number" && Number.isFinite(rawNights)
+          ? Math.round(rawNights)
+          : typeof rawNights === "string" && rawNights !== ""
+            ? Math.round(Number(rawNights))
+            : nights;
+      next.nights = Number.isFinite(parsedNights) && parsedNights > 0
+        ? parsedNights
+        : nights;
+    }
   }
   return next;
 }

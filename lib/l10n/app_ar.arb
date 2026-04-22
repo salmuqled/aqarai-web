@@ -226,6 +226,15 @@
   "hasGarden": "حديقة",
   "@hasGarden": { "description": "حديقة" },
 
+  "hasPoolIndoor": "مسبح داخلي",
+  "@hasPoolIndoor": { "description": "مسبح داخلي" },
+
+  "hasPoolOutdoor": "مسبح خارجي",
+  "@hasPoolOutdoor": { "description": "مسبح خارجي" },
+
+  "isBeachfront": "على البحر مباشرة",
+  "@isBeachfront": { "description": "العقار على البحر مباشرة" },
+
   "description": "الوصف",
   "@description": { "description": "الوصف" },
 

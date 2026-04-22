@@ -234,6 +234,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get hasGarden => 'حديقة';
 
   @override
+  String get hasPoolIndoor => 'مسبح داخلي';
+
+  @override
+  String get hasPoolOutdoor => 'مسبح خارجي';
+
+  @override
+  String get isBeachfront => 'على البحر مباشرة';
+
+  @override
   String get description => 'الوصف';
 
   @override

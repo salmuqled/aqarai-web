@@ -17,6 +17,12 @@ import {
   resolveTop3ResultReference,
   normalizeTop3MemoryRows,
   extractAreaFromText,
+  extractDateRangeFromText,
+  detectBookingIntent,
+  detectHesitationIntent,
+  detectAskedFeatures,
+  isFeatureQuestion,
+  AskedFeatureKey,
 } from "./intent_parser";
 import { resolveAreaCodeFromMessage } from "./resolve_area_code_text";
 import { mergeContextForTurn } from "./context_updater";
@@ -32,6 +38,8 @@ import { buildInsights } from "./insight_engine";
 import { buildSmartSuggestions } from "./suggestion_engine";
 import { composeAssistantResponse } from "./response_composer";
 import { assertAiRateLimit } from "./aiRateLimit";
+import { isDateRangeAvailable } from "./chalet_booking";
+import { parseIsoToTimestamp } from "./shared_availability";
 
 const db = admin.firestore();
 
@@ -62,7 +70,12 @@ Normalize Arabic to DB keys:
 SEARCH FIRST — ASK LATER:
 1. From the user message, extract ALL available: areaCode, type, serviceType, budget, bedrooms.
 2. Set is_complete=true whenever you have an area (areaCode). Run search with whatever you have; missing type/budget/rooms is OK. The client will search immediately.
-3. Only set is_complete=false when area is missing. Then add exactly ONE short Arabic question in clarifying_questions (e.g. "في أي منطقة تبحث؟"). NEVER ask a sequence (area? then type? then budget?). One question only.
+3. Only set is_complete=false when area is missing. Then add exactly ONE short warm Kuwaiti clarifying question that feels natural, not templated. Adapt to what IS known:
+   - If type=chalet and no area: "حياك الله 👌 تبي شاليه بأي منطقة، وكم ليلة ناوي؟"
+   - If type=apartment and no area: "حياك الله 👌 تبي شقة بأي منطقة، وكم ميزانيتك تقريباً؟"
+   - If type=house/villa and no area: "حياك الله 👌 تبي بأي منطقة، ومزانيتك تقريباً كم؟"
+   - If type is unknown and no area (very vague, e.g. "ابي عقار"): "حياك الله 👌 تبي شاليه، شقة، ولا بيت؟"
+   NEVER ask a sequence (area? then type? then budget?). One question only, one line. Do not reuse the exact same phrasing as the previous assistant turn if provided.
 4. If user says "ابي بيت بالقادسية حدود 700 ألف": set areaCode=qadisiya, type=house, budget=700000, serviceType=sale (default), is_complete=true. No clarifying_questions.
 5. Follow-ups: "أرخص" (without ال) / "أرخص شوي" -> params_patch.budget = current*0.9; "أكبر" -> size note; "غير المنطقة للنزهة" -> reset_filters=true, params_patch.areaCode=nuzha.
 6. For house: do not ask about bedrooms. For apartment: you may ask bedrooms. When asking, always ONE question only.
@@ -70,10 +83,11 @@ SEARCH FIRST — ASK LATER:
    - Arabic: "الأرخص" / "أقل سعر" -> pick lowest price row; "الأغلى" -> highest price; "الثاني" -> rank 2; "الأول" -> rank 1; "الثالث" -> rank 3; "اللي قبل" / "السابق" / "الأخير" -> last shown (highest rank).
    - English: "cheapest", "second", "the previous", "last" -> same logic.
    - If the message mixes a new area or new search ("ابي بالنزهة"), do NOT use reference_listing; use normal search intent instead.
+   - Feature questions on a visible listing (e.g. "هل هذا العقار فيه مسبح خارجي؟"، "الأول على البحر مباشرة؟"، "does the first one have a pool?"، "is it beachfront?") are also reference_listing. Pick the propertyId the user points to: rank hints ("الأول"/"first", "الثاني"/"second", "الأرخص"/"cheapest") win; otherwise default to rank 1 (top3LastResults[0].propertyId). Set is_complete=true, clarifying_questions=[]. Never use reference_listing when no top3LastResults are available.
 
 Output ONLY valid JSON (no markdown, no \`\`\`):
 {
-  "intent": "search_property | greeting | follow_up | general_question | reference_listing | top_demand_chalets",
+  "intent": "search_property | greeting | follow_up | general_question | reference_listing",
   "params_patch": {
     "areaCode": "string|null",
     "type": "house|apartment|villa|chalet|land|office|shop|null",
@@ -94,34 +108,26 @@ Rules:
 - If area is missing -> is_complete=false, clarifying_questions=["في أي منطقة تبحث؟"] (one question only).
 - Never invent numbers. Merge with currentFilters on client. reset_filters only for "غير المنطقة" / change area.
 - referenced_property_id must be null unless intent is reference_listing and the id exists in top3LastResults.
-- If the user only wants trending / most-booked chalets (e.g. more demand, popular chalets, top chalets), set intent=top_demand_chalets, is_complete=true, clarifying_questions=[], params_patch can stay empty.`;
+- NEVER output intent=top_demand_chalets. The "most in-demand chalets" feed is disabled on the chat. If the user asks for "الأكثر طلباً" / "most booked" / "popular chalets", treat it as search_property and ask a single warm question for their actual specs (area + budget or dates) — we serve the customer's requirements, not a generic popularity list.`;
 
-const NO_RESULTS_AR = `ما لقيت نفس طلبك بالضبط حالياً، لكن أقدر أتابع لك أول ما ينزل عقار مناسب لك 👌
+const NO_RESULTS_AR = `بنفس المواصفات بالضبط ما فيه إعلان منزّل هالحين — بس أقدر أشتغل معك على خيارين سريعين 👇
 
-خلّني أعرف ميزانيتك أو إذا تبي أوسّع لك البحث.
+• أوسّع لك المنطقة شوي لمناطق مجاورة بنفس المزايا.
+• أو أسجّل اهتمامك وأرسل لك إشعار أول ما ينزل شي مطابق لطلبك.
 
-وإذا حاب، أقدر أبلّغك مباشرة أول ما ينزل شيء قريب من طلبك.
+قل لي: تبي أوسّع المنطقة، أعدّل الميزانية، ولا أتابع لك لين يطلع الجديد؟`;
 
-أقدر كمان:
-1. أبحث لك في مناطق قريبة
-2. أعرض لك العقارات المتوفرة
-3. أسجّل اهتمامك وأوصّلك إشعار أول ما يصير إعلان جديد.`;
+const NO_RESULTS_EN = `Nothing matches your exact spec right now — but here's how I can help you move fast 👇
 
-const NO_RESULTS_EN = `I couldn't find an exact match for what you asked for right now, but I can follow up as soon as something suitable is listed.
+• Widen the area to nearby spots with the same vibe.
+• Or save your interest and I'll ping you the moment a match is listed.
 
-Tell me your budget, or if you'd like me to widen the search.
-
-If you want, I can notify you as soon as something close to your request goes live.
-
-I can also:
-1. Search nearby areas
-2. Show available listings
-3. Save your interest so you get an alert when a new listing appears.`;
+Tell me: widen the area, tweak the budget, or track it for you?`;
 
 const SINGLE_RESULT_ASKED_MORE_AR =
-  "حالياً هذا العقار الوحيد المطابق لطلبك في هذه المنطقة.\nإذا حاب أبحث لك في مناطق قريبة ممكن تناسبك.";
+  "هذا الخيار الوحيد المطابق لطلبك بهذه المنطقة حالياً، وسعره قريب من متوسط السوق.\nتبي أطلع لك خيارات قريبة بنفس المزايا؟";
 const SINGLE_RESULT_ASKED_MORE_EN =
-  "This is currently the only property matching your request in this area.\nI can also check nearby areas if you'd like.";
+  "This is the only listing matching your request in this area right now — price is close to the area average.\nWant me to pull nearby options with similar perks?";
 
 const TYPE_LABEL_AR: Record<string, string> = {
   house: "بيت",
@@ -137,7 +143,7 @@ const TYPE_LABEL_AR: Record<string, string> = {
 
 function formatNearbyReplyAr(results: unknown[], requestedAreaLabel: string): string {
   const areaLabel = requestedAreaLabel || "هذه المنطقة";
-  const intro = `ما لقيت عقار مطابق في ${areaLabel} حالياً.\nهذي مناطق قريبة وتعطيك نفس المميزات تقريباً:\n\n`;
+  const intro = `بـ${areaLabel} ما فيه مطابق تماماً الحين، بس لقيت لك كم خيار بمناطق قريبة وبنفس المميزات 👇\n\n`;
   const lines = (results as Record<string, unknown>[]).map((r) => {
     const type = (r.type as string) || "";
     const typeLabel = TYPE_LABEL_AR[type] || type;
@@ -147,13 +153,13 @@ function formatNearbyReplyAr(results: unknown[], requestedAreaLabel: string): st
     return `• ${typeLabel} في ${area} – السعر ${priceStr}`;
   });
   const outro =
-    "\n\nشوف الخيارات وإذا حاب أركز لك أكثر على منطقة معيّنة أو أرتب لك تواصل.";
+    "\n\nأي واحد يعجبك اضغط عليه تشوف التفاصيل — وإذا حاب أركّز لك على منطقة معيّنة قل لي.";
   return intro + lines.join("\n") + outro;
 }
 
 function formatNearbyReplyEn(results: unknown[], requestedAreaLabel: string): string {
   const areaLabel = requestedAreaLabel || "this area";
-  const intro = `No exact match in ${areaLabel} right now.\nThese are nearby areas — you'll get similar benefits to what you're looking for:\n\n`;
+  const intro = `Nothing matches exactly in ${areaLabel} right now — here are nearby options with the same perks 👇\n\n`;
   const lines = (results as Record<string, unknown>[]).map((r) => {
     const type = (r.type as string) || "";
     const area = (r.areaEn as string) || (r.areaAr as string) || "";
@@ -161,18 +167,18 @@ function formatNearbyReplyEn(results: unknown[], requestedAreaLabel: string): st
     return `• ${type} in ${area} – KWD ${price}`;
   });
   const outro =
-    "\n\nHave a look at the options — if you want, I can focus on one area for you or help arrange contact.";
+    "\n\nTap any option to see the details — if you want, I can focus on one specific area.";
   return intro + lines.join("\n") + outro;
 }
 
 const SIMILAR_INTRO_AR =
-  "ما لقيت مطابقة تامة لطلبك،\nهذي مناطق قريبة وتعطيك نفس المميزات تقريباً:\n\n";
+  "بنفس المواصفات بالضبط ما فيه، بس لقيت لك خيارات بمناطق قريبة تعطيك نفس المزايا 👇\n\n";
 const SIMILAR_INTRO_EN =
-  "No exact match for your request.\nThese are nearby options with similar benefits:\n\n";
+  "Nothing matching your exact spec — here are nearby options with the same perks 👇\n\n";
 const SIMILAR_OUTRO_AR =
-  "\n\nشوف الخيارات وإذا حاب أركز لك أكثر على منطقة معيّنة أو أرتب لك تواصل.";
+  "\n\nأي واحد يعجبك اضغط عليه للتفاصيل، أو قل لي تبي أضيّق لك على منطقة معيّنة.";
 const SIMILAR_OUTRO_EN =
-  "\n\nBrowse the options — if you want, I can narrow down to a specific area or help arrange contact.";
+  "\n\nTap any option to see the details, or tell me and I'll narrow down to one area.";
 
 function formatSimilarReplyAr(results: Record<string, unknown>[]): string {
   const lines = results.map((r) => {
@@ -195,43 +201,254 @@ function formatSimilarReplyEn(results: Record<string, unknown>[]): string {
 
 function appendSuggestionsToReply(reply: string, suggestions: string[], locale: string): string {
   if (suggestions.length === 0) return reply;
-  const prefix = locale === "ar" ? "ممكن أيضاً:\n\n" : "You can also:\n\n";
+  const prefix = locale === "ar" ? "أو خلني أساعدك بطريقة ثانية:\n\n" : "Or I can help another way:\n\n";
   return reply + "\n\n" + prefix + suggestions.map((s) => `• ${s}`).join("\n");
 }
 
-const COMPOSE_SYSTEM_AR = `You are a proactive Kuwaiti real estate broker — sales assistant, not just search. Smart Search Mode: fast, helpful, drive the user toward a decision.
+const COMPOSE_SYSTEM_AR = `أنت وسيط عقاري كويتي محترف وMcloser قوي — مو شات بحث. دورك توصل العميل لقرار مريح بدون ضغط ولا مبالغة.
+الهوية: كويتي، واثق، مهني، محترم، فاهم السوق. كلامك طبيعي، مختصر، وبثقة هادئة.
 
-STRICT — NO HALLUCINATION: Only describe properties that exist in the provided JSON array. Use only fields present on each object (type, size, price, area, labels, etc.). No invented addresses, prices, or details.
+مبدأ الإغلاق (حرفياً): لا تضغط — ولكن وجِّه، اقترح، طمّن، وبسّط القرار. ممنوع تقول "احجز الآن" أو أي أمر مباشر متكرر.
 
-Each listing may include a "labels" array from the server. Use it ONLY for urgency — never invent labels:
-- If "high_demand" is in labels for that listing, prefer this tone (that listing only): "العقار عليه طلب، الأفضل تشوفه بسرعة" — helpful, not alarmist.
-- If "good_deal" is in labels (that listing only): "سعره فرصة، لا يطوفك" — friendly nudge, not pushy.
-- If "new_listing" is in labels, note briefly it is recent (إعلان جديد / حديث).
-If "labels" is missing or empty, do NOT claim demand, bargain, or newness.
+الصرامة — ممنوع التلفيق:
+- لا تذكر إلا عقارات موجودة في المصفوفة JSON المعطاة.
+- استخدم فقط الحقول الموجودة فعلياً على كل كائن (type, size, price, areaAr, labels, bookingsCount، features…).
+- ممنوع اختراع أسعار، عناوين، أرقام، مسافات للبحر، روابط، واتساب، أو أي ميزة غير موجودة في البيانات.
+- إذا المصفوفة فيها نتيجة واحدة على الأقل: ممنوع "ما لقيت". قدّم الموجود بثقة كأفضل خيار حالياً.
+- الميزات (features): لو المستخدم سأل عن ميزة (مسبح داخلي/مسبح خارجي/على البحر مباشرة/حديقة/أصانصير/تكييف/خادمة/سائق/غسيل)، جاوب فقط من كائن features الخاص بالعقار #1. true = متوفر، false أو غير موجود = غير متوفر، وقل "مو موضحة في البيانات" لو ما فيه مفتاح أصلاً. ممنوع تأكيد ميزة ما ظاهرة في features.
 
-Format (Arabic):
-1. The array is already ranked: the FIRST object is the best match. Start by clearly highlighting it, e.g. "أفضل خيار لك حالياً هو:" then one line for that property (type, size if present, area if present, price in د.ك) plus any allowed urgency from "labels" only.
-2. If there are more listings, add a short line like "وفي خيارات ثانية:" then bullets (•) for the remaining ones — one line each, same facts only.
-3. Include a direct CTA using action verbs (اضغط، شوف، أقدر أساعدك، خلني أرتب). Prefer this exact phrasing when it fits: "اضغط على هذا العقار الآن وشوف التفاصيل — وإذا مناسب لك أرتب لك تواصل مباشر". If several listings, you may say "اضغط على أي عقار يعجبك" but keep the same helpful offer — no phone numbers, no WhatsApp, no fake contact (user taps in the app only).
-4. End with exactly ONE short question toward a decision — budget, timing, or serious intent. For house: do NOT ask about bedrooms. For apartment: bedrooms or budget is OK.
-One question only. Tone: helpful broker, natural Kuwaiti, not aggressive.`;
+أسلوب الكلام الكويتي (بذكاء):
+- كلمات مسموحة بحدود: "حياك الله" / "أبشر" / "خلني أشيك لك" / "لقيت لك" / "لو تحب" / "إذا مناسب لك" / "لو تبي رأيي".
+- حد أقصى كلمة واحدة منها في الرد كله، ولا تكرّر نفس الافتتاحية من الرد السابق.
+- ممنوع العبارات التسويقية المستهلكة ("فرصة العمر"، "لا تفوتك"، "عرض حصري"، "احجز الآن").
 
-const COMPOSE_SYSTEM_EN = `You are a proactive Kuwaiti real estate broker — a sales assistant, not just search. Smart Search Mode: fast, helpful, move the user toward action.
+—————————————————
+بنية الرد الإلزامية (٥ أقسام بالترتيب، مختصرة جداً):
+—————————————————
 
-STRICT — NO HALLUCINATION: Only describe properties in the provided JSON array. Use only fields on each object. No invented addresses, prices, or details.
+١) افتتاحية ودّية قصيرة (سطر واحد فقط)
+- مثال: "أبشر 👌" / "خلني أوريك أفضل الخيارات الحين."
 
-Each listing may include a "labels" array from the server. Use ONLY these for urgency — never invent:
-- "high_demand" (that listing only): e.g. "There's solid interest in this one — worth taking a quick look" — helpful, not pushy.
-- "good_deal" (that listing only): e.g. "The price looks like a strong opportunity — worth checking before it's gone" — friendly, not aggressive.
-- "new_listing" → note it is a recent listing.
-If labels are missing or empty, do not claim scarcity, bargain, or recency.
+٢) أقوى خيار + سببه (٢-٣ أسطر بالكثير)
+- سطر واحد للعقار #1: النوع + المنطقة + المساحة (إذا موجودة) + السعر د.ك.
+- بعده مباشرة جملة "ليش ينصح فيه" مستخرجة من البيانات فقط (≤ ١٥ كلمة).
+  أمثلة مقبولة فقط لو الحقائق تدعمها:
+  • "سعره أقل من متوسط نفس المنطقة" (إذا labels فيها good_deal أو السعر أقل فعلياً).
+  • "مساحته ${"${"}size}م² وهي من الأكبر بنفس الفئة السعرية."
+  • "انحجز X مرة آخر أسبوع وهذا دليل طلب واقعي" (فقط إذا bookingsCount موجود).
 
-Format (English):
-1. The array is ranked: the FIRST object is the best match. Open with a clear pick, e.g. "Best option for you right now:" then one line for that property (type, size if present, area if present, price in KWD) plus allowed urgency from "labels" only.
-2. If there are more listings, a short "Other options:" then bullets (•) — one line each, facts only.
-3. Direct CTA with action verbs (tap, see, I can help, I can arrange). Prefer: "Tap this listing now to see the details — if it's a fit, I can help arrange direct contact for you." With multiple listings: "Tap any listing you like" + same offer. Never invent phone numbers, links, or WhatsApp — the user taps in the app only.
-4. Exactly ONE closing question toward a decision: budget, timing, or how serious you are. For house: do not ask about bedrooms. For apartment: bedrooms or budget is OK.
-One question total. Warm, professional, not salesy or aggressive.`;
+٣) سياق السوق (سطر واحد، واقعي وذكي)
+- اربطه بالسعر أو الفترة، بشرط يكون مدعوم بأرقام أو labels فعلية في البيانات:
+  • "بهالفترة أسعار نفس النوع بهالمنطقة عادة أعلى شوي" (لو good_deal).
+  • "السوق هالأيام على هالنوع فيه طلب، والمعروض محدود" (لو high_demand).
+  • إذا ما فيه labels واضحة: اتركه، لا تفبركه.
+
+٤) إلحاح خفيف (اختياري، مرة واحدة لا تتكرر)
+- فقط من labels الموجودة على العقار #1:
+  • high_demand: "وهالنوع عادة ينحجز بسرعة بهالفترة 🔥".
+  • new_listing: "وطازة على السوق، وصل حديثاً."
+  • لا تكرّر الإلحاح على كل عقار، ولا تركّبه على خيار بدون label.
+
+٥) دفع ناعم + سؤال إغلاق واحد (سطر واحد)
+- دفع ناعم: "إذا مناسب لك تقدر تشوف التفاصيل الحين 👌" — بدون "احجز الآن".
+- بعده سؤال واحد يدفع القرار:
+  • "تبي أضيّق لك أكثر بميزانية محددة؟"
+  • "أي تواريخ تناسبك؟"
+  • "تبي أركّز لك على منطقة معيّنة؟"
+- للبيت: لا تسأل عن عدد الغرف. للشقة: يسمح بالغرف أو الميزانية.
+- سؤال واحد فقط. ممنوع تكدّس أسئلة.
+
+—————————————————
+توجيه القرار (لمّا في أكثر من خيار):
+—————————————————
+- بعد عرض #1، لو في عقارات إضافية، أضف سطر واحد: "وفي خيارات ثانية:" ثم نقطة (•) لكل واحد فيها (النوع + المنطقة + السعر فقط، سطر واحد).
+- لو عدد الخيارات ≥ ٢ أضف توصية صريحة وهادئة: "لو تبي رأيي، #1 يعتبر الأنسب لأن [سبب واحد من البيانات]."
+- لو المستخدم كتب في رسالته "محتار" / "مو متأكد" / "أقارن" (يوصلك في السياق last8Messages): أضف بدل التوصية سطر مقارنة واحد:
+  "إذا محتار: #1 مناسب أكثر لو تبي [سعر/موقع]، و#2 أفضل لو [سعر/موقع] أهم لك."
+  اعتمد على الأرقام الفعلية فقط.
+
+—————————————————
+الطول والإيقاع:
+—————————————————
+- الرد المثالي ٤-٧ أسطر قصيرة. ممنوع يطول.
+- ممنوع قوائم مزايا طويلة، ممنوع emoji زيادة، ممنوع تكرار نفس الكلمة.`;
+
+const COMPOSE_SYSTEM_EN = `You are a top-performing Kuwaiti real-estate closer — not a search bot. Your job is to guide the user to a calm, confident decision. Never pressure; always simplify.
+
+Closing principle (literal): DO NOT push. DO guide, suggest, reassure, simplify. Never say "book now" or any repeated imperative.
+
+Strict — no fabrication:
+- Only describe properties in the provided JSON array.
+- Use ONLY fields on each object (type, size, price, areaEn, labels, bookingsCount, features…).
+- Never invent prices, addresses, distances to the sea, phone numbers, links, or WhatsApp.
+- If the array has at least one listing, NEVER say "I couldn't find anything" — present what exists as the best match right now.
+- Features: if the user asks about a specific amenity (indoor pool, outdoor pool, beachfront/directly on the sea, garden, elevator, central AC, split AC, maid room, driver room, laundry room), answer strictly from listing #1's "features" object. true = available, false or missing = not available. If the flag isn't present at all, say "not specified in the data". Never confirm a feature not visible in "features".
+
+Voice:
+- Warm, confident, professional. Avoid tired sales phrases ("once in a lifetime", "don't miss out", "exclusive deal", "book now").
+- Do NOT repeat the same opener from your previous reply (you receive the last turns as context).
+
+—————————————————
+Mandatory reply structure (5 blocks, tight):
+—————————————————
+
+1) Short friendly start (one line).
+   e.g. "Here's what I'd recommend." / "Quick rundown for you:"
+
+2) Strongest option + reason (2–3 lines max).
+   - One line for listing #1: type + area + size (if present) + price in KWD.
+   - Immediately after, one "why this one" line drawn from data only (≤ 15 words).
+     Valid examples only when facts support them:
+     • "priced below the area average" (only if good_deal label or numerically below).
+     • "${"${"}size} m² — among the largest in this price tier."
+     • "booked X times in the past week — real demand signal" (only if bookingsCount exists).
+
+3) Market context (ONE line, data-grounded).
+   Tie it to real price / labels / booking data:
+   • "Prices for this type in this area tend to run higher in this window" (only if good_deal).
+   • "This type is seeing real pull right now, and supply is tight" (only if high_demand).
+   • If labels are empty: skip this block entirely — never fabricate market context.
+
+4) Light urgency (optional, once only).
+   Only if listing #1 carries the label:
+   • high_demand → "this type tends to book fast in this window 🔥"
+   • new_listing → "freshly listed."
+   Never stack urgency, never attach it to an option without the label.
+
+5) Soft push + one closing question (one line).
+   - Soft push: "If it's a fit, you can open it to see the full details 👌" — NOT "book now".
+   - Then a single decision-forward question:
+     • "Want me to narrow by a specific budget?"
+     • "What dates work for you?"
+     • "Want me to focus on a single area?"
+   - House: do NOT ask about bedrooms. Apartment: bedrooms or budget is fine.
+   - Exactly one question. No stacking.
+
+—————————————————
+Decision guidance (when there are multiple options):
+—————————————————
+- After #1, if more listings exist, add one line "Other options worth a look:" then bullet each (•) with type + area + price only (one line each).
+- If 2+ options, add one calm recommendation: "If you want my take, #1 is the best fit because [one data-backed reason]."
+- If the user's message contained "not sure" / "undecided" / "comparing" (visible in last8Messages context), REPLACE the recommendation with a concise compare line:
+  "If you're torn: #1 wins on [price/location], and #2 wins on [price/location]."
+  Use the actual numbers only.
+
+—————————————————
+Length:
+—————————————————
+- Ideal reply: 4–7 short lines. No feature-lists, no emoji clutter, no repetition.`;
+
+// ---------------------------------------------------------------------------
+// Feature answer composer
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a feature key to its bilingual display label. `hasPoolAny` is a
+ * virtual key used when the user didn't qualify indoor vs outdoor — we
+ * expand it to both real flags when resolving the answer.
+ */
+const FEATURE_LABELS_AR: Record<Exclude<AskedFeatureKey, "hasPoolAny">, string> = {
+  hasPoolIndoor: "مسبح داخلي",
+  hasPoolOutdoor: "مسبح خارجي",
+  isBeachfront: "على البحر مباشرة",
+  hasGarden: "حديقة",
+  hasElevator: "أصانصير",
+  hasCentralAC: "تكييف مركزي",
+  hasSplitAC: "تكييف وحدات",
+  hasMaidRoom: "غرفة خادمة",
+  hasDriverRoom: "غرفة سائق",
+  hasLaundryRoom: "غرفة غسيل",
+};
+const FEATURE_LABELS_EN: Record<Exclude<AskedFeatureKey, "hasPoolAny">, string> = {
+  hasPoolIndoor: "an indoor pool",
+  hasPoolOutdoor: "an outdoor pool",
+  isBeachfront: "directly beachfront",
+  hasGarden: "a garden",
+  hasElevator: "an elevator",
+  hasCentralAC: "central AC",
+  hasSplitAC: "split AC",
+  hasMaidRoom: "a maid room",
+  hasDriverRoom: "a driver room",
+  hasLaundryRoom: "a laundry room",
+};
+
+function readFeatureFlag(
+  features: Record<string, unknown> | undefined,
+  key: Exclude<AskedFeatureKey, "hasPoolAny">
+): boolean {
+  return !!features && features[key] === true;
+}
+
+/**
+ * Build a deterministic reply to a feature question ("فيه مسبح خارجي؟").
+ * Answers strictly from the listing's `features` map — no fabrication.
+ * Returns null when we can't locate a usable listing (caller falls back
+ * to the normal LLM compose path).
+ */
+function composeFeatureAnswer(
+  listing: Record<string, unknown> | undefined,
+  asked: AskedFeatureKey[],
+  locale: "ar" | "en"
+): string | null {
+  if (!listing) return null;
+  const features =
+    typeof listing.features === "object" && listing.features !== null
+      ? (listing.features as Record<string, unknown>)
+      : undefined;
+  if (!features) return null;
+
+  const area =
+    locale === "ar"
+      ? String(listing.areaAr ?? listing.areaEn ?? "").trim()
+      : String(listing.areaEn ?? listing.areaAr ?? "").trim();
+  const typeAr = String(listing.type ?? "").trim();
+
+  // Expand the virtual "hasPoolAny" into the two real keys so the answer
+  // can cover both variants when the user asked a generic "فيه مسبح؟".
+  const concrete: Exclude<AskedFeatureKey, "hasPoolAny">[] = [];
+  for (const k of asked) {
+    if (k === "hasPoolAny") {
+      if (!concrete.includes("hasPoolIndoor")) concrete.push("hasPoolIndoor");
+      if (!concrete.includes("hasPoolOutdoor")) concrete.push("hasPoolOutdoor");
+    } else if (!concrete.includes(k)) {
+      concrete.push(k);
+    }
+  }
+  if (concrete.length === 0) return null;
+
+  const lines: string[] = [];
+  const header =
+    locale === "ar"
+      ? area
+        ? `عن العقار في ${area}:`
+        : "عن هذا العقار:"
+      : area
+        ? `About the listing in ${area}:`
+        : "About this listing:";
+  lines.push(header);
+
+  for (const key of concrete) {
+    const has = readFeatureFlag(features, key);
+    const label = locale === "ar" ? FEATURE_LABELS_AR[key] : FEATURE_LABELS_EN[key];
+    if (locale === "ar") {
+      lines.push(has ? `• ${label}: إي، متوفر 👌` : `• ${label}: لا، مو متوفر.`);
+    } else {
+      lines.push(has ? `• ${label}: yes, available 👌` : `• ${label}: no, not available.`);
+    }
+  }
+
+  // Soft closer keeps the sales tone without inventing new facts.
+  if (locale === "ar") {
+    const closer = typeAr
+      ? "لو تبي أعطيك نظرة أوضح على العقار أو أرتب لك الحجز، قل لي 👌"
+      : "إذا تبي تفاصيل أكثر أو ترتيب الحجز، قل لي 👌";
+    lines.push(closer);
+  } else {
+    lines.push("Want me to pull up more details or set up the booking?");
+  }
+
+  return lines.join("\n");
+}
 
 // ---------------------------------------------------------------------------
 // Shared rank + compose (used by callables; single source of truth for logic)
@@ -296,7 +513,12 @@ const TOP_DEMAND_HIGH_BOOKINGS = 5;
 const TOP_DEMAND_FETCH_POOL = 48;
 const TOP_DEMAND_REPLY_CAP = 10;
 
-function detectTopDemandChaletsIntent(message: string): boolean {
+/**
+ * @deprecated Retained for potential reactivation (e.g. admin dashboard).
+ * The AI chat no longer dispatches into this branch — it always runs a
+ * customer-matched search based on the user's own specs.
+ */
+export function detectTopDemandChaletsIntent(message: string): boolean {
   const t = (message || "").trim();
   if (!t) return false;
   const lower = t.toLowerCase();
@@ -562,8 +784,22 @@ function rankTopDemandRows(
 /**
  * Mirrors getTopDemandChalets booking aggregation + chalet-only property filter
  * (callable file is unchanged; logic kept in sync here for compose).
+ *
+ * Date-aware gating (when `availability` is supplied): any chalet that is
+ * reserved (`confirmed` or live `pending_payment`) or has a `blocked_dates`
+ * overlap for `[startDate, endDate)` is skipped. This turns the "most-demanded
+ * chalets" feed from a pure demand signal into an availability-aware feed,
+ * eliminating the pre-existing contradiction where a fully-booked chalet would
+ * be ranked first *because* it was booked.
+ *
+ * When `availability` is not supplied, behavior is unchanged (backward-compat).
  */
-async function fetchTopDemandChaletsForAgent(): Promise<TopDemandAgentRow[]> {
+async function fetchTopDemandChaletsForAgent(
+  availability?: {
+    start: admin.firestore.Timestamp;
+    end: admin.firestore.Timestamp;
+  } | null
+): Promise<TopDemandAgentRow[]> {
   const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const snap = await db
     .collection("bookings")
@@ -588,6 +824,32 @@ async function fetchTopDemandChaletsForAgent(): Promise<TopDemandAgentRow[]> {
     if (!pSnap.exists) continue;
     const pd = pSnap.data()!;
     if (!isChaletPropertyDoc(pd)) continue;
+
+    // Date-aware gate: reuse the authoritative `isDateRangeAvailable` from
+    // `chalet_booking.ts` — it already consults `bookings` + `blocked_dates`
+    // and honors the pending_payment hold. We only hit it when the user
+    // supplied a travel window on this turn.
+    if (availability) {
+      try {
+        const ok = await isDateRangeAvailable(
+          propertyId,
+          availability.start,
+          availability.end
+        );
+        if (!ok) continue;
+      } catch (err) {
+        // Fail-closed on availability errors: if we cannot verify, skip this
+        // property from the "top demand" list rather than risk surfacing a
+        // booked chalet. The fallback behavior (no date context) is the
+        // non-availability branch that retains pre-existing behavior.
+        console.warn({
+          tag: "top_demand.availability_error",
+          propertyId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        continue;
+      }
+    }
 
     const priceRaw = pd.price;
     const priceNum =
@@ -615,6 +877,20 @@ async function fetchTopDemandChaletsForAgent(): Promise<TopDemandAgentRow[]> {
       coverUrl: pd.coverUrl ?? "",
       thumbnails: Array.isArray(pd.thumbnails) ? pd.thumbnails : [],
       size: pd.size,
+      // Amenities / feature flags — forwarded so the LLM can answer
+      // feature questions like "فيه مسبح خارجي؟" or "على البحر مباشرة؟".
+      features: {
+        hasElevator: pd.hasElevator === true,
+        hasCentralAC: pd.hasCentralAC === true,
+        hasSplitAC: pd.hasSplitAC === true,
+        hasMaidRoom: pd.hasMaidRoom === true,
+        hasDriverRoom: pd.hasDriverRoom === true,
+        hasLaundryRoom: pd.hasLaundryRoom === true,
+        hasGarden: pd.hasGarden === true,
+        hasPoolIndoor: pd.hasPoolIndoor === true,
+        hasPoolOutdoor: pd.hasPoolOutdoor === true,
+        isBeachfront: pd.isBeachfront === true,
+      },
     };
 
     out.push({
@@ -630,7 +906,13 @@ async function fetchTopDemandChaletsForAgent(): Promise<TopDemandAgentRow[]> {
   return out;
 }
 
-async function buildTopDemandChaletsCompose(
+/**
+ * @deprecated Kept so the "trending chalets" feed stays available to other
+ * callers (e.g. `get_top_demand_chalets.ts` / admin surfaces). The AI chat
+ * intentionally no longer composes through this path; see the notes on
+ * `detectTopDemandChaletsIntent`.
+ */
+export async function buildTopDemandChaletsCompose(
   locale: "ar" | "en",
   opts?: {
     currentFilters?: Record<string, unknown>;
@@ -641,13 +923,36 @@ async function buildTopDemandChaletsCompose(
   reply: string;
   results: Record<string, unknown>[];
 }> {
-  const rows = (await fetchTopDemandChaletsForAgent()).filter((r) => topDemandRowPriceOk(r));
+  // Pull the Date Intelligence Layer triple from the incoming filters. If the
+  // client didn't push dates into `currentFilters` yet, also try to extract a
+  // range from this turn's raw message (e.g. "اكثر الشاليهات طلباً من 27 الى
+  // 29"). When both sources exist, filter values win (the client applied them
+  // intentionally). If a valid `[startDate, endDate)` window is present, we
+  // forward it to the top-demand fetch so booked chalets get filtered out
+  // upstream.
+  const filtersForDates = (opts?.currentFilters ?? {}) as Record<string, unknown>;
+  let startTs = parseIsoToTimestamp(filtersForDates.startDate);
+  let endTs = parseIsoToTimestamp(filtersForDates.endDate);
+  if ((!startTs || !endTs) && opts?.rawMessage) {
+    const inline = extractDateRangeFromText(opts.rawMessage);
+    if (inline) {
+      startTs = parseIsoToTimestamp(inline.startDate);
+      endTs = parseIsoToTimestamp(inline.endDate);
+    }
+  }
+  const availability =
+    startTs && endTs && startTs.toMillis() < endTs.toMillis()
+      ? { start: startTs, end: endTs }
+      : null;
+  const rows = (await fetchTopDemandChaletsForAgent(availability)).filter((r) =>
+    topDemandRowPriceOk(r)
+  );
   if (rows.length === 0) {
     return {
       reply:
         locale === "ar"
-          ? "حالياً لا توجد بيانات كافية، جرب لاحقاً"
-          : "Not enough data right now — try again later.",
+          ? "بهالفترة الشاليهات المطلوبة شبه محجوزة بالكامل. قل لي منطقتك المفضلة أو عدد الليالي وخلني أطلع لك أقرب خيار متاح 👌"
+          : "Chalets are nearly fully booked in this window. Tell me your preferred area or number of nights and I'll surface the closest available option.",
       results: [],
     };
   }
@@ -688,25 +993,24 @@ async function buildTopDemandChaletsCompose(
   const lines: string[] = [];
   if (usedBudgetFallback) {
     if (locale === "ar") {
-      lines.push("ما لقيت شاليهات بنفس المواصفات،", "لكن هذه أقرب الخيارات 👇", "");
+      lines.push("مافي مطابق تماماً لنفس المواصفات، بس لقيت لك أقرب الخيارات ومرتبة حسب الطلب 👇", "");
     } else {
       lines.push(
-        "I couldn't find chalets that match those specs exactly,",
-        "but here are the closest options 👇",
+        "No exact match on every spec, but these are the closest options — ranked by booking demand 👇",
         ""
       );
     }
   } else if (hasPersonalization) {
     if (locale === "ar") {
-      lines.push("هذه أكثر الشاليهات طلباً المناسبة لك 👇", "");
+      lines.push("أبشر، هذي أكثر الشاليهات طلباً وتناسب طلبك 👇", "");
     } else {
-      lines.push("Here are the most in-demand chalets that fit what you asked for 👇", "");
+      lines.push("Here are the most in-demand chalets that fit what you're after 👇", "");
     }
   } else {
     if (locale === "ar") {
-      lines.push("هذه أكثر الشاليهات طلباً حالياً 👇", "");
+      lines.push("هذي أكثر الشاليهات طلباً بالسوق حالياً 👇", "");
     } else {
-      lines.push("Here are the chalets with the most bookings right now 👇", "");
+      lines.push("These are the chalets booked the most right now 👇", "");
     }
   }
 
@@ -748,30 +1052,36 @@ async function buildTopDemandChaletsCompose(
     if (locale === "ar") {
       lines.push(
         `${idx}) ${r.title}`,
-        `السعر: ${r.price} د.ك — عدد الحجوزات المؤكدة (آخر ٧ أيام): ${r.bookingsCount}`
+        `السعر: ${r.price} د.ك — انحجز ${r.bookingsCount} مرة بآخر أسبوع`
       );
       if (showNightsBreakdown) {
         const total = r.price * userNights!;
-        lines.push(`${r.price} × ${userNights} ليالي = ${total} د.ك`);
+        lines.push(`لإقامة ${userNights} ليالي: ${total} د.ك`);
       }
-      if (budgetReasonAr != null) lines.push(budgetReasonAr);
-      if (areaMatched) lines.push("قريب من المنطقة المطلوبة");
-      if (high) lines.push("🔥 عليه طلب عالي");
-      lines.push("عرض الشاليه", "");
+      if (budgetReasonAr != null) lines.push(`✅ ${budgetReasonAr}`);
+      if (areaMatched) lines.push("📍 قريب من منطقتك المفضلة");
+      if (high) lines.push("🔥 عليه طلب عالي — عادةً ينحجز بسرعة");
+      lines.push("");
     } else {
       lines.push(
         `${idx}) ${r.title}`,
-        `Price: KWD ${r.price} — confirmed bookings (last 7 days): ${r.bookingsCount}`
+        `Price: KWD ${r.price} — booked ${r.bookingsCount} times this past week`
       );
       if (showNightsBreakdown) {
         const total = r.price * userNights!;
-        lines.push(`${r.price} × ${userNights} nights = KWD ${total}`);
+        lines.push(`For ${userNights} nights: KWD ${total}`);
       }
-      if (budgetReasonEn != null) lines.push(budgetReasonEn);
-      if (areaMatched) lines.push("Near your preferred area");
-      if (high) lines.push("🔥 High demand");
-      lines.push("View chalet", "");
+      if (budgetReasonEn != null) lines.push(`✅ ${budgetReasonEn}`);
+      if (areaMatched) lines.push("📍 Close to your preferred area");
+      if (high) lines.push("🔥 High demand — tends to book fast");
+      lines.push("");
     }
+  }
+
+  if (locale === "ar") {
+    lines.push("اضغط على أي واحد منهم تطّلع على الصور والتفاصيل. تبي أضيّق لك أكثر بمنطقة أو ميزانية؟");
+  } else {
+    lines.push("Tap any of them to see photos and full details. Want me to narrow it down by area or budget?");
   }
 
   const reply = lines.join("\n").trimEnd();
@@ -798,37 +1108,18 @@ async function composeAgentReply(
         : "";
   const intentFromClient =
     typeof data.intent === "string" ? data.intent.trim().toLowerCase() : "";
-  const topDemandCompose =
-    intentFromClient === TOP_DEMAND_INTENT || detectTopDemandChaletsIntent(rawMessage);
-
-  if (topDemandCompose) {
-    try {
-      const currentFilters =
-        data.currentFilters && typeof data.currentFilters === "object"
-          ? (data.currentFilters as Record<string, unknown>)
-          : {};
-      const last8Messages = Array.isArray(data.last8Messages) ? data.last8Messages : [];
-      const pack = await buildTopDemandChaletsCompose(locale, {
-        currentFilters,
-        last8Messages,
-        rawMessage,
-      });
-      return { reply: pack.reply, results: pack.results };
-    } catch (err) {
-      console.error(
-        JSON.stringify({
-          tag: "TOP_DEMAND_COMPOSE_ERROR",
-          message: err instanceof Error ? err.message : String(err),
-        })
-      );
-      return {
-        reply:
-          locale === "ar"
-            ? "حالياً لا توجد بيانات كافية، جرب لاحقاً"
-            : "Not enough data right now — try again later.",
-        results: [],
-      };
-    }
+  // Top-demand compose is intentionally disabled on the chat surface — the
+  // AI is required to answer with the user's own specs (area, budget,
+  // dates, features), not a generic popularity feed. Any stale client that
+  // still tags `intent: "top_demand_chalets"` falls through to the normal
+  // compose path below so the user always lands on matched results.
+  if (intentFromClient === TOP_DEMAND_INTENT) {
+    console.info(
+      JSON.stringify({
+        tag: "top_demand_chalets.compose_deprecated",
+        note: "falling through to normal compose",
+      })
+    );
   }
 
   const areaCode =
@@ -883,6 +1174,27 @@ async function composeAgentReply(
   if (top3Results.length === 1 && userAskedForMore) {
     const reply = locale === "ar" ? SINGLE_RESULT_ASKED_MORE_AR : SINGLE_RESULT_ASKED_MORE_EN;
     return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
+  }
+
+  // ---------------------------------------------------------------------
+  // Feature Q&A short-circuit.
+  //   The user is asking about a concrete amenity on an already-shown
+  //   listing ("فيه مسبح خارجي؟", "is it beachfront?"). We answer straight
+  //   from the first listing's `features` map instead of round-tripping
+  //   to the LLM — this is faster, deterministic, and never hallucinates.
+  // ---------------------------------------------------------------------
+  if (rawMessage) {
+    const askedFeatures = detectAskedFeatures(rawMessage);
+    if (askedFeatures.length > 0 && isFeatureQuestion(rawMessage, askedFeatures)) {
+      const primary = top3Results[0];
+      const featureAnswer = composeFeatureAnswer(primary, askedFeatures, locale);
+      if (featureAnswer) {
+        return {
+          reply: appendSuggestionsToReply(featureAnswer, suggestions, locale),
+          results: top3Results,
+        };
+      }
+    }
   }
 
   const areaLabel =
@@ -1052,15 +1364,46 @@ export const aqaraiAgentAnalyze = onCall(
       };
     }
 
-    if (detectTopDemandChaletsIntent(rawMessage)) {
+    // High-intent booking shortcut. We short-circuit the LLM round-trip with
+    // a warm canned reply because this is the moment to CONFIRM, not to keep
+    // searching. The client exposes the "tap listing → book" flow, so the
+    // reply points the user there instead of inventing a booking action.
+    if (detectBookingIntent(rawMessage)) {
       return {
-        intent: TOP_DEMAND_INTENT,
+        intent: "booking_intent",
         params_patch: {},
         reset_filters: false,
         is_complete: true,
         clarifying_questions: [],
+        greeting_reply:
+          locale === "ar"
+            ? "أبشر 👌 خلني أرتب لك الحجز على طول — اختر العقار من الخيارات اللي عرضتها لك وادخل على صفحة التفاصيل، أقدر أكمل معك خطوات الحجز من هناك. إذا ما اتفقت على عقار بعد، قل لي تاريخ الحجز والمنطقة وأجهّز لك أفضل خيار متاح."
+            : "Perfect 👌 let's lock it in. Open the listing from the options I showed you and tap through to the details page — I can walk you through the booking steps from there. If you haven't picked one yet, just tell me your dates and area and I'll line up the best match.",
       };
     }
+
+    // Undecided / hesitation — reassure without pressure. Same pattern as
+    // greeting: warm canned reply, no search flow, no filter changes.
+    if (detectHesitationIntent(rawMessage)) {
+      return {
+        intent: "hesitation",
+        params_patch: {},
+        reset_filters: false,
+        is_complete: true,
+        clarifying_questions: [],
+        greeting_reply:
+          locale === "ar"
+            ? "خذ راحتك 👌 ما فيه استعجال. إذا حاب أرتب لك أفضل خيار حسب ميزانيتك أو التواريخ اللي تناسبك قل لي، وإلا أقدر أتابع لك أول ما ينزل شي مناسب."
+            : "Take your time 👌 no rush. If you'd like, I can line up the best option for your budget or dates — just say the word. Otherwise I can keep an eye out and ping you when a strong match is listed.",
+      };
+    }
+
+    // NOTE: the "most in-demand chalets" shortcut used to fire here, but
+    // product decided the AI chat should always serve the user's concrete
+    // specs (area, budget, dates, features) instead of a one-size-fits-all
+    // popularity feed. If the user literally asks for "الأكثر طلباً"، we
+    // fall through to the normal LLM analyze pass, which asks them for
+    // the missing specs and then runs a targeted search.
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -1144,15 +1487,62 @@ export const aqaraiAgentAnalyze = onCall(
         clarifyingQuestionsFinal = [];
       }
 
-      if (!referencedPropertyId && intent === TOP_DEMAND_INTENT) {
-        isCompleteFinal = true;
-        clarifyingQuestionsFinal = [];
+      // Top-demand is deprecated on the chat. If the LLM still returns it,
+      // we force a proper customer-centric search and — when we don't yet
+      // have an area — prepend a warm, type-aware clarifying question so
+      // the user lands on a concrete next step ("بأي منطقة؟") instead of
+      // a generic popularity list.
+      if (intent === TOP_DEMAND_INTENT) {
+        intent = "search_property";
+        const paramsAreaMissing =
+          paramsPatch.areaCode == null || String(paramsPatch.areaCode).trim() === "";
+        const previousAreaMissing =
+          !currentFilters.areaCode || String(currentFilters.areaCode).trim() === "";
+        if (paramsAreaMissing && previousAreaMissing && !parsed.detectedAreaCode) {
+          const inferredType =
+            (typeof paramsPatch.type === "string" && paramsPatch.type.trim()) ||
+            (kuwaiti.propertyType ? String(kuwaiti.propertyType) : "") ||
+            "chalet";
+          isCompleteFinal = false;
+          if (clarifyingQuestionsFinal.length === 0) {
+            if (locale === "ar") {
+              clarifyingQuestionsFinal = [
+                inferredType === "chalet"
+                  ? "حياك الله 👌 خلني أفصّل لك حسب طلبك — تبي شاليه بأي منطقة، وكم ليلة ناوي؟ ولو عندك ميزانية في بالك قل لي."
+                  : inferredType === "apartment"
+                    ? "حياك الله 👌 خلني أفصّل لك حسب طلبك — أي منطقة، وميزانيتك تقريباً كم؟"
+                    : inferredType === "house" || inferredType === "villa"
+                      ? "حياك الله 👌 خلني أفصّل لك حسب طلبك — أي منطقة، وميزانيتك تقريباً كم؟"
+                      : "حياك الله 👌 في أي منطقة تبحث، وما اللي يناسبك بالضبط؟",
+              ];
+            } else {
+              clarifyingQuestionsFinal = [
+                inferredType === "chalet"
+                  ? "Welcome 👌 let me tailor this for you — which area, how many nights, and any budget in mind?"
+                  : inferredType === "apartment"
+                    ? "Welcome 👌 let me tailor this for you — which area, and roughly what budget?"
+                    : inferredType === "house" || inferredType === "villa"
+                      ? "Welcome 👌 let me tailor this for you — which area, and roughly what budget?"
+                      : "Welcome 👌 which area are you searching in, and what exactly do you need?",
+              ];
+            }
+          }
+        }
       }
 
       if (!paramsPatch.areaCode && parsed.detectedAreaCode) {
         paramsPatch.areaCode = parsed.detectedAreaCode;
         isCompleteFinal = true;
         clarifyingQuestionsFinal = [];
+      }
+
+      // Date Intelligence Layer — OpenAI does not extract dates; our
+      // deterministic parser does (intent_parser.extractDateRangeFromText).
+      // Merge whenever the parser found a valid range for THIS turn.
+      if (parsed.dateRange) {
+        paramsPatch.startDate = parsed.dateRange.startDate;
+        paramsPatch.endDate = parsed.dateRange.endDate;
+        paramsPatch.nights = parsed.dateRange.nights;
       }
 
       const previousContext = getSearchContextFromFilters(currentFilters);
@@ -1164,6 +1554,18 @@ export const aqaraiAgentAnalyze = onCall(
       if (paramsPatch.budget == null && previousContext.budget != null) paramsPatch.budget = previousContext.budget;
       if (paramsPatch.bedrooms == null && previousContext.bedrooms != null)
         paramsPatch.bedrooms = previousContext.bedrooms;
+      // Carry dates forward across turns (same treatment as budget/bedrooms).
+      // Only when this turn did NOT supply a fresh range.
+      if (
+        paramsPatch.startDate == null &&
+        paramsPatch.endDate == null &&
+        previousContext.startDate != null &&
+        previousContext.endDate != null
+      ) {
+        paramsPatch.startDate = previousContext.startDate;
+        paramsPatch.endDate = previousContext.endDate;
+        if (previousContext.nights != null) paramsPatch.nights = previousContext.nights;
+      }
 
       const hasPreviousSearch =
         (previousContext.areaCode != null && previousContext.areaCode !== "") ||

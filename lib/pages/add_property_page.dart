@@ -85,6 +85,9 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   bool hasDriverRoom = false;
   bool hasLaundryRoom = false;
   bool hasGarden = false;
+  bool hasPoolIndoor = false;
+  bool hasPoolOutdoor = false;
+  bool isBeachfront = false;
 
   bool _acceptedTerms = false;
 
@@ -648,6 +651,9 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "hasDriverRoom": hasDriverRoom,
         "hasLaundryRoom": hasLaundryRoom,
         "hasGarden": hasGarden,
+        "hasPoolIndoor": hasPoolIndoor,
+        "hasPoolOutdoor": hasPoolOutdoor,
+        "isBeachfront": isBeachfront,
 
         if (videoUrlController.text.trim().isNotEmpty)
           "videoUrl": videoUrlController.text.trim(),
@@ -1396,6 +1402,21 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                 title: Text(loc.hasGarden),
                 value: hasGarden,
                 onChanged: (v) => setState(() => hasGarden = v!),
+              ),
+              CheckboxListTile(
+                title: Text(loc.hasPoolIndoor),
+                value: hasPoolIndoor,
+                onChanged: (v) => setState(() => hasPoolIndoor = v!),
+              ),
+              CheckboxListTile(
+                title: Text(loc.hasPoolOutdoor),
+                value: hasPoolOutdoor,
+                onChanged: (v) => setState(() => hasPoolOutdoor = v!),
+              ),
+              CheckboxListTile(
+                title: Text(loc.isBeachfront),
+                value: isBeachfront,
+                onChanged: (v) => setState(() => isBeachfront = v!),
               ),
 
               const SizedBox(height: 12),

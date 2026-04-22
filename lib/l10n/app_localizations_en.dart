@@ -234,6 +234,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hasGarden => 'Garden';
 
   @override
+  String get hasPoolIndoor => 'Indoor Pool';
+
+  @override
+  String get hasPoolOutdoor => 'Outdoor Pool';
+
+  @override
+  String get isBeachfront => 'Beachfront (on the sea)';
+
+  @override
   String get description => 'Description';
 
   @override

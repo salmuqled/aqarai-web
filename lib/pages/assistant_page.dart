@@ -35,6 +35,7 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:aqarai_app/home_page.dart';
 import 'package:aqarai_app/services/ai_brain_service.dart';
+import 'package:aqarai_app/services/chat_analytics_service.dart';
 import 'package:aqarai_app/services/conversational_search_service.dart';
 import 'package:aqarai_app/services/user_interest_service.dart';
 import 'package:aqarai_app/services/notification_service.dart';
@@ -53,24 +54,16 @@ bool _listingVisibleForAssistantSearch(Map<String, dynamic> data) {
 
 /// No listings after search (+ optional findSimilar); offline hint + traditional search (X).
 const String _assistantNoResultsAr =
-    'ما لقيت نفس طلبك بالضبط حالياً، لكن أقدر أتابع لك أول ما ينزل عقار مناسب لك 👌\n\n'
-    'خلّني أعرف ميزانيتك أو إذا تبي أوسّع لك البحث.\n\n'
-    'وإذا حاب، أقدر أبلّغك مباشرة أول ما ينزل شيء قريب من طلبك.\n\n'
-    'أقدر كمان:\n'
-    '1. أبحث لك في مناطق قريبة\n'
-    '2. أعرض لك العقارات المتوفرة\n'
-    '3. أسجّل اهتمامك وأوصّلك إشعار أول ما يصير إعلان جديد.\n\n'
-    'إذا ما عندك نت، تأكد من الاتصال ثم أعد الإرسال. تقدر تستخدم البحث العادي من أيقونة X.';
+    'بنفس المواصفات بالضبط ما نزل شي هالحين — بس أقدر أشتغل معك على خيارين سريعين 👇\n\n'
+    '• أوسّع لك المنطقة شوي لمناطق مجاورة بنفس المزايا.\n'
+    '• أو أسجّل اهتمامك وأرسل لك إشعار أول ما ينزل مطابق لطلبك.\n\n'
+    'قل لي: تبي أوسّع المنطقة، أعدّل الميزانية، ولا أتابع لك لين يطلع الجديد؟';
 
 const String _assistantNoResultsEn =
-    'I couldn\'t find an exact match for what you asked for right now, but I can follow up as soon as something suitable is listed.\n\n'
-    'Tell me your budget, or if you\'d like me to widen the search.\n\n'
-    'If you want, I can notify you as soon as something close to your request goes live.\n\n'
-    'I can also:\n'
-    '1. Search nearby areas\n'
-    '2. Show available listings\n'
-    '3. Save your interest so you get an alert when a new listing appears.\n\n'
-    'If you\'re offline, reconnect and try again. You can also use traditional search (X).';
+    'Nothing matches your exact spec right now — but I can help you move fast 👇\n\n'
+    '• Widen the area to nearby spots with the same perks.\n'
+    '• Or save your interest and I\'ll ping you the moment something matching is listed.\n\n'
+    'Tell me: widen the area, tweak the budget, or track it for you?';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({super.key});
@@ -95,6 +88,12 @@ class _AssistantPageState extends State<AssistantPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(UserActivityService.recordActivity(reason: 'app_resume'));
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      // Best-effort drain of buffered analytics when the app backgrounds.
+      // Never awaited — lifecycle callbacks must return promptly.
+      unawaited(ChatAnalyticsService().flushNow());
     }
   }
 
@@ -114,14 +113,19 @@ class _AssistantPageState extends State<AssistantPage>
     'shamiya': ['kaifan', 'daeya', 'rawda'],
   };
 
+  /// Below this threshold the Smart Suggestions Engine is invoked to generate
+  /// alternative filters (shift dates, bump budget, widen area). Must stay in
+  /// sync with `SMART_SUGGESTIONS_WEAK_THRESHOLD` on the server.
+  static const int _weakResultThreshold = 3;
+
   /// Same area labels as listing cards ([areaArToEn] + [propertyLocationCode]).
   String _areaUiLabel(String areaCode) =>
       areaLabelForCode(areaCode, arabic: _isAr);
 
   static const String _welcomeAr =
-      'هلا وغلا! أنا مساعدك في عقار أي. تقدر تسألني عن أي عقار، أسعار الإيجار بالشاليهات، أو أسعار العقار في أي منطقة مثل القادسية. ولا تتردد، أي سؤال؟';
+      'هلا والله 👋 أنا مساعدك في عقار AI. أقدر أطلع لك شاليه للويكند، شقة للإيجار، أو بيت للتمليك.\nقل لي نوع العقار والمنطقة وخلني أشيك لك على المتاح 👌';
   static const String _welcomeEn =
-      'Welcome! I\'m your AqarAi assistant. Ask me about any property, chalet rental prices, or prices in any area. What would you like to know?';
+      'Hi there 👋 I\'m your AqarAi assistant. I can pull chalets for the weekend, apartments for rent, or houses for sale.\nTell me the type and area and I\'ll line up the best options for you.';
 
   @override
   void initState() {
@@ -260,24 +264,37 @@ class _AssistantPageState extends State<AssistantPage>
         return;
       }
 
-      if (intent == 'top_demand_chalets') {
-        final composed = await aiBrain.composeMarketingReply(
-          top3Results: const [],
-          isAr: _isAr,
-          userAskedForMore: false,
-          isNearbyFallback: false,
-          requestedAreaLabel: '',
-          rawMessage: text,
-          intent: 'top_demand_chalets',
-          currentFilters: Map<String, dynamic>.from(_currentFilters),
-          last8Messages: lastMessages,
-        );
-        _appendReply(
-          composed.reply,
-          results: composed.results.isNotEmpty ? composed.results : null,
-        );
+      // High-intent booking shortcut. Server ships a warm canned reply that
+      // confirms and points the user at the tap-through flow. No search,
+      // no filter changes — this is the moment to CLOSE, not to re-query.
+      if (intent == 'booking_intent') {
+        final canned = result['greeting_reply']?.toString();
+        final reply = (canned != null && canned.isNotEmpty)
+            ? canned
+            : (_isAr
+                ? 'أبشر 👌 اختر العقار من الخيارات اللي عرضتها لك وادخل على صفحة التفاصيل، أقدر أكمل معك خطوات الحجز من هناك.'
+                : "Perfect 👌 open the listing from the options above and tap through — I'll walk you through the booking steps from there.");
+        _appendReply(reply);
         return;
       }
+
+      // Hesitation — respond with space, not pressure.
+      if (intent == 'hesitation') {
+        final canned = result['greeting_reply']?.toString();
+        final reply = (canned != null && canned.isNotEmpty)
+            ? canned
+            : (_isAr
+                ? 'خذ راحتك 👌 ما فيه استعجال. إذا حاب أرتب لك أفضل خيار حسب ميزانيتك قل لي.'
+                : "Take your time 👌 no rush. If you'd like, I can line up the best option for your budget — just say the word.");
+        _appendReply(reply);
+        return;
+      }
+
+      // NOTE: `top_demand_chalets` is intentionally not handled here. The
+      // AI chat always serves the user's concrete specs (area, budget,
+      // dates, features) through the normal search flow below. If the
+      // backend ever returns that deprecated intent, it falls through and
+      // the standard branch asks for the customer's requirements.
 
       if (resetFilters) {
         if (!mounted) return;
@@ -358,6 +375,18 @@ class _AssistantPageState extends State<AssistantPage>
               'type': chosenData['type'],
               'price': chosenData['price'],
               'size': chosenData['size'],
+              'features': <String, bool>{
+                'hasElevator': (chosenData['hasElevator'] ?? false) == true,
+                'hasCentralAC': (chosenData['hasCentralAC'] ?? false) == true,
+                'hasSplitAC': (chosenData['hasSplitAC'] ?? false) == true,
+                'hasMaidRoom': (chosenData['hasMaidRoom'] ?? false) == true,
+                'hasDriverRoom': (chosenData['hasDriverRoom'] ?? false) == true,
+                'hasLaundryRoom': (chosenData['hasLaundryRoom'] ?? false) == true,
+                'hasGarden': (chosenData['hasGarden'] ?? false) == true,
+                'hasPoolIndoor': (chosenData['hasPoolIndoor'] ?? false) == true,
+                'hasPoolOutdoor': (chosenData['hasPoolOutdoor'] ?? false) == true,
+                'isBeachfront': (chosenData['isBeachfront'] ?? false) == true,
+              },
             },
           ];
           refReply = (await aiBrain.composeMarketingReply(
@@ -373,8 +402,8 @@ class _AssistantPageState extends State<AssistantPage>
         }
         if (top3ListRef.isNotEmpty && refReply.isEmpty) {
           refReply = _isAr
-              ? 'لقيت لك بعض الخيارات أدناه. قل لي إذا تبي تفاصيل أكثر.'
-              : 'Here are some options below. Ask if you want more detail.';
+              ? 'أبشر، لقيت لك كم خيار مرتّب 👇 قل لي إذا تبي أركّز على وحدة منهم.'
+              : 'Here are a few solid options for you 👇 tell me if you want me to focus on one.';
         }
         final areaNameRef =
             areaCodeRef.isNotEmpty ? _areaUiLabel(areaCodeRef) : null;
@@ -385,7 +414,7 @@ class _AssistantPageState extends State<AssistantPage>
           propertyType: propertyTypeRef?.isNotEmpty == true ? propertyTypeRef : null,
           serviceType: serviceTypeRef?.isNotEmpty == true ? serviceTypeRef : null,
           isAr: _isAr,
-        );
+        ).map((s) => SuggestionChip.text(s)).toList();
         final refReplyResults = _enrichResultsWithFullDocs(
           top3ListRef.take(3).map((e) => Map<String, dynamic>.from(e)).toList(),
           _lastResults,
@@ -402,13 +431,17 @@ class _AssistantPageState extends State<AssistantPage>
       if (!isComplete) {
         final msg = clarifyingQuestions.isNotEmpty
             ? clarifyingQuestions.join('\n')
-            : (_isAr ? 'في أي منطقة تبحث؟' : 'Which area are you looking in?');
+            : (_isAr
+                ? 'حياك الله 👌 عطني فكرة عن اللي في بالك — شاليه، شقة، ولا بيت؟ وبأي منطقة؟'
+                : 'Give me a quick idea — chalet, apartment, or house? And which area?');
         _appendReply(msg);
         return;
       }
 
       if (_currentFilters['areaCode'] == null || _currentFilters['areaCode'].toString().trim().isEmpty) {
-        _appendReply(_isAr ? 'حدد المنطقة (مثل: القادسية، النزهة) عشان أبحث.' : 'Specify the area (e.g. Qadisiya, Nuzha) to search.');
+        _appendReply(_isAr
+            ? 'قل لي المنطقة (مثل القادسية، السالمية، خيران…) وخلني أشيك لك على المتاح 👀'
+            : 'Tell me the area (e.g. Qadisiya, Salmiya, Khairan…) and I\'ll check what\'s available for you.');
         return;
       }
 
@@ -542,8 +575,8 @@ class _AssistantPageState extends State<AssistantPage>
         reply = rc.reply.trim();
         if (top3List.isNotEmpty && reply.isEmpty) {
           reply = _isAr
-              ? 'لقيت لك بعض الخيارات أدناه. قل لي إذا تبي تفاصيل أو تغيّر البحث.'
-              : 'Here are some options below. Say if you want more detail or to adjust your search.';
+              ? 'أبشر، لقيت لك كم خيار مرتّب أدناه 👇 قل لي إذا تبي أضيّق أكثر أو أغيّر البحث.'
+              : 'Here are a few solid options below 👇 tell me if you want me to narrow down or adjust the search.';
         }
         if (top3List.isNotEmpty && mounted) {
           final idList = top3List.map((e) => e['id'] as String?).whereType<String>().toList();
@@ -565,19 +598,91 @@ class _AssistantPageState extends State<AssistantPage>
       final areaName = areaCode.isNotEmpty ? _areaUiLabel(areaCode) : null;
       final propertyType = _currentFilters['type']?.toString().trim();
       final serviceType = _currentFilters['serviceType']?.toString().trim();
-      final suggestions = _buildSmartSuggestions(
+      final staticTextChips = _buildSmartSuggestions(
         area: areaName,
         propertyType: propertyType?.isNotEmpty == true ? propertyType : null,
         serviceType: serviceType?.isNotEmpty == true ? serviceType : null,
         isAr: _isAr,
-      );
+      ).map((s) => SuggestionChip.text(s)).toList();
+      var finalChips = <SuggestionChip>[...staticTextChips];
+
       final isNoResultsNotifyFallback =
           top3List.isEmpty && (replyResults == null || replyResults.isEmpty);
       _awaitingNotifyConsent = isNoResultsNotifyFallback;
+
+      // Smart Suggestions Engine. When the assistant produced a thin result
+      // set (`< _weakResultThreshold`), probe the Cloud Function for concrete
+      // alternatives (date shift / budget bump / nearby areas). The engine is
+      // deterministic and uses the actual booking + blocked_dates data, so
+      // its suggestions are guaranteed actionable rather than guesswork.
+      // Resolve the TRUE count of results that will actually render under this
+      // reply. We must check BOTH `replyResults` (the cards we'll send into
+      // `_appendReply`) and `top3List` (the ranker's chosen triple) —
+      // relying on just one side can misclassify a real result as empty and
+      // trigger the "ما لقيت" copy while cards are visible below.
+      final shownResultCount = (replyResults?.length ?? 0) > 0
+          ? replyResults!.length
+          : (top3List.isNotEmpty ? top3List.length : _lastResults.length);
+      final hasAnyResults = shownResultCount > 0;
+      final hasAnyFilterToTweak = areaCode.isNotEmpty ||
+          (_currentFilters['budget'] != null) ||
+          (_currentFilters['startDate'] != null);
+
+      // TRUST GUARANTEE: if results exist, we NEVER surface the
+      // "ما لقيت" / "I couldn't find" copy. If an earlier branch produced
+      // that copy defensively, replace it with a positive framing BEFORE the
+      // Smart Suggestions banner runs.
+      if (hasAnyResults && _isNoResultsCopy(reply)) {
+        reply = _isAr
+            ? 'أبشر، لقيت لك كم خيار مرتّب 👇'
+            : 'Here are a few solid options lined up for you 👇';
+      }
+
+      if (shownResultCount < _weakResultThreshold && hasAnyFilterToTweak) {
+        final smart = await _fetchSmartSuggestions(
+          baseFilters: _currentFilters,
+          areaCode: areaCode,
+          originalResultCount: shownResultCount,
+        );
+        if (smart != null) {
+          final banner = _isAr
+              ? (smart['banner_ar']?.toString().trim() ?? '')
+              : (smart['banner_en']?.toString().trim() ?? '');
+          // CRITICAL: The Smart Suggestions banner is intentionally framed as
+          // a soft failure ("هالتواريخ محجوزة", "ما لقيت بميزانيتك"...).
+          // That framing is ONLY valid when there are zero results shown.
+          // If even one result is rendered, prepending the banner produces a
+          // self-contradicting message ("I didn't find anything — here are 2
+          // properties"). So we only use the banner when results are empty.
+          if (banner.isNotEmpty && !hasAnyResults) {
+            reply = reply.isEmpty ? banner : '$banner\n\n$reply';
+          }
+          final directChips = _extractDirectApplyChips(smart, _isAr);
+          if (directChips.isNotEmpty) {
+            // Smart chips (date/budget/area) take priority over the static
+            // template chips; keep the top static chip as a gentle backup.
+            finalChips = [
+              ...directChips,
+              ...staticTextChips.take(1),
+            ].take(3).toList();
+          }
+        }
+      }
+
+      // Final safety net — if we somehow still ended up with a "no results"
+      // copy while results exist, rewrite it now. Defense in depth: any
+      // future branch that sets `reply = _assistantNoResultsAr` without
+      // checking the result set won't break user trust.
+      if (hasAnyResults && _isNoResultsCopy(reply)) {
+        reply = _isAr
+            ? 'أبشر، لقيت لك كم خيار مرتّب 👇'
+            : 'Here are a few solid options lined up for you 👇';
+      }
+
       _appendReply(
         reply,
         results: replyResults,
-        suggestions: suggestions.isNotEmpty ? suggestions : null,
+        suggestions: finalChips.isNotEmpty ? finalChips : null,
       );
     } catch (e, st) {
       _awaitingNotifyConsent = false;
@@ -609,6 +714,53 @@ class _AssistantPageState extends State<AssistantPage>
 
       _appendReply(message);
     }
+  }
+
+  /// True when [reply] is a "no results" framing (either the static template
+  /// or any reply that leads with the characteristic Arabic/English fail
+  /// phrases). Used to sanitize replies before composition — if we have
+  /// results to show, we must never lead with "couldn't find".
+  static bool _isNoResultsCopy(String reply) {
+    if (reply.isEmpty) return false;
+    if (reply == _assistantNoResultsAr) return true;
+    if (reply == _assistantNoResultsEn) return true;
+    final head = reply.trimLeft();
+    // Match the exact opening phrases used in the no-results templates and
+    // the Smart Suggestions failure banners. Kept narrow on purpose — we do
+    // NOT want a ranker reply that happens to contain "لقيت" to match.
+    const arFailLeads = <String>[
+      'ما لقيت', // generic
+      'هالتواريخ محجوزة',
+      'ما لقيت مناسب',
+      'المنطقة فاضية',
+      'بنفس المواصفات بالضبط ما',
+      'بميزانيتك الحالية',
+      'بهالتواريخ أغلب',
+      'بهالتواريخ السوق',
+      'المنطقة مستهلكة',
+    ];
+    const enFailLeads = <String>[
+      "i couldn't find",
+      "i could not find",
+      'nothing matched',
+      'nothing matches',
+      'nothing in that area',
+      'nothing in this area',
+      'those dates are booked',
+      'those dates are fully booked',
+      'most chalets are booked',
+      'that area is thin',
+      'that window is crowded',
+      'your current budget is tight',
+    ];
+    for (final lead in arFailLeads) {
+      if (head.startsWith(lead)) return true;
+    }
+    final headLower = head.toLowerCase();
+    for (final lead in enFailLeads) {
+      if (headLower.startsWith(lead)) return true;
+    }
+    return false;
   }
 
   /// True for common OS error codes that mean network unreachable / no route.
@@ -657,40 +809,370 @@ class _AssistantPageState extends State<AssistantPage>
     final suggestions = <String>[];
     if (isAr) {
       if (area != null && area.isNotEmpty) {
-        suggestions.add('أرخص شوي في $area');
-        suggestions.add('نفس النوع في مناطق قريبة');
+        suggestions.add('وريني الأرخص في $area');
+        suggestions.add('خيارات قريبة بنفس المميزات');
       }
       if (propertyType == 'house') {
-        suggestions.add('شقق في نفس المنطقة');
+        suggestions.add('شقق بنفس المنطقة');
       }
       if (propertyType == 'apartment') {
-        suggestions.add('بيوت في نفس المنطقة');
+        suggestions.add('بيوت بنفس المنطقة');
+      }
+      if (propertyType == 'chalet') {
+        suggestions.add('شاليهات على البحر');
       }
       if (serviceType == 'sale') {
-        suggestions.add('للإيجار في نفس المنطقة');
+        suggestions.add('عندك خيارات إيجار بنفس المنطقة');
       }
     } else {
       if (area != null && area.isNotEmpty) {
-        suggestions.add('Cheaper options in $area');
-        suggestions.add('Same type in nearby areas');
+        suggestions.add('Show the cheapest in $area');
+        suggestions.add('Nearby options with the same perks');
       }
       if (propertyType == 'house') {
-        suggestions.add('Apartments in same area');
+        suggestions.add('Apartments in the same area');
       }
       if (propertyType == 'apartment') {
-        suggestions.add('Houses in same area');
+        suggestions.add('Houses in the same area');
+      }
+      if (propertyType == 'chalet') {
+        suggestions.add('Beachfront chalets');
       }
       if (serviceType == 'sale') {
-        suggestions.add('For rent in same area');
+        suggestions.add('Rentals in the same area');
       }
     }
     return suggestions.take(3).toList();
   }
 
+  /// Calls the Smart Suggestions engine for the current conversation turn.
+  ///
+  /// Only runs when we actually have a filter dimension worth tweaking
+  /// (dates, budget, or area). Returns the raw server payload on success
+  /// (`{ triggered, failureReason, alternatives[], banner_ar, banner_en }`)
+  /// or `null` on any failure — the caller is expected to silently fall back
+  /// to the legacy static chips in that case.
+  ///
+  /// We deliberately re-fetch the candidate pool *without* the availability
+  /// gate (`applyAvailabilityGate: false`). That gives the server the full
+  /// set of discoverable chalets so the date-shift probe can measure how
+  /// many become free one / two / three days later against real bookings —
+  /// the "use real data" requirement.
+  Future<Map<String, dynamic>?> _fetchSmartSuggestions({
+    required Map<String, dynamic> baseFilters,
+    required String areaCode,
+    required int originalResultCount,
+  }) async {
+    try {
+      final svc = (baseFilters['serviceType']?.toString().trim().toLowerCase() ?? '');
+      final type = (baseFilters['type']?.toString().trim().toLowerCase() ?? '');
+      final rentalType = (baseFilters['rentalType']?.toString().trim().toLowerCase() ?? '');
+      final dateBookable = svc == 'rent' && (type == 'chalet' || rentalType == 'daily');
+      final hasDates = baseFilters['startDate'] != null && baseFilters['endDate'] != null;
+
+      List<String> candidateIds = const <String>[];
+      if (dateBookable && hasDates) {
+        // Pull the raw (pre-gate) pool from the SAME filter map the chat just
+        // used. `applyAvailabilityGate: false` is the critical bit: we want
+        // the server to measure availability across shifted windows, not
+        // re-measure the original window we just failed on.
+        try {
+          final preGate = await ConversationalSearchService()
+              .fetchMarketplaceMergedFromMap(
+            baseFilters,
+            limitPerCategory: 60,
+            applyAvailabilityGate: false,
+          );
+          candidateIds = preGate.map((d) => d.id).toList();
+        } catch (_) {
+          candidateIds = const <String>[];
+        }
+      }
+
+      final neighbors = areaCode.isNotEmpty
+          ? (_nearbyAreaCodes[areaCode] ?? const <String>[])
+          : const <String>[];
+
+      final payload = <String, dynamic>{
+        ...baseFilters,
+        // Server expects `propertyType`; the chat uses `type` internally.
+        if (baseFilters['type'] != null) 'propertyType': baseFilters['type'],
+        // Rename `budget` → `maxPrice` to match the smart_suggestions contract.
+        if (baseFilters['budget'] != null) 'maxPrice': baseFilters['budget'],
+      };
+
+      return await AiBrainService().generateChatSmartSuggestions(
+        filters: payload,
+        originalResultCount: originalResultCount,
+        candidatePropertyIds: candidateIds,
+        nearbyAreaCodes: neighbors,
+      );
+    } catch (e) {
+      debugPrint('[Assistant] smart suggestions failed: $e');
+      return null;
+    }
+  }
+
+  /// Converts the Smart Suggestions response into direct-apply
+  /// [SuggestionChip]s. Each chip carries the server-returned filter patch
+  /// (canonical keys: `propertyType`, `maxPrice`, `areaCode`, `startDate`,
+  /// `endDate`, `nights`, etc.) so the UI can apply it in-place without
+  /// re-parsing a text message.
+  List<SuggestionChip> _extractDirectApplyChips(
+    Map<String, dynamic> smart,
+    bool isAr,
+  ) {
+    final alts = smart['alternatives'];
+    if (alts is! List) return const <SuggestionChip>[];
+    final out = <SuggestionChip>[];
+    for (final a in alts) {
+      if (a is! Map) continue;
+      final headline =
+          (isAr ? a['headline_ar'] : a['headline_en'])?.toString().trim() ?? '';
+      if (headline.isEmpty) continue;
+      final rawFilters = a['filters'];
+      Map<String, dynamic>? filters;
+      if (rawFilters is Map) {
+        filters = Map<String, dynamic>.from(rawFilters);
+      }
+      final rawKind = a['kind']?.toString().trim();
+      final kind = (rawKind != null && rawKind.isNotEmpty) ? rawKind : null;
+      out.add(SuggestionChip(headline, filters: filters, kind: kind));
+    }
+    return out;
+  }
+
+  /// Handles the two chip flavors:
+  ///   - **Direct-apply**: merges the filter patch into `_currentFilters`,
+  ///     re-runs the Firestore search, and appends a fresh assistant message
+  ///     *without* sending a user message or re-invoking the LLM. This is the
+  ///     core of the "real-time assistant" UX upgrade.
+  ///   - **Text-only** (legacy / static chips): falls back to the old
+  ///     `_sendMessage(headline)` path so existing refinement flows keep
+  ///     working without code duplication.
+  Future<void> _applySuggestionChip(SuggestionChip chip) async {
+    // Analytics (every tap, before any early-return so we never lose a click).
+    final previousResultCount = _lastResults.length;
+    final clickStopwatch = Stopwatch()..start();
+    try {
+      ChatAnalyticsService().logEvent(
+        ChatAnalyticsEvents.suggestionClick,
+        <String, dynamic>{
+          'headline': chip.headline,
+          'type': chip.kind,
+          'directApply': chip.isDirectApply,
+          'previousResultCount': previousResultCount,
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+        },
+      );
+    } catch (_) {/* silent */}
+
+    if (!chip.isDirectApply) {
+      await _sendMessage(chip.headline);
+      return;
+    }
+    if (_isLoading) return;
+
+    // Merge chip.filters into the in-memory filter map. Canonical server
+    // keys (`propertyType`, `maxPrice`) map to the chat's internal keys
+    // (`type`, `budget`); all other keys pass through unchanged. The
+    // translation is defensive: unknown keys are ignored so a future
+    // server-side strategy can't silently corrupt `_currentFilters`.
+    _currentFilters = _mergeChipFiltersIntoCurrent(_currentFilters, chip.filters!);
+
+    // Guarantee the latest filter snapshot is what the search will use.
+    setState(() {
+      _isLoading = true;
+      _assistantTyping = true;
+    });
+    _scrollToBottom();
+
+    try {
+      final searchService = ConversationalSearchService();
+      final docs = await searchService.fetchMarketplaceMergedFromMap(
+        _currentFilters,
+        limitPerCategory: 60,
+      );
+      if (!mounted) return;
+      setState(() {
+        _lastResults = List.from(docs);
+      });
+
+      final areaCode = _currentFilters['areaCode']?.toString().trim() ?? '';
+      final userBudget = _currentFilters['budget'] is num
+          ? (_currentFilters['budget'] as num).toDouble()
+          : (_currentFilters['budget'] != null
+              ? double.tryParse(_currentFilters['budget'].toString())
+              : null);
+
+      String reply;
+      List<Map<String, dynamic>>? replyResults;
+      var top3List = <Map<String, dynamic>>[];
+
+      if (_lastResults.isEmpty) {
+        // No matches after direct-apply. This is rare (the server validated
+        // the alternative against real availability data) but possible if
+        // another user booked the last chalet between suggestion and click.
+        reply = _isAr ? _assistantNoResultsAr : _assistantNoResultsEn;
+      } else {
+        final propsForRank = _buildPropsForRank(_lastResults);
+        try {
+          final rc = await AiBrainService().rankAndComposeMarketingReply(
+            properties: propsForRank,
+            requestedAreaCode: areaCode,
+            nearbyAreaCodes: const [],
+            userBudget: userBudget,
+            isAr: _isAr,
+            userAskedForMore: false,
+            isNearbyFallback: false,
+            requestedAreaLabel: '',
+            rawMessage: chip.headline,
+          );
+          top3List = rc.top3;
+          reply = rc.reply.trim();
+          replyResults = _enrichResultsWithFullDocs(
+            top3List.take(3).map((e) => Map<String, dynamic>.from(e)).toList(),
+            _lastResults,
+          );
+        } catch (e) {
+          debugPrint('[Assistant] direct-apply rank/compose failed: $e');
+          // Degrade gracefully to an unranked listing of the first 3 docs so
+          // the user still sees results even if the rank/compose Cloud
+          // Function fails transiently.
+          top3List = _lastResults
+              .take(3)
+              .map((d) => <String, dynamic>{...d.data(), 'id': d.id})
+              .toList();
+          replyResults = top3List;
+          reply = '';
+        }
+      }
+
+      // Trust guarantee: even though `_lastResults.isEmpty` is handled above,
+      // the ranker can still return a reply that leads with a "couldn't find"
+      // phrase (LLM hallucination). If results exist, strip any such reply
+      // so the user doesn't see "Here are the updated results 👇\n\nI didn't
+      // find anything".
+      if (_lastResults.isNotEmpty && _isNoResultsCopy(reply)) {
+        reply = '';
+      }
+
+      final intro = _isAr
+          ? (_lastResults.isEmpty
+              ? ''
+              : 'أبشر، هذي النتائج بعد التعديل 👇')
+          : (_lastResults.isEmpty
+              ? ''
+              : 'Done — here are the options after the tweak 👇');
+      final String finalReply;
+      if (_lastResults.isEmpty) {
+        finalReply = reply;
+      } else {
+        finalReply = reply.isEmpty ? intro : '$intro\n\n$reply';
+      }
+
+      // Persist interest on a successful direct-apply (the user actively
+      // committed to the refined filters by tapping).
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null && _currentFilters.isNotEmpty) {
+          await UserInterestService().saveInterest(
+            userId: user.uid,
+            filters: Map<String, dynamic>.from(_currentFilters),
+          );
+        }
+      } catch (_) {
+        // Interest tracking is best-effort; never block the reply.
+      }
+
+      // Analytics: close the loop on the direct-apply click with the
+      // resulting count + latency. `success = resultCount > 0` matches the
+      // spec's definition. Note: _lastResults reflects the post-apply set.
+      try {
+        clickStopwatch.stop();
+        ChatAnalyticsService().logEvent(
+          ChatAnalyticsEvents.suggestionResult,
+          <String, dynamic>{
+            'resultCount': _lastResults.length,
+            'success': _lastResults.isNotEmpty,
+            'filtersApplied': <String, dynamic>{
+              if (_currentFilters['areaCode'] != null)
+                'areaCode': _currentFilters['areaCode'],
+              if (_currentFilters['type'] != null)
+                'propertyType': _currentFilters['type'],
+              if (_currentFilters['serviceType'] != null)
+                'serviceType': _currentFilters['serviceType'],
+              if (_currentFilters['budget'] != null)
+                'maxPrice': _currentFilters['budget'],
+              if (_currentFilters['startDate'] != null)
+                'startDate': _currentFilters['startDate'],
+              if (_currentFilters['endDate'] != null)
+                'endDate': _currentFilters['endDate'],
+              if (_currentFilters['nights'] != null)
+                'nights': _currentFilters['nights'],
+            },
+            'chipType': chip.kind,
+            'responseTimeMs': clickStopwatch.elapsedMilliseconds,
+          },
+        );
+      } catch (_) {/* silent */}
+
+      _appendReply(finalReply, results: replyResults);
+    } catch (e, st) {
+      debugPrint('[Assistant] _applySuggestionChip error: $e');
+      if (kDebugMode) debugPrint('$st');
+      try {
+        clickStopwatch.stop();
+        ChatAnalyticsService().logEvent(
+          ChatAnalyticsEvents.suggestionResult,
+          <String, dynamic>{
+            'resultCount': 0,
+            'success': false,
+            'error': e.toString(),
+            'chipType': chip.kind,
+            'responseTimeMs': clickStopwatch.elapsedMilliseconds,
+          },
+        );
+      } catch (_) {/* silent */}
+      _appendReply(AiBrainService.userFacingErrorMessage(e, isArabic: _isAr));
+    }
+  }
+
+  /// Defensive merge. Accepts the server's canonical keys (matches
+  /// `SuggestionFilters` in `functions/src/smart_suggestions.ts`) and maps
+  /// them to the chat's internal filter-map keys. Only the whitelist below
+  /// is copied — unknown keys are dropped on the floor so a future server
+  /// strategy change cannot inject arbitrary fields into the client state.
+  static Map<String, dynamic> _mergeChipFiltersIntoCurrent(
+    Map<String, dynamic> current,
+    Map<String, dynamic> patch,
+  ) {
+    final merged = Map<String, dynamic>.from(current);
+    void copy(String source, String dest) {
+      if (patch.containsKey(source) && patch[source] != null) {
+        merged[dest] = patch[source];
+      }
+    }
+
+    copy('areaCode', 'areaCode');
+    copy('governorateCode', 'governorateCode');
+    copy('serviceType', 'serviceType');
+    copy('rentalType', 'rentalType');
+    copy('bedrooms', 'bedrooms');
+    copy('startDate', 'startDate');
+    copy('endDate', 'endDate');
+    copy('nights', 'nights');
+    // Key translations (server ↔ client naming):
+    copy('propertyType', 'type');
+    copy('maxPrice', 'budget');
+
+    return merged;
+  }
+
   void _appendReply(
     String text, {
     List<Map<String, dynamic>>? results,
-    List<String>? suggestions,
+    List<SuggestionChip>? suggestions,
   }) {
     if (!mounted) return;
     final list = results != null && results.isNotEmpty
@@ -708,6 +1190,44 @@ class _AssistantPageState extends State<AssistantPage>
       _assistantTyping = false;
     });
     _scrollToBottom();
+
+    // Analytics: record the impression right when the chips hit the screen.
+    // Only log when we're actually showing direct-apply chips — static text
+    // chips are low-signal and would drown out the suggestion funnel metrics.
+    if (suggestions != null && suggestions.isNotEmpty) {
+      final directApply =
+          suggestions.where((c) => c.isDirectApply).toList(growable: false);
+      if (directApply.isNotEmpty) {
+        _logSuggestionImpression(directApply);
+      }
+    }
+  }
+
+  /// Fires `suggestion_impression` with the types + current filter context.
+  /// Fire-and-forget; never throws.
+  void _logSuggestionImpression(List<SuggestionChip> chips) {
+    try {
+      final types = <String>[
+        for (final c in chips)
+          if (c.kind != null && c.kind!.isNotEmpty) c.kind!
+      ];
+      final filters = _currentFilters;
+      ChatAnalyticsService().logEvent(
+        ChatAnalyticsEvents.suggestionImpression,
+        <String, dynamic>{
+          'suggestionCount': chips.length,
+          'types': types,
+          'filters': <String, dynamic>{
+            if (filters['areaCode'] != null) 'areaCode': filters['areaCode'],
+            if (filters['type'] != null) 'propertyType': filters['type'],
+            if (filters['serviceType'] != null)
+              'serviceType': filters['serviceType'],
+          },
+          'hasDateRange': filters['startDate'] != null &&
+              filters['endDate'] != null,
+        },
+      );
+    } catch (_) {/* silent */}
   }
 
   /// Compact memory of the last 3 listings shown (order = rank 1..3) for analyze / reference resolution.
@@ -788,6 +1308,18 @@ class _AssistantPageState extends State<AssistantPage>
         'size': d['size'],
         'createdAt': createdAt is Timestamp ? createdAt.millisecondsSinceEpoch : createdAt,
         'featuredUntil': featuredUntil is Timestamp ? featuredUntil.millisecondsSinceEpoch : featuredUntil,
+        'features': <String, bool>{
+          'hasElevator': (d['hasElevator'] ?? false) == true,
+          'hasCentralAC': (d['hasCentralAC'] ?? false) == true,
+          'hasSplitAC': (d['hasSplitAC'] ?? false) == true,
+          'hasMaidRoom': (d['hasMaidRoom'] ?? false) == true,
+          'hasDriverRoom': (d['hasDriverRoom'] ?? false) == true,
+          'hasLaundryRoom': (d['hasLaundryRoom'] ?? false) == true,
+          'hasGarden': (d['hasGarden'] ?? false) == true,
+          'hasPoolIndoor': (d['hasPoolIndoor'] ?? false) == true,
+          'hasPoolOutdoor': (d['hasPoolOutdoor'] ?? false) == true,
+          'isBeachfront': (d['isBeachfront'] ?? false) == true,
+        },
       };
     }).toList();
   }
@@ -1030,20 +1562,44 @@ class _AssistantPageState extends State<AssistantPage>
                     child: Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: msg.suggestions!.map((s) {
+                      children: msg.suggestions!.map((chip) {
+                        // Direct-apply chips (with a filters patch) get a
+                        // slightly stronger visual weight so users see they
+                        // are actionable filters, not just refinement
+                        // prompts. Text chips fall back to the legacy
+                        // "send as message" interaction.
+                        final isDirect = chip.isDirectApply;
+                        final bg = isDirect
+                            ? const Color(0xFFE8EEFF)
+                            : const Color(0xFFF1F1F1);
+                        final border = isDirect
+                            ? Border.all(color: const Color(0xFF3354D6), width: 1)
+                            : null;
+                        final textColor = isDirect
+                            ? const Color(0xFF1E3AA8)
+                            : const Color(0xFF1A1A1A);
                         return GestureDetector(
-                          onTap: () => _sendMessage(s),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F1F1),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    s,
-                                    style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
-                                  ),
-                                ),
+                          onTap: _isLoading
+                              ? null
+                              : () => _applySuggestionChip(chip),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: bg,
+                              borderRadius: BorderRadius.circular(20),
+                              border: border,
+                            ),
+                            child: Text(
+                              chip.headline,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: textColor,
+                                fontWeight:
+                                    isDirect ? FontWeight.w600 : FontWeight.w400,
+                              ),
+                            ),
+                          ),
                         );
                       }).toList(),
                     ),
@@ -1243,14 +1799,57 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
   }
 }
 
+/// A quick-reply chip under an assistant message.
+///
+/// Two flavors:
+///   - **Text chip** (legacy): `filters == null`. Tapping it sends [headline]
+///     as a new user message — same behavior the chat has always had for the
+///     static template chips ("Cheaper options in Qadisiya", "A bit bigger",
+///     etc.).
+///   - **Direct-apply chip** (new, via Smart Suggestions Engine): `filters`
+///     is a non-empty filter patch using server-canonical keys
+///     (`propertyType`, `maxPrice`, `serviceType`, `areaCode`, `startDate`,
+///     `endDate`, `nights`, optionally `rentalType` / `governorateCode` /
+///     `bedrooms`). Tapping merges the patch into `_currentFilters`, re-runs
+///     the Firestore search, ranks, and appends a fresh assistant message —
+///     **without** sending a user message or re-invoking `parseUserMessage`.
+///     This is the "feels like a real-time assistant" path.
+///
+/// [filters] is stored as a plain `Map<String, dynamic>` (not a typed model)
+/// so it survives a `setState` rebuild without custom serialization, and so
+/// the map can be injected into `_currentFilters` which is already
+/// `Map<String, dynamic>`.
+class SuggestionChip {
+  final String headline;
+  final Map<String, dynamic>? filters;
+
+  /// Server-side strategy that produced this chip, one of:
+  ///   - `availability_shift`
+  ///   - `budget_bump`
+  ///   - `area_widen`
+  ///
+  /// `null` for legacy static/text chips. Used for analytics only — behavior
+  /// is fully determined by [filters].
+  final String? kind;
+
+  const SuggestionChip(this.headline, {this.filters, this.kind});
+
+  /// Shorthand for legacy text-only chips.
+  const SuggestionChip.text(this.headline)
+      : filters = null,
+        kind = null;
+
+  bool get isDirectApply => filters != null && filters!.isNotEmpty;
+}
+
 class ChatMessage {
   final String text;
   final bool isUser;
   final DateTime timestamp;
   /// When non-null and non-empty, show up to 3 property cards under this (assistant) message.
   final List<Map<String, dynamic>>? results;
-  /// Optional quick-reply suggestions shown under assistant messages.
-  final List<String>? suggestions;
+  /// Optional quick-reply chips shown under assistant messages.
+  final List<SuggestionChip>? suggestions;
 
   ChatMessage({
     required this.text,

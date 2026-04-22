@@ -226,6 +226,15 @@
   "hasGarden": "Garden",
   "@hasGarden": { "description": "Garden" },
 
+  "hasPoolIndoor": "Indoor Pool",
+  "@hasPoolIndoor": { "description": "Indoor pool" },
+
+  "hasPoolOutdoor": "Outdoor Pool",
+  "@hasPoolOutdoor": { "description": "Outdoor pool" },
+
+  "isBeachfront": "Beachfront (on the sea)",
+  "@isBeachfront": { "description": "Property sits directly on the sea" },
+
   "description": "Description",
   "@description": { "description": "Description" },
 
