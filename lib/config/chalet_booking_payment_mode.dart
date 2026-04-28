@@ -7,16 +7,16 @@ enum PaymentMode {
   myfatoorah,
 }
 
-/// Legacy compile-time flag; [getPaymentMode] maps this to [PaymentMode].
+/// Production hard-pinned to MyFatoorah.
 ///
-/// Keep `true` for dev/QA fake pay; set `false` when the MyFatoorah WebView
-/// flow is ready and [getPaymentMode] should return [PaymentMode.myfatoorah].
-const bool kChaletUseFakePayment = true;
+/// The fake-pay rail (`kChaletUseFakePayment = true`) was used during DEV/QA
+/// only. As of the Financial Hardening sprint (Phase 1) the matching server
+/// callables (`fakePayChaletBooking`, `simulateChaletBookingPayment`) are
+/// permanently disabled and always reject. DO NOT flip this back to `true`
+/// without first restoring those server callables.
+const bool kChaletUseFakePayment = false;
 
 /// Single source of truth for which payment rail the confirmation flow uses.
-///
-/// To enable real gateway later: return [PaymentMode.myfatoorah] here (and/or
-/// derive from remote config), without editing [BookingConfirmationPage].
 PaymentMode getPaymentMode() {
   return kChaletUseFakePayment ? PaymentMode.fake : PaymentMode.myfatoorah;
 }

@@ -1067,6 +1067,33 @@
       "queryScope": "COLLECTION",
       "fields": [
         {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "rentalType", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
+        {"fieldPath": "rentalType", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "governorateCode", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
         {"fieldPath": "hiddenFromPublic", "order": "ASCENDING"},
         {"fieldPath": "serviceType", "order": "ASCENDING"},
         {"fieldPath": "type", "order": "ASCENDING"},
@@ -1218,6 +1245,19 @@
         {"fieldPath": "rentalType", "order": "ASCENDING"},
         {"fieldPath": "createdAt", "order": "DESCENDING"},
         {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "rentalType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "areaCode", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
       ]
     }
   ],

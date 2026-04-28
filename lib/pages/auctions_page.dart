@@ -10,8 +10,8 @@ import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/services/auction/auction_service.dart';
 import 'package:aqarai_app/pages/auction_request_page.dart';
 import 'package:aqarai_app/services/auction/lot_service.dart';
+import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/widgets/add_auction_property_card.dart';
-import 'package:aqarai_app/widgets/property_details_page.dart';
 
 /// Browse the next upcoming auction and its lots (no bidding on this screen).
 class AuctionsPage extends StatefulWidget {
@@ -110,15 +110,11 @@ class _AuctionsPageState extends State<AuctionsPage> {
   }
 
   void _openListing(BuildContext context, PublicAuctionLot lot) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PropertyDetailsPage(
-          propertyId: lot.listingDocumentId,
-          auctionLotId: lot.id,
-          auctionId: lot.auctionId,
-          leadSource: DealLeadSource.direct,
-        ),
-      ),
+    context.pushPropertyDetails(
+      propertyId: lot.listingDocumentId,
+      auctionLotId: lot.id,
+      auctionId: lot.auctionId,
+      leadSource: DealLeadSource.direct,
     );
   }
 

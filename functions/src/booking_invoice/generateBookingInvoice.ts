@@ -156,6 +156,9 @@ export const generateBookingInvoice = onDocumentUpdated(
       paymentId,
       propertyId,
       ownerId,
+      // Auth UID of the guest who paid — used by Firestore rules so the user
+      // can read their own invoice (Financial Hardening Phase 1).
+      clientId,
       totalAmount,
       commissionAmount,
       ownerNet,
@@ -230,6 +233,7 @@ export const generateBookingInvoice = onDocumentUpdated(
         paymentId,
         propertyId,
         ownerId,
+        clientId,
         totalAmount,
         commissionAmount,
         ownerNet,

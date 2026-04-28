@@ -263,9 +263,13 @@ class AiBrainService {
 
   /// When main + nearby both return 0, get similar property recommendations from backend.
   /// Returns reply text and list of recommendation maps (id, areaAr, areaEn, type, price, size).
+  ///
+  /// [propertyType] is optional — when empty, the backend widens the search
+  /// to every listing type in the nearby cluster (useful for vague queries
+  /// like "ابي بالقادسية" without a declared type).
   Future<Map<String, dynamic>> findSimilarRecommendations({
     required String requestedAreaCode,
-    required String propertyType,
+    String propertyType = '',
     List<String> nearbyAreaCodes = const [],
     double? userBudget,
   }) async {
@@ -292,6 +296,37 @@ class AiBrainService {
     } on TimeoutException catch (e) {
       _logCallableFailure('aqaraiAgentFindSimilar', e);
       rethrow;
+    }
+  }
+
+  /// Deterministic ROI / yield for a sale listing — Phase 1.
+  ///
+  /// Returns null when the backend refuses to guess: owner did not provide
+  /// income AND there are not enough comparable rentals in the same area.
+  /// Callers MUST NOT synthesize yield numbers when null; the whole feature
+  /// hinges on honesty about missing data.
+  Future<Map<String, dynamic>?> computeRoi({
+    required String propertyId,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      final callable = _callable('aqaraiAgentComputeRoi');
+      final res = await callable
+          .call(<String, dynamic>{
+            'propertyId': propertyId,
+            'forceRefresh': forceRefresh,
+          })
+          .timeout(const Duration(seconds: 15));
+      final data = _asMap(res.data);
+      final roi = data['roi'];
+      if (roi == null) return null;
+      return Map<String, dynamic>.from(roi as Map);
+    } on FirebaseFunctionsException catch (e) {
+      _logCallableFailure('aqaraiAgentComputeRoi', e);
+      return null;
+    } on TimeoutException catch (e) {
+      _logCallableFailure('aqaraiAgentComputeRoi', e);
+      return null;
     }
   }
 

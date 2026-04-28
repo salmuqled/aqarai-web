@@ -36,9 +36,23 @@ class ConversationalSearchResult {
 /// date triples are rejected at parse time — see [parseFiltersFromMap].
 class ParsedFilters {
   final String? areaCode;
+
+  /// Multi-area selection. Populated when the customer named 2+ canonical
+  /// `areaCode`s in one message ("الخيران بنيدر جليعه") OR the agent expanded
+  /// a vague chalet request to the canonical chalet belt. When non-empty
+  /// (length >= 2) the marketplace queries run a Firestore `whereIn` over
+  /// these slugs and IGNORE [areaCode]. Each entry is canonical (lowercase
+  /// underscored) and present in `kuwaitAreas` — never a fabricated joined
+  /// slug. Firestore caps `whereIn` at 30 values so we always trim to 30.
+  final List<String>? areaCodes;
   final String? governorateCode;
   final String? serviceType; // sale | rent
   final String? propertyType; // house, apartment, villa, chalet, ...
+
+  /// Optional rental cadence — `daily`, `monthly`, or `full`. Distinguishes
+  /// "شقة شهرية" vs "شقة يومية" when a user is explicit. Null means "no
+  /// preference" (both branches included).
+  final String? rentalType;
   final double? maxPrice;
   final int? bedrooms; // roomCount في Firestore
 
@@ -54,9 +68,11 @@ class ParsedFilters {
 
   const ParsedFilters({
     this.areaCode,
+    this.areaCodes,
     this.governorateCode,
     this.serviceType,
     this.propertyType,
+    this.rentalType,
     this.maxPrice,
     this.bedrooms,
     this.startDate,
@@ -64,7 +80,10 @@ class ParsedFilters {
     this.nights,
   });
 
-  bool get hasArea => areaCode != null && areaCode!.isNotEmpty;
+  /// True when a multi-area selection is active (>= 2 distinct slugs).
+  bool get hasMultiArea => areaCodes != null && areaCodes!.length >= 2;
+
+  bool get hasArea => hasMultiArea || (areaCode != null && areaCode!.isNotEmpty);
 
   /// True only when the full date triple is present AND consistent.
   bool get hasDateRange =>
@@ -134,6 +153,11 @@ class ConversationalSearchService {
   static const List<String> _rentKeywordsEn = ['rent', 'rental', 'lease', 'for rent'];
 
   // نوع العقار: قيمة Firestore <- كلمات عربي/إنجليزي
+  // Keep these slugs aligned with the add-property form dropdown so we never
+  // emit a type that can't actually exist on a listing (e.g. `warehouse`).
+  // `villa` / `farm` / `room` are kept for conversational parsing — the
+  // form doesn't offer them but customers type them often, and the backend
+  // ranking tolerates an empty type filter downstream.
   static const Map<String, List<String>> _propertyTypeKeywords = {
     'house': ['house', 'بيت', 'منزل', 'دار'],
     'apartment': ['apartment', 'شقة', 'شقق', 'اپارتمان'],
@@ -142,7 +166,7 @@ class ConversationalSearchService {
     'shop': ['shop', 'محل', 'محلات', 'متجر'],
     'office': ['office', 'مكتب', 'مكاتب'],
     'land': ['land', 'أرض', 'اراضي'],
-    'warehouse': ['warehouse', 'مخزن'],
+    'building': ['building', 'بناية', 'عمارة'],
     'farm': ['farm', 'مزرعة'],
     'room': ['room', 'غرفة', 'غرف'],
   };
@@ -258,18 +282,93 @@ class ConversationalSearchService {
     if (f.propertyType != null && f.propertyType!.trim().isNotEmpty) {
       q = q.where('type', isEqualTo: f.propertyType!.trim());
     }
+    if (f.rentalType != null && f.rentalType!.trim().isNotEmpty) {
+      q = q.where('rentalType', isEqualTo: f.rentalType!.trim());
+    }
     if (f.governorateCode != null &&
         f.governorateCode!.trim().isNotEmpty &&
         f.governorateCode!.trim() != 'chalet') {
       q = q.where('governorateCode', isEqualTo: f.governorateCode!.trim());
     }
-    if (f.areaCode != null && f.areaCode!.trim().isNotEmpty) {
-      q = q.where('areaCode', isEqualTo: f.areaCode!.trim());
+    final multi = _expandMultiAreaCodes(f);
+    if (multi != null && multi.length >= 2) {
+      q = q.where('areaCode', whereIn: multi);
+    } else if (f.areaCode != null && f.areaCode!.trim().isNotEmpty) {
+      final area = f.areaCode!.trim();
+      final cluster = _areaCluster[area];
+      if (cluster != null && cluster.length > 1) {
+        q = q.where('areaCode', whereIn: cluster);
+      } else {
+        q = q.where('areaCode', isEqualTo: area);
+      }
     }
     return q.orderBy('createdAt', descending: true);
   }
 
+  /// Shared sibling-area cluster map for ALL marketplace search branches.
+  ///
+  /// Phase 1 generalization: an area cluster is the minimum set of canonical
+  /// `areaCode` slugs that a customer treats as a single "place". Kuwaitis say
+  /// "الخيران" to mean "the whole Khiran coastline" — which spans coastal
+  /// `sabah_al_ahmad_marine_khiran` and inland `khiran_residential_inland`.
+  /// Any slug inside a cluster broadens the query with Firestore `whereIn` so
+  /// a customer never gets a false "no results" just because their listing
+  /// happens to sit on the sibling slug.
+  ///
+  /// Scope guardrails:
+  /// - Used by BOTH [_normalMarketplaceQuery] and [_chaletMarketplaceQuery].
+  ///   When a cluster exists for the user's `areaCode`, every branch expands
+  ///   to the cluster; otherwise strict equality applies (no change).
+  /// - Firestore `whereIn` accepts up to 30 values; keep clusters small (≤ 10).
+  /// - Add new clusters only when two or more slugs describe the same
+  ///   colloquial place. Keep distinct areas distinct (e.g. salmiya and
+  ///   hawalli are neighbors, not the same place).
+  static const Map<String, List<String>> _areaCluster = {
+    'sabah_al_ahmad_marine_khiran': [
+      'sabah_al_ahmad_marine_khiran',
+      'khiran_residential_inland',
+      'khiran',
+    ],
+    'khiran_residential_inland': [
+      'sabah_al_ahmad_marine_khiran',
+      'khiran_residential_inland',
+      'khiran',
+    ],
+    // Bare "khiran" slug (legacy chalet area in `kuwait_areas.dart`). When the
+    // resolver lands on it — e.g. an older listing stamped with `khiran` only,
+    // or a future code path that picks the standalone `AreaModel(code:
+    // 'khiran')` — we still want the chat to show coastal AND inland Khiran
+    // chalets, the same way customers think of "الخيران" in conversation.
+    'khiran': [
+      'khiran',
+      'sabah_al_ahmad_marine_khiran',
+      'khiran_residential_inland',
+    ],
+    // Defensive alias for the English-typo slug "khairan". Earlier server-side
+    // smart_suggestions chips shipped this misspelling (we've since fixed the
+    // chips, but historical chat transcripts and any caller that hardcoded
+    // "khairan" still flow through here). Treating it as the same Khiran
+    // cluster prevents the dead "ما نزل شي" path on a slug that has zero rows
+    // in Firestore.
+    'khairan': [
+      'khiran',
+      'sabah_al_ahmad_marine_khiran',
+      'khiran_residential_inland',
+    ],
+  };
+
   Query<Map<String, dynamic>> _chaletMarketplaceQuery(ParsedFilters f) {
+    // Intentionally NOT filtering by `isActive == true` here.
+    //
+    // The public chalet browse page (`PropertyList.buildFirestoreQuery`,
+    // chalet branch) only requires `approved == true` and
+    // `hiddenFromPublic == false`. Many existing chalet listings either
+    // omit the `isActive` field or store it as `true` only after a manual
+    // re-save. Adding `where('isActive', '==', true)` here used to make
+    // the AI chat return ZERO chalets in areas where the regular search
+    // had several visible — exactly the divergence customers reported.
+    // Lifecycle gating is still applied later by
+    // `listingDataIsPubliclyDiscoverable` once we have the document.
     Query<Map<String, dynamic>> q = FirebaseFirestore.instance
         .collection('properties')
         .where('approved', isEqualTo: true)
@@ -277,20 +376,70 @@ class ConversationalSearchService {
     if (f.serviceType != null && f.serviceType!.trim().isNotEmpty) {
       q = q.where('serviceType', isEqualTo: f.serviceType!.trim());
     }
+    // Phase 1: no chalet-type default. When the user didn't specify a type,
+    // let this branch match whatever lives in the chalet marketplace bucket
+    // (typically chalets, but also hybrid chalet listings). Type-aware
+    // clarification happens BEFORE search when we truly have nothing to go on
+    // (see `aqaraiAgentAnalyze`'s hard guard on missing areaCode).
     if (f.propertyType != null && f.propertyType!.trim().isNotEmpty) {
       q = q.where('type', isEqualTo: f.propertyType!.trim());
-    } else {
-      q = q.where('type', isEqualTo: 'chalet');
+    }
+    if (f.rentalType != null && f.rentalType!.trim().isNotEmpty) {
+      q = q.where('rentalType', isEqualTo: f.rentalType!.trim());
     }
     if (f.governorateCode != null &&
         f.governorateCode!.trim().isNotEmpty &&
         f.governorateCode!.trim() != 'chalet') {
       q = q.where('governorateCode', isEqualTo: f.governorateCode!.trim());
     }
-    if (f.areaCode != null && f.areaCode!.trim().isNotEmpty) {
-      q = q.where('areaCode', isEqualTo: f.areaCode!.trim());
+    final multi = _expandMultiAreaCodes(f);
+    if (multi != null && multi.length >= 2) {
+      q = q.where('areaCode', whereIn: multi);
+    } else if (f.areaCode != null && f.areaCode!.trim().isNotEmpty) {
+      final area = f.areaCode!.trim();
+      final cluster = _areaCluster[area];
+      if (cluster != null && cluster.length > 1) {
+        q = q.where('areaCode', whereIn: cluster);
+      } else {
+        q = q.where('areaCode', isEqualTo: area);
+      }
     }
     return q.orderBy('createdAt', descending: true);
+  }
+
+  /// Expand a multi-area selection into the final list passed to Firestore
+  /// `whereIn`.
+  ///
+  /// Behavior:
+  ///   1. Returns `null` when `f.areaCodes` is missing / shorter than 2 — the
+  ///      caller falls back to single-area logic.
+  ///   2. For every entry, expand through [_areaCluster] so a customer who
+  ///      typed "الخيران" (single canonical slug) still pulls coastal +
+  ///      inland Khiran inventory inside a multi-area whereIn — the same
+  ///      promise the single-area path makes.
+  ///   3. Deduplicates and trims to Firestore's 30-value `whereIn` cap. We
+  ///      drop overflow rather than splitting the query: the customer-facing
+  ///      surface area is the chalet belt (~9 codes after expansion), so 30
+  ///      is safely larger than realistic inputs.
+  List<String>? _expandMultiAreaCodes(ParsedFilters f) {
+    if (f.areaCodes == null || f.areaCodes!.length < 2) return null;
+    final out = <String>{};
+    for (final raw in f.areaCodes!) {
+      final code = raw.trim().toLowerCase();
+      if (code.isEmpty) continue;
+      final cluster = _areaCluster[code];
+      if (cluster != null && cluster.isNotEmpty) {
+        out.addAll(cluster);
+      } else {
+        out.add(code);
+      }
+    }
+    if (out.length < 2) return null;
+    final list = out.toList();
+    if (list.length > 30) {
+      return list.sublist(0, 30);
+    }
+    return list;
   }
 
   /// No `whereIn` on listingCategory: two branches merged in memory.
@@ -355,6 +504,8 @@ class ConversationalSearchService {
         if (filters.serviceType != null) 'serviceType': filters.serviceType,
         if (filters.propertyType != null) 'propertyType': filters.propertyType,
         if (filters.areaCode != null) 'areaCode': filters.areaCode,
+        if (filters.areaCodes != null && filters.areaCodes!.length >= 2)
+          'areaCodes': filters.areaCodes,
         if (filters.governorateCode != null)
           'governorateCode': filters.governorateCode,
         if (filters.maxPrice != null) 'maxPrice': filters.maxPrice,
@@ -466,6 +617,7 @@ class ConversationalSearchService {
         governorateCode: baseFilters.governorateCode,
         serviceType: baseFilters.serviceType,
         propertyType: baseFilters.propertyType,
+        rentalType: baseFilters.rentalType,
         maxPrice: baseFilters.maxPrice,
         bedrooms: baseFilters.bedrooms,
         startDate: baseFilters.startDate,
@@ -505,6 +657,16 @@ class ConversationalSearchService {
     if (type.isNotEmpty) {
       if ((data['type']?.toString() ?? '') != type) return false;
     }
+    final rentalType =
+        filters['rentalType']?.toString().trim().toLowerCase() ?? '';
+    if (rentalType == 'daily' ||
+        rentalType == 'monthly' ||
+        rentalType == 'full') {
+      if ((data['rentalType']?.toString().trim().toLowerCase() ?? '') !=
+          rentalType) {
+        return false;
+      }
+    }
     final bedrooms = filters['bedrooms'];
     final br = bedrooms is int
         ? bedrooms
@@ -521,8 +683,36 @@ class ConversationalSearchService {
   /// Parses Agent / UI filter map into [ParsedFilters].
   ParsedFilters parseFiltersFromMap(Map<String, dynamic> filters) {
     final areaCode = filters['areaCode']?.toString().trim();
+    // Multi-area: the agent surfaces `areaCodes` (List<String>) when the
+    // customer named 2+ areas in one message OR when the orchestrator
+    // expanded a vague chalet request to the canonical chalet belt. We
+    // accept both `List<String>` and `List<dynamic>` (Functions JSON
+    // round-trips can wrap entries as `dynamic`); we coerce to a clean
+    // `List<String>` and dedupe. A list of length < 2 is dropped — single-
+    // area runs through `areaCode` so the cluster-aware single-area path
+    // (which expands "الخيران" siblings) still kicks in.
+    final rawAreaCodes = filters['areaCodes'];
+    List<String>? areaCodes;
+    if (rawAreaCodes is List) {
+      final cleaned = rawAreaCodes
+          .map((v) => v?.toString().trim().toLowerCase() ?? '')
+          .where((v) => v.isNotEmpty)
+          .toSet()
+          .toList();
+      if (cleaned.length >= 2) areaCodes = cleaned;
+    }
     final type = filters['type']?.toString().trim();
     final serviceType = filters['serviceType']?.toString().trim();
+    final rawRentalType =
+        filters['rentalType']?.toString().trim().toLowerCase();
+    // Only accept the canonical values actually stored on listings.
+    // Everything else (including empty) is coerced back to null so we don't
+    // accidentally query with a garbage value.
+    final rentalType = (rawRentalType == 'daily' ||
+            rawRentalType == 'monthly' ||
+            rawRentalType == 'full')
+        ? rawRentalType
+        : null;
     final budget = filters['budget'] is num
         ? (filters['budget'] as num).toDouble()
         : (filters['budget'] != null
@@ -539,9 +729,11 @@ class ConversationalSearchService {
 
     return ParsedFilters(
       areaCode: areaCode?.isNotEmpty == true ? areaCode : null,
+      areaCodes: areaCodes,
       governorateCode: governorateCode?.isNotEmpty == true ? governorateCode : null,
       serviceType: serviceType?.isNotEmpty == true ? serviceType : null,
       propertyType: type?.isNotEmpty == true ? type : null,
+      rentalType: rentalType,
       maxPrice: budget != null && budget > 0 ? budget : null,
       bedrooms: bedrooms != null && bedrooms > 0 ? bedrooms : null,
       startDate: dateTriple?.startDate,

@@ -87,9 +87,27 @@ const CANDIDATE_POOL_HARD_CAP = 120;
  *
  * Area tokens match Firestore `areaCode` values — keep them lowercase.
  */
+// IMPORTANT: every slug here MUST match a canonical `areaCode` in
+// `lib/data/kuwait_areas.dart` and `functions/src/kuwait_areas.ts`. The chat
+// renders these as chips ("وريني الأرخص في {slug}") and re-submits the slug
+// verbatim as the next-turn `areaCode` filter — there is NO area resolver in
+// that path, so a typo here = guaranteed zero-results "ما نزل شي" reply.
+//
+// If you add a new entry, grep both files for the slug to confirm it exists
+// before shipping. Past breakages we hit:
+//   khairan        →  khiran
+//   sabah_ahmad_sea →  sabah_al_ahmad_marine_khiran
+//   bnaider        →  bneider
+//   rabia          →  rabya
 const AREA_BY_PROPERTY_TYPE: Readonly<Record<string, readonly string[]>> = {
-  chalet: ["khairan", "sabah_ahmad_sea", "zour", "bnaider"],
-  apartment: ["hawally", "salmiya", "jabriya", "rabia"],
+  chalet: [
+    "khiran",
+    "sabah_al_ahmad_marine_khiran",
+    "khiran_residential_inland",
+    "zour",
+    "bneider",
+  ],
+  apartment: ["hawally", "salmiya", "jabriya", "rabya"],
   house: ["mishref", "jabriya", "south_surra"],
   villa: ["mishref", "jabriya", "south_surra"],
 };
@@ -132,6 +150,15 @@ export interface SuggestionFilters {
   propertyType?: string;
   rentalType?: string;
   areaCode?: string;
+  /**
+   * Multi-area selection (e.g. customer is browsing the whole chalet belt).
+   * When this is set with 2+ entries we deliberately SKIP the `area_widen`
+   * strategy — the customer is already looking across many areas and
+   * suggesting "Try Khairan" on top of "show me Khairan and Bneider and
+   * Julaia" is noise, not help. The other strategies (date shift / budget
+   * bump) still apply normally.
+   */
+  areaCodes?: string[];
   governorateCode?: string;
   maxPrice?: number;
   bedrooms?: number;
@@ -429,6 +456,12 @@ function buildAreaWidenAlternative(
   filters: SuggestionFilters,
   nearbyAreaCodes: string[]
 ): SuggestionAlternative | null {
+  // Multi-area browses already cover several areas — adding "Try X" on top of
+  // a 5-area belt query is confusing, not helpful. Skip the strategy entirely
+  // and let date-shift / budget-bump carry the banner.
+  if (Array.isArray(filters.areaCodes) && filters.areaCodes.length >= 2) {
+    return null;
+  }
   if (!filters.areaCode) return null;
   const current = filters.areaCode.trim().toLowerCase();
   const cleaned = nearbyAreaCodes
@@ -680,6 +713,11 @@ export const generateChatSmartSuggestions = onCall(
       propertyType: typeof filtersRaw.propertyType === "string" ? filtersRaw.propertyType : undefined,
       rentalType: typeof filtersRaw.rentalType === "string" ? filtersRaw.rentalType : undefined,
       areaCode: typeof filtersRaw.areaCode === "string" ? filtersRaw.areaCode : undefined,
+      areaCodes: Array.isArray(filtersRaw.areaCodes)
+        ? (filtersRaw.areaCodes as unknown[])
+            .map((v) => (typeof v === "string" ? v.trim().toLowerCase() : ""))
+            .filter((v) => v.length > 0)
+        : undefined,
       governorateCode: typeof filtersRaw.governorateCode === "string" ? filtersRaw.governorateCode : undefined,
       maxPrice: typeof filtersRaw.maxPrice === "number"
         ? filtersRaw.maxPrice

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 
+import 'package:aqarai_app/app/safe_app_path.dart';
 import 'package:aqarai_app/auth/reset_password_page.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
@@ -39,7 +41,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
         password: _passCtrl.text.trim(),
       );
       if (!mounted) return;
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      final target = safeAppPath(widget.returnTo) ?? '/';
+      context.go(target);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       final t = AppLocalizations.of(context)!;

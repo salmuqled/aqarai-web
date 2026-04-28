@@ -28,7 +28,6 @@ import {
   ensureChaletLedgerForConfirmedBooking,
   COMMISSION_RATE,
 } from "./chalet_booking_finance";
-import { writeExceptionLog } from "./exceptionLogs";
 import { sendNotificationToUser } from "./sendUserNotification";
 
 const db = admin.firestore();
@@ -1373,10 +1372,12 @@ export async function finalizeBookingAfterPayment(
  *
  * Bookings can ONLY transition to `confirmed` via a payment path that runs
  * through [finalizeBookingAfterPayment], which writes the financial ledgers
- * atomically. Those paths are:
- *   - `fakePayChaletBooking` (dev/QA, gated by `ALLOW_CHALET_FAKE_PAYMENT`)
- *   - `simulateChaletBookingPayment` (dev/QA, same gate)
- *   - `verifyBookingMyFatoorahPayment` (real gateway)
+ * atomically. The only allowed path in production is:
+ *   - `verifyBookingMyFatoorahPayment` (real MyFatoorah gateway)
+ *   - `myFatoorahWebhook` (server-to-server payment notification)
+ *
+ * The legacy `fakePayChaletBooking` / `simulateChaletBookingPayment` rails
+ * are permanently disabled (Financial Hardening Phase 1).
  *
  * This callable exists only to return a clear `permission-denied` error to any
  * legacy client still invoking it. It will be removed once all clients have
@@ -1399,13 +1400,12 @@ export const confirmBooking = onCall(
         tag: "confirmBooking.deprecated.invoked",
         bookingId,
         uid: request.auth?.uid ?? null,
-        hint:
-          "Use fakePayChaletBooking / simulateChaletBookingPayment / verifyBookingMyFatoorahPayment",
+        hint: "Use verifyBookingMyFatoorahPayment (real gateway).",
       })
     );
     throw new HttpsError(
       "permission-denied",
-      "Manual confirmation is disabled. Use a payment path (fakePayChaletBooking / verifyBookingMyFatoorahPayment)."
+      "Manual confirmation is disabled. Use verifyBookingMyFatoorahPayment."
     );
   }
 );
@@ -1505,93 +1505,60 @@ export const rejectBooking = onCall(
 
 
 /**
- * DEV / QA only: confirm a `pending_payment` booking as if payment succeeded.
- * Disabled unless `ALLOW_CHALET_FAKE_PAYMENT=true` on the Functions runtime.
- * Only the guest ([clientId]) or an admin may call this.
+ * @deprecated PERMANENTLY DISABLED — fake-pay rail removed in the Financial
+ * Hardening sprint (Phase 1). All chalet bookings MUST complete real
+ * MyFatoorah verification via `verifyBookingMyFatoorahPayment`.
+ *
+ * This callable exists only to return a clear `permission-denied` error to
+ * any legacy client still invoking it. The previous environment-variable
+ * gate (`ALLOW_CHALET_FAKE_PAYMENT`) has been removed entirely.
  */
 export const simulateChaletBookingPayment = onCall(
   { region: "us-central1" },
   async (request) => {
-    if (process.env.ALLOW_CHALET_FAKE_PAYMENT !== "true") {
-      throw new HttpsError(
-        "failed-precondition",
-        "Fake booking payment is disabled (set ALLOW_CHALET_FAKE_PAYMENT=true on Functions)"
-      );
-    }
-
-    const uid = requireUid(request);
-    const adminUser = isAdminAuth(request.auth);
-
     const bookingId =
-      typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
-    if (!bookingId) {
-      throw new HttpsError("invalid-argument", "bookingId is required");
-    }
-
-    try {
-      await finalizeBookingAfterPayment(bookingId, {
-        kind: "guest_simulate",
-        uid,
-        isAdmin: adminUser,
-      });
-    } catch (err: unknown) {
-      if (!(err instanceof HttpsError)) {
-        logBookingError(err, bookingId);
-      }
-      throw err;
-    }
-
-    return { ok: true, status: "confirmed" as const };
+      typeof request.data?.bookingId === "string"
+        ? request.data.bookingId.trim()
+        : "";
+    console.warn(
+      JSON.stringify({
+        tag: "simulateChaletBookingPayment.disabled.invoked",
+        bookingId,
+        uid: request.auth?.uid ?? null,
+        hint: "Use verifyBookingMyFatoorahPayment after real MyFatoorah checkout.",
+      })
+    );
+    throw new HttpsError(
+      "permission-denied",
+      "Fake booking payment is permanently disabled. Use MyFatoorah."
+    );
   }
 );
 
 /**
- * DEV / QA only: create a fake "paid" record for an existing `pending_payment` booking.
+ * @deprecated PERMANENTLY DISABLED — see [simulateChaletBookingPayment].
  *
- * This mirrors the real gateway flow shape:
- * - booking status becomes `confirmed`
- * - booking gains `paymentStatus: "paid"` + `paymentId` (fake)
- * - ledger row is ensured in `transactions/{bookingId}`
- *
- * Disabled unless `ALLOW_CHALET_FAKE_PAYMENT=true` on the Functions runtime.
- * Only the guest ([clientId]) or an admin may call this.
+ * Hard-rejects every call with `permission-denied`. There is no longer any
+ * environment variable that re-enables this code path.
  */
 export const fakePayChaletBooking = onCall(
   { region: "us-central1" },
   async (request) => {
-    if (process.env.ALLOW_CHALET_FAKE_PAYMENT !== "true") {
-      throw new HttpsError(
-        "failed-precondition",
-        "Fake booking payment is disabled (set ALLOW_CHALET_FAKE_PAYMENT=true on Functions)"
-      );
-    }
-
-    const uid = requireUid(request);
-    const adminUser = isAdminAuth(request.auth);
-
     const bookingId =
-      typeof request.data?.bookingId === "string" ? request.data.bookingId.trim() : "";
-    if (!bookingId) {
-      throw new HttpsError("invalid-argument", "bookingId is required");
-    }
-
-    try {
-      const { paymentId } = await finalizeBookingAfterPayment(bookingId, {
-        kind: "fake",
-        uid,
-        isAdmin: adminUser,
-      });
-      return { ok: true, bookingId, paymentId: paymentId ?? "" };
-    } catch (err: unknown) {
-      if (!(err instanceof HttpsError)) {
-        void writeExceptionLog({
-          type: "ledger_error",
-          relatedId: bookingId,
-          message: err instanceof Error ? err.message : String(err),
-          severity: "high",
-        });
-      }
-      throw err;
-    }
+      typeof request.data?.bookingId === "string"
+        ? request.data.bookingId.trim()
+        : "";
+    console.warn(
+      JSON.stringify({
+        tag: "fakePayChaletBooking.disabled.invoked",
+        bookingId,
+        uid: request.auth?.uid ?? null,
+        hint: "Use verifyBookingMyFatoorahPayment after real MyFatoorah checkout.",
+      })
+    );
+    throw new HttpsError(
+      "permission-denied",
+      "Fake booking payment is permanently disabled. Use MyFatoorah."
+    );
   }
 );

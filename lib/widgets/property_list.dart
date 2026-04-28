@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
-import '../widgets/property_details_page.dart';
+import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/data/kuwait_areas.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/utils/listing_display.dart';
@@ -717,17 +717,12 @@ class _PropertyListState extends State<PropertyList> {
             // "Book Now" CTA immediately (only for daily chalet rentals).
             // Non-chalet / non-daily flows still pass null dates — the
             // details page falls back to its previous behavior.
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PropertyDetailsPage(
-                  propertyId: doc.id,
-                  leadSource: widget.leadSource,
-                  stayStart: _isChaletRentMode ? _stayStart : null,
-                  stayEnd: _isChaletRentMode ? _stayEnd : null,
-                  rentalType: widget.rentalType,
-                ),
-              ),
+            context.pushPropertyDetails(
+              propertyId: doc.id,
+              leadSource: widget.leadSource,
+              stayStart: _isChaletRentMode ? _stayStart : null,
+              stayEnd: _isChaletRentMode ? _stayEnd : null,
+              rentalType: widget.rentalType,
             );
           },
           child: Card(

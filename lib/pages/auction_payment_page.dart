@@ -29,11 +29,12 @@ class _AuctionPaymentPageState extends State<AuctionPaymentPage> {
     if (_processing) return;
     setState(() => _processing = true);
     try {
-      final uiOk = await PaymentServiceProvider.instance.payAuctionFee(
+      final uiResult = await PaymentServiceProvider.instance.payAuctionFee(
         amount: widget.auctionFeeKwd,
         requestId: widget.requestId,
       );
-      if (!uiOk) {
+      final paymentId = uiResult.paymentId?.trim() ?? '';
+      if (!uiResult.success || paymentId.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(loc.auctionPaymentDeclined)),
@@ -44,6 +45,7 @@ class _AuctionPaymentPageState extends State<AuctionPaymentPage> {
 
       final result = await MarkAuctionFeePaidService.call(
         requestId: widget.requestId,
+        paymentId: paymentId,
       );
       if (!mounted) return;
       if (!result.ok) {
@@ -151,14 +153,18 @@ class _AuctionPaymentPageState extends State<AuctionPaymentPage> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
-                if (_processing)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
                 FilledButton(
                   onPressed: _processing ? null : () => _pay(loc),
-                  child: Text(loc.auctionPaymentPayNow),
+                  child: _processing
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(loc.auctionPaymentPayNow),
                 ),
               ],
             ),

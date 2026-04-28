@@ -12,11 +12,41 @@ export function applyParamsToContext(
 ): SearchContext {
   const next: SearchContext = { ...context };
   const areaCode = paramsPatch.areaCode;
-  if (areaCode != null && String(areaCode).trim() !== "") next.areaCode = String(areaCode).trim();
+  const newAreaCodeSet =
+    areaCode != null && String(areaCode).trim() !== "";
+  if (newAreaCodeSet) next.areaCode = String(areaCode).trim();
+  // Multi-area patch: replace the previous selection (don't merge) when this
+  // turn provides a fresh list. An explicit empty array is treated as "clear",
+  // which is what `isNewSearch` flows want when the customer pivots.
+  const areaCodes = paramsPatch.areaCodes;
+  if (Array.isArray(areaCodes)) {
+    const distinct = Array.from(
+      new Set(
+        areaCodes
+          .map((v) => (typeof v === "string" ? v.trim().toLowerCase() : ""))
+          .filter((v) => v.length > 0)
+      )
+    );
+    if (distinct.length >= 2) {
+      next.areaCodes = distinct;
+    } else {
+      delete next.areaCodes;
+    }
+  } else if (newAreaCodeSet) {
+    // Customer narrowed from a multi-area browse to a single area
+    // ("خلاص بس الخيران"). Drop the inherited list so downstream queries
+    // run a single-area search and don't keep showing other belt areas.
+    delete next.areaCodes;
+  }
   const type = paramsPatch.type;
   if (type != null && String(type).trim() !== "") next.propertyType = String(type).trim();
   const serviceType = paramsPatch.serviceType;
   if (serviceType != null && String(serviceType).trim() !== "") next.serviceType = String(serviceType).trim();
+  const rentalType = paramsPatch.rentalType;
+  if (rentalType != null) {
+    const rt = String(rentalType).trim().toLowerCase();
+    if (rt === "daily" || rt === "monthly" || rt === "full") next.rentalType = rt;
+  }
   const budget = paramsPatch.budget;
   if (budget != null && (typeof budget === "number" || typeof budget === "string")) {
     const n = typeof budget === "number" ? budget : Number(budget);

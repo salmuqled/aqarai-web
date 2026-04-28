@@ -1,5 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -23,6 +25,7 @@ import 'package:aqarai_app/widgets/booking_phone_capture_sheet.dart';
 import 'package:aqarai_app/widgets/owner_booking_tools.dart';
 import 'package:aqarai_app/services/featured_property_service.dart';
 import 'package:aqarai_app/services/featured_suggestion_tracking_service.dart';
+import 'package:aqarai_app/services/payment/payment_service.dart';
 import 'package:aqarai_app/services/payment/payment_service_provider.dart';
 import 'package:aqarai_app/services/ai_suggestions_auto_config_service.dart';
 import 'package:aqarai_app/pages/video_page.dart';
@@ -30,6 +33,10 @@ import 'package:aqarai_app/utils/video_embed_url.dart';
 import 'package:aqarai_app/utils/booking_rules.dart';
 import 'package:aqarai_app/utils/listing_display.dart';
 import 'package:aqarai_app/utils/property_price_display.dart';
+import 'package:aqarai_app/services/ai_brain_service.dart';
+import 'package:aqarai_app/app/property_route.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:aqarai_app/app/web_meta_helper.dart';
 
 /// Human-friendly featured expiry line for owner CTA (Arabic / English).
 String formatRemainingTime(DateTime featuredUntil, {bool isArabic = true}) {
@@ -138,6 +145,8 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
   bool _trackedSuggestionShown = false;
   String? _lastShownEventId;
   String? _lastClickEventId;
+  /// Debounce + loading UX while MyFatoorah session + checkout run.
+  bool _featurePaymentLoading = false;
 
   @override
   void initState() {
@@ -212,7 +221,9 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     required AiSuggestionsAutoConfig cfg,
   }) async {
     if (!mounted) return;
-
+    if (_featurePaymentLoading) return;
+    setState(() => _featurePaymentLoading = true);
+    try {
     final plan = await _pickPlan(context, cfg: cfg);
     if (plan == null) return;
 
@@ -233,15 +244,19 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     try {
       final ui = await PaymentServiceProvider.instance.payFeaturedAd(
         amountKwd: plan.priceKwd.toDouble(),
+        durationDays: plan.durationDays,
         propertyId: propertyId,
         description: 'تمييز إعلان',
       );
 
       if (!ui.success) {
         if (!context.mounted) return;
-        messenger.showSnackBar(
-          const SnackBar(content: Text('تم إلغاء الدفع')),
-        );
+        final msg = messageForFeaturedAdFailureAr(ui.failure);
+        if (msg != null) {
+          messenger.showSnackBar(
+            SnackBar(content: Text(msg)),
+          );
+        }
         return;
       }
 
@@ -293,6 +308,9 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+    } finally {
+      if (mounted) setState(() => _featurePaymentLoading = false);
     }
   }
 
@@ -445,6 +463,15 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
 
+          if (kIsWeb) {
+            final canonicalUrl =
+                '${Uri.base.origin}${Uri.base.path}'
+                '${Uri.base.hasQuery ? '?${Uri.base.query}' : ''}';
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              updatePropertyMeta(data, canonicalUrl);
+            });
+          }
+
           // Read once per rebuild and reuse — avoids walking the map +
           // trimming on every conditional widget.
           final chaletName = listingChaletName(data);
@@ -497,6 +524,11 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   ? (data['areaAr'] ?? data['area'])
                   : (data['areaEn'] ?? data['area'])) ??
               '';
+          final listingTitleForSemantics = listingDisplayTitle(
+            data,
+            areaLabel: area,
+            typeLabel: _translateType(context, type),
+          );
           final String description = data['description'] ?? '';
           final String status = data['status'] ?? '';
           final Timestamp? createdAt = data['createdAt'] as Timestamp?;
@@ -556,6 +588,24 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
               ),
               centerTitle: true,
               actions: [
+                IconButton(
+                  tooltip: isAr ? 'مشاركة الرابط' : 'Share listing link',
+                  icon: const Icon(Icons.ios_share_rounded),
+                  onPressed: () async {
+                    final url = PropertyRoute.publicShareUrl(widget.propertyId);
+                    if (kIsWeb) {
+                      await Clipboard.setData(ClipboardData(text: url));
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(loc.instagramPostLinkCopied),
+                        ),
+                      );
+                    } else {
+                      await SharePlus.instance.share(ShareParams(text: url));
+                    }
+                  },
+                ),
                 if (FirebaseAuth.instance.currentUser != null && !isAdmin)
                   _FavoriteHeart(propertyId: widget.propertyId),
               ],
@@ -596,21 +646,36 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                 canSeeBooking ? 100 : 16,
               ),
               children: [
-                _buildImageSlider(context, images),
+                if (chaletName.isEmpty && listingTitleForSemantics.trim().isNotEmpty)
+                  Semantics(
+                    header: true,
+                    label: listingTitleForSemantics.trim(),
+                    child: const SizedBox.shrink(),
+                  ),
+                _buildImageSlider(
+                  context,
+                  images,
+                  listingSemanticCaption: listingTitleForSemantics,
+                  isArabic: isAr,
+                ),
                 // Optional owner-provided chalet name — shown as a large
                 // prominent heading right below the image. Only renders when
                 // the listing actually has a `chaletName`, so historical
                 // listings keep their layout identical.
                 if (chaletName.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Text(
-                    chaletName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      height: 1.25,
+                  Semantics(
+                    header: true,
+                    label: listingTitleForSemantics,
+                    child: Text(
+                      chaletName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        height: 1.25,
+                      ),
                     ),
                   ),
                 ],
@@ -652,6 +717,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   _translateType(context, type),
                   _translateService(context, serviceType),
                   _translateStatus(context, status),
+                  isAr: isAr,
                   serviceTypeRaw: serviceType,
                   priceTypeRaw: data['priceType']?.toString(),
                   bookingForTotalLine:
@@ -666,6 +732,21 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   hideHeroPrice: isChaletRentListing,
                   chaletPerNightPrice: isChaletRentListing,
                 ),
+
+                // Yield / ROI card — Phase 1. Shown only for sale listings
+                // of multi-unit-friendly types. Backend is the single source
+                // of truth for the numbers; the widget never invents them.
+                if (serviceType == 'sale' &&
+                    (type == 'building' || type == 'house')) ...[
+                  const SizedBox(height: 12),
+                  _YieldCard(
+                    propertyId: widget.propertyId,
+                    cachedRoi: data['roi'] is Map
+                        ? Map<String, dynamic>.from(data['roi'] as Map)
+                        : null,
+                    isArabic: isAr,
+                  ),
+                ],
 
                 if (!isAdmin && isOwner) ...[
                   const SizedBox(height: 14),
@@ -821,12 +902,15 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                             buttonSubtitle: featureButtonSubtitle,
                             accentOverride: featureAccentOverride,
                             urgent: urgentCard,
-                            onPressed: () => _runFeatureFlow(
-                              context: context,
-                              propertyId: widget.propertyId,
-                              suggestionType: suggestionType,
-                              cfg: cfg,
-                            ),
+                            isLoading: _featurePaymentLoading,
+                            onPressed: _featurePaymentLoading
+                                ? null
+                                : () => _runFeatureFlow(
+                                      context: context,
+                                      propertyId: widget.propertyId,
+                                      suggestionType: suggestionType,
+                                      cfg: cfg,
+                                    ),
                           );
                         },
                       );
@@ -1526,9 +1610,14 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     );
   }
 
-  Widget _buildImageSlider(BuildContext context, List<String> images) {
+  Widget _buildImageSlider(
+    BuildContext context,
+    List<String> images, {
+    required String listingSemanticCaption,
+    required bool isArabic,
+  }) {
     if (images.isEmpty) {
-      final isAr = Localizations.localeOf(context).languageCode == 'ar';
+      final isAr = isArabic;
       return Container(
         height: 260,
         decoration: BoxDecoration(
@@ -1570,6 +1659,8 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
       height: 260,
       borderRadius: 14,
       memCacheWidth: memW,
+      listingSemanticCaption: listingSemanticCaption,
+      isArabic: isArabic,
     );
   }
 
@@ -1581,6 +1672,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     String type,
     String serviceType,
     String status, {
+    required bool isAr,
     required String serviceTypeRaw,
     String? priceTypeRaw,
     ChaletBookingController? bookingForTotalLine,
@@ -1588,7 +1680,6 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     bool chaletPerNightPrice = false,
   }) {
     final loc = AppLocalizations.of(context)!;
-    final isAr = Localizations.localeOf(context).languageCode == 'ar';
     final displayType = resolveDisplayPriceType(
       serviceType: serviceTypeRaw,
       priceType: priceTypeRaw,
@@ -1596,6 +1687,14 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     final heroPriceText = chaletPerNightPrice
         ? _perNightPriceLine(price, isAr)
         : _heroPriceWithUnit(price, isAr, serviceTypeRaw, priceTypeRaw);
+    final priceSemanticsLabel =
+        isAr ? 'السعر: $heroPriceText' : 'Price: $heroPriceText';
+
+    final locationOneLine = '$governorate - $area';
+    final trimmedLocationLine = locationOneLine.trim();
+    final locationSemanticsLabel = trimmedLocationLine.isEmpty
+        ? (isAr ? 'الموقع غير متوفر' : 'Location unavailable')
+        : (isAr ? 'الموقع: $trimmedLocationLine' : 'Location: $trimmedLocationLine');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1604,12 +1703,17 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!hideHeroPrice) ...[
-            Text(
-              heroPriceText,
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
+            Semantics(
+              label: priceSemanticsLabel,
+              excludeSemantics: true,
+              container: true,
+              child: SelectableText(
+                heroPriceText,
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
               ),
             ),
             if (bookingForTotalLine != null &&
@@ -1627,12 +1731,20 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                       : 'Total: ${fmt.format(total)} KWD';
                   return Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      line,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[800],
+                    child: Semantics(
+                      label:
+                          isAr
+                              ? 'إجمالي الإقامة: $line'
+                              : 'Booking total: $line',
+                      excludeSemantics: true,
+                      container: true,
+                      child: SelectableText(
+                        line,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[800],
+                        ),
                       ),
                     ),
                   );
@@ -1642,7 +1754,15 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
             const SizedBox(height: 12),
           ],
 
-          Text("$governorate - $area", style: const TextStyle(fontSize: 18)),
+          Semantics(
+            label: locationSemanticsLabel,
+            excludeSemantics: true,
+            container: true,
+            child: SelectableText(
+              locationOneLine,
+              style: const TextStyle(fontSize: 18),
+            ),
+          ),
 
           const SizedBox(height: 12),
 
@@ -1669,7 +1789,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
-          Text(
+          SelectableText(
             description.isEmpty ? loc.noDescription : description,
             style: const TextStyle(fontSize: 16),
           ),
@@ -1738,7 +1858,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
         color: const Color(0xFFEFEFEF),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
+      child: SelectableText(
         text,
         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
       ),
@@ -1751,7 +1871,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: _cardDecoration(),
-      child: Text(
+      child: SelectableText(
         "${loc.addedOnDate} ${_formatDate(createdAt.toDate())}",
         style: const TextStyle(fontSize: 15, color: Colors.grey),
       ),
@@ -1777,9 +1897,18 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
   }
 
   Widget _rowInfo(String label, String value) {
+    final line = '$label: $value';
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text("$label: $value", style: const TextStyle(fontSize: 16)),
+      child: Semantics(
+        label: line,
+        excludeSemantics: true,
+        container: true,
+        child: SelectableText(
+          line,
+          style: const TextStyle(fontSize: 16),
+        ),
+      ),
     );
   }
 }
@@ -2030,6 +2159,7 @@ class _AiSuggestionCard extends StatelessWidget {
     this.buttonSubtitle,
     this.accentOverride,
     this.urgent = false,
+    this.isLoading = false,
   });
 
   final String title;
@@ -2037,8 +2167,9 @@ class _AiSuggestionCard extends StatelessWidget {
   final String buttonText;
   final String? buttonSubtitle;
   final Color? accentOverride;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool urgent;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -2117,7 +2248,16 @@ class _AiSuggestionCard extends StatelessWidget {
                       ),
                     ),
                     onPressed: onPressed,
-                    icon: const Icon(Icons.star, size: 18),
+                    icon: isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.star, size: 18),
                     label: Text(
                       buttonText,
                       style: const TextStyle(fontWeight: FontWeight.w800),
@@ -2214,18 +2354,40 @@ class _RecordPropertyViewOnceState extends State<_RecordPropertyViewOnce> {
   Widget build(BuildContext context) => widget.child;
 }
 
+/// Accessibility / SEO label for each photo (does not alter layout pixels).
+String _carouselImageSemanticsLabel({
+  required int pageIndexZeroBased,
+  required int totalImages,
+  required String listingSemanticCaption,
+  required bool isArabic,
+}) {
+  final base = listingSemanticCaption.trim().isEmpty
+      ? (isArabic ? 'إعلان عقاري' : 'property listing')
+      : listingSemanticCaption.trim();
+  if (totalImages <= 1) {
+    return isArabic ? 'صورة الإعلان: $base' : 'Photo of listing: $base';
+  }
+  return isArabic
+      ? 'صورة ${pageIndexZeroBased + 1} من $totalImages للعقار: $base'
+      : 'Image ${pageIndexZeroBased + 1} of $totalImages: $base';
+}
+
 class _PropertyImageCarousel extends StatefulWidget {
   const _PropertyImageCarousel({
     required this.images,
     required this.height,
     required this.borderRadius,
     required this.memCacheWidth,
+    required this.listingSemanticCaption,
+    required this.isArabic,
   });
 
   final List<String> images;
   final double height;
   final double borderRadius;
   final int memCacheWidth;
+  final String listingSemanticCaption;
+  final bool isArabic;
 
   @override
   State<_PropertyImageCarousel> createState() => _PropertyImageCarouselState();
@@ -2315,27 +2477,39 @@ class _PropertyImageCarouselState extends State<_PropertyImageCarousel> {
                   onPageChanged: (i) => _index.value = i,
                   itemBuilder: (context, page) {
                     final url = images[page];
+                    final semLabel = _carouselImageSemanticsLabel(
+                      pageIndexZeroBased: page,
+                      totalImages: images.length,
+                      listingSemanticCaption: widget.listingSemanticCaption,
+                      isArabic: widget.isArabic,
+                    );
                     return RepaintBoundary(
-                      child: CachedNetworkImage(
-                        imageUrl: url,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        memCacheWidth: widget.memCacheWidth,
-                        maxWidthDiskCache: widget.memCacheWidth,
-                        fadeInDuration: const Duration(milliseconds: 220),
-                        fadeOutDuration: const Duration(milliseconds: 120),
-                        placeholder: (_, __) => ColoredBox(
-                          color: Colors.grey.shade300,
-                          child: const Center(
-                            child: SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                      child: Semantics(
+                        container: true,
+                        image: true,
+                        excludeSemantics: true,
+                        label: semLabel,
+                        child: CachedNetworkImage(
+                          imageUrl: url,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          memCacheWidth: widget.memCacheWidth,
+                          maxWidthDiskCache: widget.memCacheWidth,
+                          fadeInDuration: const Duration(milliseconds: 220),
+                          fadeOutDuration: const Duration(milliseconds: 120),
+                          placeholder: (_, __) => ColoredBox(
+                            color: Colors.grey.shade300,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
                             ),
                           ),
+                          errorWidget: (_, __, ___) =>
+                              ColoredBox(color: Colors.grey.shade300),
                         ),
-                        errorWidget: (_, __, ___) =>
-                            ColoredBox(color: Colors.grey.shade300),
                       ),
                     );
                   },
@@ -2746,6 +2920,253 @@ Future<void> confirmAndBanPropertyOwner(
       context: context,
       targetUid: targetUid,
       isAr: isAr,
+    );
+  }
+}
+
+/// Deterministic yield / ROI card — Phase 1.
+///
+/// Shown only for `serviceType == 'sale'` listings. Consumes whatever is
+/// cached on the property doc (`data['roi']`) and, if missing, triggers a
+/// single backend compute via [AiBrainService.computeRoi]. When the backend
+/// returns null we display an honest "no data" state — we never guess.
+///
+/// A source badge (owner vs market comparables) sits next to the yield so
+/// buyers can judge how trustworthy the number is.
+class _YieldCard extends StatefulWidget {
+  const _YieldCard({
+    required this.propertyId,
+    required this.cachedRoi,
+    required this.isArabic,
+  });
+
+  final String propertyId;
+  final Map<String, dynamic>? cachedRoi;
+  final bool isArabic;
+
+  @override
+  State<_YieldCard> createState() => _YieldCardState();
+}
+
+class _YieldCardState extends State<_YieldCard> {
+  Map<String, dynamic>? _roi;
+  bool _loading = false;
+  bool _tried = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _roi = widget.cachedRoi;
+    // If no cache is present we kick off a single compute request on the
+    // next frame. We deliberately avoid retry / polling — the 7-day TTL on
+    // the backend means most views hit warm cache anyway.
+    if (_roi == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _fetch();
+      });
+    }
+  }
+
+  Future<void> _fetch() async {
+    if (_loading || _tried) return;
+    setState(() => _loading = true);
+    Map<String, dynamic>? result;
+    try {
+      result = await AiBrainService().computeRoi(propertyId: widget.propertyId);
+    } catch (_) {
+      result = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _roi = result;
+      _loading = false;
+      _tried = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isAr = widget.isArabic;
+    final title = isAr ? 'تقدير العائد' : 'Estimated yield';
+
+    if (_loading) {
+      return _YieldShell(
+        title: title,
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 10),
+            Text(isAr ? 'جاري الحساب…' : 'Calculating…'),
+          ],
+        ),
+      );
+    }
+
+    if (_roi == null) {
+      return _YieldShell(
+        title: title,
+        child: Text(
+          isAr
+              ? 'ما عندي بيانات كافية لحساب العائد لهذا العقار بشكل دقيق.'
+              : 'Not enough data to calculate a reliable yield for this listing.',
+          style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+        ),
+      );
+    }
+
+    final yieldPercent = (_roi!['yieldPercent'] as num?)?.toDouble();
+    final payback = (_roi!['paybackYears'] as num?)?.toDouble();
+    final annual = (_roi!['annualIncomeKwd'] as num?)?.toDouble();
+    final source = (_roi!['source'] ?? '').toString();
+    final sampleSize = (_roi!['comparableCount'] as num?)?.toInt();
+
+    final badgeLabel = source == 'owner'
+        ? (isAr ? 'من بيانات المالك' : 'Owner-provided')
+        : (isAr ? 'من السوق' : 'From market');
+    final badgeColor = source == 'owner'
+        ? Colors.blue.shade50
+        : Colors.green.shade50;
+    final badgeBorder = source == 'owner'
+        ? Colors.blue.shade300
+        : Colors.green.shade300;
+
+    return _YieldShell(
+      title: title,
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: badgeColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: badgeBorder),
+        ),
+        child: Text(
+          source == 'comparables' && sampleSize != null
+              ? '$badgeLabel · $sampleSize'
+              : badgeLabel,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _YieldMetric(
+                  label: isAr ? 'العائد السنوي' : 'Gross yield',
+                  value: yieldPercent != null
+                      ? '${yieldPercent.toStringAsFixed(1)}%'
+                      : '—',
+                ),
+              ),
+              Expanded(
+                child: _YieldMetric(
+                  label: isAr ? 'فترة الاسترداد' : 'Payback',
+                  value: payback != null
+                      ? (isAr
+                          ? '${payback.toStringAsFixed(1)} سنة'
+                          : '${payback.toStringAsFixed(1)} yrs')
+                      : '—',
+                ),
+              ),
+            ],
+          ),
+          if (annual != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              isAr
+                  ? 'الدخل السنوي المتوقع: ${annual.toStringAsFixed(0)} د.ك'
+                  : 'Expected annual income: KWD ${annual.toStringAsFixed(0)}',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            isAr
+                ? 'تقدير استرشادي — قد يختلف حسب الإشغال والصيانة.'
+                : 'Indicative estimate — varies with occupancy and maintenance.',
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _YieldShell extends StatelessWidget {
+  const _YieldShell({
+    required this.title,
+    required this.child,
+    this.trailing,
+  });
+
+  final String title;
+  final Widget child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (trailing != null) trailing!,
+              ],
+            ),
+            const SizedBox(height: 8),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _YieldMetric extends StatelessWidget {
+  const _YieldMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+      ],
     );
   }
 }

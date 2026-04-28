@@ -3,12 +3,24 @@
  */
 import * as admin from "firebase-admin";
 
-export type InvoiceServiceType = "rent" | "sale" | "chalet";
+import { areaDisplayEnglish } from "./invoicePdfAreaEn";
+
+export type InvoiceServiceType =
+  | "rent"
+  | "sale"
+  | "chalet"
+  | "property_feature";
 
 export interface PaymentInvoiceContext {
   companyId: string;
   companyName: string;
   companyEmail: string | null;
+  /**
+   * Auth UID of the user this invoice belongs to (the payer / addressee).
+   * Used by Firestore rules so the user can READ their own invoice. `null`
+   * for fully manual / unlinked rows where no end-user identity exists.
+   */
+  clientId: string | null;
   serviceType: InvoiceServiceType;
   area: string;
   descriptionAr: string;
@@ -19,6 +31,15 @@ export interface PaymentInvoiceContext {
   street: string;
   /** Formatted e.g. "12,345.000 KWD", or "". */
   propertyPrice: string;
+  /**
+   * When set, overrides the default English title from [serviceType] in the PDF
+   * (e.g. `Property Featuring - 7 days`).
+   */
+  lineItemTitleOverrideEn?: string;
+  /**
+   * When set, replaces the standard Area/Type/Block HTML block (featured ads).
+   */
+  lineItemDetailsOverrideHtml?: string;
 }
 
 function str(v: unknown): string {
@@ -50,6 +71,7 @@ function descriptionAr(serviceType: InvoiceServiceType, area: string): string {
     rent: `عمولة تأجير عقار – ${a}`,
     sale: `عمولة بيع عقار – ${a}`,
     chalet: `عمولة حجز شاليه – ${a}`,
+    property_feature: `تمييز إعلان — ${a}`,
   };
   return map[serviceType];
 }
@@ -194,6 +216,7 @@ export async function resolvePaymentInvoiceContext(
       companyId: ownerId,
       companyName: profile.name,
       companyEmail: profile.email,
+      clientId: ownerId,
       serviceType,
       area,
       descriptionAr: descriptionAr(serviceType, area),
@@ -222,6 +245,7 @@ export async function resolvePaymentInvoiceContext(
       companyId: userId,
       companyName: profile.name,
       companyEmail: profile.email,
+      clientId: userId,
       serviceType,
       area,
       descriptionAr: descriptionAr(serviceType, area),
@@ -249,10 +273,75 @@ export async function resolvePaymentInvoiceContext(
     companyId: `manual_${fallbackUid}`,
     companyName,
     companyEmail,
+    // Manual rows are admin-only — no end-user "owner" of the invoice.
+    clientId: createdBy || null,
     serviceType: st,
     area,
     descriptionAr: descriptionAr(st, area),
     amount,
     ...emptyPropertyLines(),
+  };
+}
+
+function escapeHtmlInvoice(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Invoice context for paid «feature my listing» (MyFatoorah → featurePropertyPaid).
+ * PDF line item matches product copy: `Property Featuring - [N] days`.
+ */
+export async function buildFeaturedPropertyInvoiceContext(params: {
+  uid: string;
+  propertyId: string;
+  durationDays: number;
+  amountKwd: number;
+  newFeaturedUntil: Date;
+}): Promise<PaymentInvoiceContext | null> {
+  const db = admin.firestore();
+  const profile = await loadClientProfile(params.uid);
+  const propSnap = await db.collection("properties").doc(params.propertyId).get();
+  if (!propSnap.exists) return null;
+  const p = propSnap.data() as Record<string, unknown>;
+  const area = str(p.areaAr ?? p.area) || "الكويت";
+  const propertyType = str(p.type);
+  const lineTitle = `Property Featuring - ${params.durationDays} days`;
+  const untilStr = params.newFeaturedUntil.toLocaleString("en-GB", {
+    timeZone: "Asia/Kuwait",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const areaEn = areaDisplayEnglish(area);
+  const detailsLines = [
+    `Property ID — ${params.propertyId}`,
+    `Plan — ${params.durationDays} days`,
+    `Featured until — ${untilStr}`,
+    `Area — ${areaEn}`,
+    `Property type — ${propertyType || "—"}`,
+  ];
+  const lineItemDetailsOverrideHtml = detailsLines
+    .map((line) => `<div class="sub">${escapeHtmlInvoice(line)}</div>`)
+    .join("");
+
+  return {
+    companyId: params.uid,
+    companyName: profile.name || "Valued Customer",
+    companyEmail: profile.email,
+    clientId: params.uid,
+    serviceType: "property_feature",
+    area,
+    descriptionAr: `تمييز إعلان — ${params.durationDays} يوم — ${area}`,
+    amount: params.amountKwd,
+    propertyType,
+    block: "",
+    street: "",
+    propertyPrice: "",
+    lineItemTitleOverrideEn: lineTitle,
+    lineItemDetailsOverrideHtml,
   };
 }

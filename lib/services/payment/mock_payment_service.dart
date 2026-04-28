@@ -29,17 +29,22 @@ class MockPaymentService implements PaymentService {
   }
 
   @override
-  Future<bool> payAuctionFee({
+  Future<AuctionFeePaymentUiResult> payAuctionFee({
     required double amount,
     required String requestId,
   }) async {
-    await Future<void>.delayed(const Duration(seconds: 2));
-    return true;
+    // The auction fee path now requires real MyFatoorah verification on the
+    // server (Financial Hardening Phase 1). The mock has no way to produce a
+    // valid gateway paymentId, so it deliberately fails so QA cannot pretend
+    // a fee was paid in production builds.
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    return const AuctionFeePaymentUiResult(success: false);
   }
 
   @override
   Future<FeaturedAdPaymentUiResult> payFeaturedAd({
     required double amountKwd,
+    required int durationDays,
     required String propertyId,
     required String description,
   }) async {
@@ -48,11 +53,15 @@ class MockPaymentService implements PaymentService {
 
     final fail = failureRate > 0 && _rng.nextDouble() < failureRate;
     if (fail) {
-      return const FeaturedAdPaymentUiResult(success: false);
+      return const FeaturedAdPaymentUiResult(
+        success: false,
+        failure: FeaturedAdPaymentFailure.unknown,
+      );
     }
 
     return FeaturedAdPaymentUiResult(
       success: true,
+      failure: FeaturedAdPaymentFailure.none,
       // Looks like a real gateway identifier. Prefix keeps it recognizable in logs.
       paymentId: 'fake_${_uuidV4()}',
     );

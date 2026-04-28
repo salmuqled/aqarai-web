@@ -10,7 +10,7 @@ import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/models/deal_pipeline.dart';
 import 'package:aqarai_app/services/deal_admin_service.dart';
 import 'package:aqarai_app/utils/financial_rules.dart';
-import 'package:aqarai_app/widgets/property_details_page.dart';
+import 'package:aqarai_app/app/property_route.dart';
 
 /// Admin: final deal price, commission (from final price only), pipeline status.
 class AdminDealDetailPage extends StatefulWidget {
@@ -884,14 +884,9 @@ class _AdminDealDetailPageState extends State<AdminDealDetailPage> {
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: () {
-                      Navigator.push<void>(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => PropertyDetailsPage(
-                            propertyId: propertyId,
-                            isAdminView: true,
-                          ),
-                        ),
+                      context.pushPropertyDetails(
+                        propertyId: propertyId,
+                        isAdminView: true,
                       );
                     },
                     icon: const Icon(Icons.open_in_new),

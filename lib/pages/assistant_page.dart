@@ -41,11 +41,13 @@ import 'package:aqarai_app/services/user_interest_service.dart';
 import 'package:aqarai_app/services/notification_service.dart';
 import 'package:aqarai_app/services/user_activity_service.dart';
 import 'package:aqarai_app/widgets/chat_bubble.dart';
+import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/widgets/listing_card.dart';
-import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/widgets/notifications_inbox_bell_button.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/utils/property_area_display.dart';
+import 'package:aqarai_app/data/governorates_data_ar.dart';
+import 'package:aqarai_app/data/ar_to_en_mapping.dart';
 
 /// إعلان يُعرض في نتائج المساعد (معتمد وظاهر للعميل).
 bool _listingVisibleForAssistantSearch(Map<String, dynamic> data) {
@@ -106,12 +108,56 @@ class _AssistantPageState extends State<AssistantPage>
   /// True after a no-results reply that offered to notify; next short confirmation saves interest explicitly.
   bool _awaitingNotifyConsent = false;
 
-  /// مناطق قريبة للـ fallback عند عدم وجود نتائج في المنطقة المطلوبة (areaCode → قائمة areaCode)
-  static const Map<String, List<String>> _nearbyAreaCodes = {
-    'qadisiya': ['rawda', 'kaifan', 'khaldiya'],
-    'nuzha': ['faiha', 'daeya', 'shamiya'],
-    'shamiya': ['kaifan', 'daeya', 'rawda'],
-  };
+  /// Area-code → nearby area codes, auto-derived from the governorate
+  /// structure ([governoratesAndAreasAr] + [areaArToEn]). Any area that lives
+  /// in a governorate gets its siblings from the same governorate as the
+  /// default nearby-set. This gives Kuwait-wide coverage without a hand-kept
+  /// table — every future area addition to the governorate data shows up
+  /// here automatically.
+  ///
+  /// Caveats:
+  /// - Only siblings in the same governorate are returned (no cross-gov
+  ///   cluster like "south surra ↔ north surra").
+  /// - Up to 6 siblings per area; we don't try to pick the geographically
+  ///   closest ones since we don't ship coordinates.
+  /// - If an area name has no English mapping in [areaArToEn] we skip it so
+  ///   the stored `areaCode` stays consistent with what search expects.
+  static final Map<String, List<String>> _nearbyAreaCodes = _buildNearbyAreaCodes();
+
+  static Map<String, List<String>> _buildNearbyAreaCodes() {
+    String code(String s) {
+      var v = s.trim().toLowerCase();
+      v = v.replaceAll(RegExp(r'\s+'), '_');
+      v = v.replaceAll('-', '_');
+      v = v.replaceAll(RegExp(r'[^a-z0-9_]+'), '');
+      v = v.replaceAll(RegExp(r'_+'), '_');
+      v = v.replaceAll(RegExp(r'^_+|_+$'), '');
+      return v;
+    }
+
+    const int maxSiblings = 6;
+    final out = <String, List<String>>{};
+    for (final entry in governoratesAndAreasAr.entries) {
+      final codes = <String>[];
+      for (final ar in entry.value) {
+        final en = areaArToEn[ar];
+        if (en == null || en.isEmpty) continue;
+        final c = code(en);
+        if (c.isEmpty) continue;
+        if (!codes.contains(c)) codes.add(c);
+      }
+      for (final c in codes) {
+        final siblings = <String>[];
+        for (final other in codes) {
+          if (other == c) continue;
+          siblings.add(other);
+          if (siblings.length >= maxSiblings) break;
+        }
+        if (siblings.isNotEmpty) out[c] = siblings;
+      }
+    }
+    return out;
+  }
 
   /// Below this threshold the Smart Suggestions Engine is invoked to generate
   /// alternative filters (shift dates, bump budget, widen area). Must stay in
@@ -123,9 +169,9 @@ class _AssistantPageState extends State<AssistantPage>
       areaLabelForCode(areaCode, arabic: _isAr);
 
   static const String _welcomeAr =
-      'هلا والله 👋 أنا مساعدك في عقار AI. أقدر أطلع لك شاليه للويكند، شقة للإيجار، أو بيت للتمليك.\nقل لي نوع العقار والمنطقة وخلني أشيك لك على المتاح 👌';
+      'هلا والله 👋 أنا مساعدك في عقار AI. أقدر أطلع لك شاليه للويكند، شقة للإيجار، بيت أو عمارة للتمليك، محل، مكتب، أو أرض.\nقل لي نوع العقار والمنطقة وخلني أشيك لك على المتاح 👌';
   static const String _welcomeEn =
-      'Hi there 👋 I\'m your AqarAi assistant. I can pull chalets for the weekend, apartments for rent, or houses for sale.\nTell me the type and area and I\'ll line up the best options for you.';
+      'Hi there 👋 I\'m your AqarAi assistant. I can pull chalets for the weekend, apartments for rent, houses or buildings for sale, shops, offices, or land.\nTell me the type and area and I\'ll line up the best options for you.';
 
   @override
   void initState() {
@@ -146,15 +192,12 @@ class _AssistantPageState extends State<AssistantPage>
     final cid = u.queryParameters['cid']?.trim();
     if (id == null || id.isEmpty || !mounted) return;
     _webCaptionLinkHandled = true;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PropertyDetailsPage(
-          propertyId: id,
-          captionTrackingId:
-              (cid != null && cid.isNotEmpty) ? cid : null,
-          leadSource: DealLeadSource.direct,
-        ),
-      ),
+    if (!mounted) return;
+    context.pushPropertyDetails(
+      propertyId: id,
+      captionTrackingId:
+          (cid != null && cid.isNotEmpty) ? cid : null,
+      leadSource: DealLeadSource.direct,
     );
   }
 
@@ -411,6 +454,7 @@ class _AssistantPageState extends State<AssistantPage>
         final serviceTypeRef = _currentFilters['serviceType']?.toString().trim();
         final refSuggestions = _buildSmartSuggestions(
           area: areaNameRef,
+          areaCodes: _activeAreaCodesFromFilters(),
           propertyType: propertyTypeRef?.isNotEmpty == true ? propertyTypeRef : null,
           serviceType: serviceTypeRef?.isNotEmpty == true ? serviceTypeRef : null,
           isAr: _isAr,
@@ -432,13 +476,24 @@ class _AssistantPageState extends State<AssistantPage>
         final msg = clarifyingQuestions.isNotEmpty
             ? clarifyingQuestions.join('\n')
             : (_isAr
-                ? 'حياك الله 👌 عطني فكرة عن اللي في بالك — شاليه، شقة، ولا بيت؟ وبأي منطقة؟'
-                : 'Give me a quick idea — chalet, apartment, or house? And which area?');
+                ? 'حياك الله 👌 عطني فكرة عن اللي في بالك — شاليه، شقة، بيت، محل، مكتب، أرض، ولا عمارة؟ وبأي منطقة؟'
+                : 'Give me a quick idea — chalet, apartment, house, shop, office, land, or building? And which area?');
         _appendReply(msg);
         return;
       }
 
-      if (_currentFilters['areaCode'] == null || _currentFilters['areaCode'].toString().trim().isEmpty) {
+      // Multi-area runs are valid even when the single `areaCode` slot is
+      // empty: the agent emits an `areaCodes` list (chalet belt expansion or
+      // explicit multi-area mention) and the search service does a Firestore
+      // `whereIn` over it. Only block when BOTH are missing — otherwise we'd
+      // ask "أي منطقة؟" right after the customer named three of them.
+      final hasMultiAreaInFilters =
+          _currentFilters['areaCodes'] is List &&
+          (_currentFilters['areaCodes'] as List).length >= 2;
+      final hasSingleAreaInFilters =
+          _currentFilters['areaCode'] != null &&
+          _currentFilters['areaCode'].toString().trim().isNotEmpty;
+      if (!hasMultiAreaInFilters && !hasSingleAreaInFilters) {
         _appendReply(_isAr
             ? 'قل لي المنطقة (مثل القادسية، السالمية، خيران…) وخلني أشيك لك على المتاح 👀'
             : 'Tell me the area (e.g. Qadisiya, Salmiya, Khairan…) and I\'ll check what\'s available for you.');
@@ -528,14 +583,18 @@ class _AssistantPageState extends State<AssistantPage>
       var top3List = <Map<String, dynamic>>[];
       if (_lastResults.isEmpty) {
         final nearbyCodesForSimilar = areaCode.isNotEmpty ? _nearbyAreaCodes[areaCode] : null;
+        // Phase 1 generalization: fire the similar-recommendations fallback
+        // whenever we have an area to widen AROUND, even if the user never
+        // declared a property type. The backend now tolerates empty
+        // `propertyType` and returns nearby listings regardless of type.
         if (areaCode.isNotEmpty &&
-            _currentFilters['type'] != null &&
             nearbyCodesForSimilar != null &&
             nearbyCodesForSimilar.isNotEmpty) {
           try {
             final similarResult = await aiBrain.findSimilarRecommendations(
               requestedAreaCode: areaCode,
-              propertyType: _currentFilters['type']!.toString().trim(),
+              propertyType:
+                  _currentFilters['type']?.toString().trim() ?? '',
               nearbyAreaCodes: nearbyCodesForSimilar,
               userBudget: userBudget,
             );
@@ -600,6 +659,7 @@ class _AssistantPageState extends State<AssistantPage>
       final serviceType = _currentFilters['serviceType']?.toString().trim();
       final staticTextChips = _buildSmartSuggestions(
         area: areaName,
+        areaCodes: _activeAreaCodesFromFilters(),
         propertyType: propertyType?.isNotEmpty == true ? propertyType : null,
         serviceType: serviceType?.isNotEmpty == true ? serviceType : null,
         isAr: _isAr,
@@ -799,17 +859,62 @@ class _AssistantPageState extends State<AssistantPage>
     return ar.contains(inner) || ar.contains(s);
   }
 
+  /// Pull the active multi-area selection out of `_currentFilters`. Returns
+  /// `[]` when the customer is in single-area mode (or hasn't picked an area
+  /// yet) — callers treat empty as "no multi-area, behave like before".
+  List<String> _activeAreaCodesFromFilters() {
+    final raw = _currentFilters['areaCodes'];
+    if (raw is! List) return const [];
+    final cleaned = raw
+        .map((v) => v?.toString().trim().toLowerCase() ?? '')
+        .where((v) => v.isNotEmpty)
+        .toSet()
+        .toList();
+    return cleaned.length >= 2 ? cleaned : const [];
+  }
+
   /// Build contextual suggestion buttons based on current search filters.
+  ///
+  /// Persona rules (kept aligned with `agent_brain.ts` ANALYZE_SYSTEM):
+  ///   • DEFAULT SORT IS QUALITY, NOT PRICE. We never auto-offer
+  ///     "وريني الأرخص" / "Show the cheapest" — that chip caused the bot to
+  ///     drag customers down-market on every chalet turn. The الأرخص modifier
+  ///     still works when the customer types it themselves; the chat brain
+  ///     parses it via [detectSearchModifier].
+  ///   • CHALETS GET CONSULTATIVE CHIPS. After a chalet result lands, real
+  ///     brokers ask "صف أول على البحر؟" / "حق عوايل ولا شباب؟" — those are
+  ///     the chips here, not generic "show me beachfront".
+  ///   • MULTI-AREA SUPPORT. When the customer is browsing 2+ chalet-belt
+  ///     areas in one breath, we surface a "بس بـ {area}" chip per area so
+  ///     they can narrow with one tap. Each chip carries the canonical
+  ///     `areaCode` slug verbatim — the chat brain's resolver already maps it
+  ///     back to a single-area search on click.
   List<String> _buildSmartSuggestions({
     String? area,
+    List<String> areaCodes = const [],
     String? propertyType,
     String? serviceType,
     bool isAr = true,
   }) {
     final suggestions = <String>[];
+    final isChalet = propertyType == 'chalet';
+    final cleanedAreaCodes = areaCodes
+        .map((c) => c.trim().toLowerCase())
+        .where((c) => c.isNotEmpty)
+        .toList();
+    final isMultiArea = cleanedAreaCodes.length >= 2;
+
     if (isAr) {
-      if (area != null && area.isNotEmpty) {
-        suggestions.add('وريني الأرخص في $area');
+      if (isChalet) {
+        suggestions.add('صف أول على البحر');
+        suggestions.add('حق عوايل');
+      }
+      if (isMultiArea) {
+        for (final code in cleanedAreaCodes.take(3)) {
+          final label = _areaUiLabel(code);
+          if (label.isNotEmpty) suggestions.add('بس بـ $label');
+        }
+      } else if (area != null && area.isNotEmpty) {
         suggestions.add('خيارات قريبة بنفس المميزات');
       }
       if (propertyType == 'house') {
@@ -818,15 +923,20 @@ class _AssistantPageState extends State<AssistantPage>
       if (propertyType == 'apartment') {
         suggestions.add('بيوت بنفس المنطقة');
       }
-      if (propertyType == 'chalet') {
-        suggestions.add('شاليهات على البحر');
-      }
       if (serviceType == 'sale') {
         suggestions.add('عندك خيارات إيجار بنفس المنطقة');
       }
     } else {
-      if (area != null && area.isNotEmpty) {
-        suggestions.add('Show the cheapest in $area');
+      if (isChalet) {
+        suggestions.add('Beachfront row only');
+        suggestions.add('Family-friendly');
+      }
+      if (isMultiArea) {
+        for (final code in cleanedAreaCodes.take(3)) {
+          final label = _areaUiLabel(code);
+          if (label.isNotEmpty) suggestions.add('Just in $label');
+        }
+      } else if (area != null && area.isNotEmpty) {
         suggestions.add('Nearby options with the same perks');
       }
       if (propertyType == 'house') {
@@ -834,9 +944,6 @@ class _AssistantPageState extends State<AssistantPage>
       }
       if (propertyType == 'apartment') {
         suggestions.add('Houses in the same area');
-      }
-      if (propertyType == 'chalet') {
-        suggestions.add('Beachfront chalets');
       }
       if (serviceType == 'sale') {
         suggestions.add('Rentals in the same area');
@@ -1542,14 +1649,9 @@ class _AssistantPageState extends State<AssistantPage>
                         onTap: id.isEmpty
                             ? null
                             : () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => PropertyDetailsPage(
-                                      propertyId: id,
-                                      leadSource: DealLeadSource.aiChat,
-                                    ),
-                                  ),
+                                context.pushPropertyDetails(
+                                  propertyId: id,
+                                  leadSource: DealLeadSource.aiChat,
                                 );
                               },
                       ),

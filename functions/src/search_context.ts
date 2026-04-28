@@ -9,8 +9,22 @@ export type BuyerIntent = "residential" | "investment";
 
 export interface SearchContext {
   areaCode?: string;
+  /**
+   * Multi-area selection — populated when the customer named 2+ distinct
+   * `areaCode`s in one breath ("الخيران بنيدر جليعه") OR when the orchestrator
+   * expanded a vague chalet request to the canonical chalet belt.
+   *
+   * When set, the search service runs a Firestore `whereIn` over this list
+   * (each entry already canonical, no fabricated concatenated slugs). Always
+   * an array of distinct lowercase canonical slugs; we keep [areaCode]
+   * populated alongside it (= first entry) so legacy single-area consumers
+   * still work without changes.
+   */
+  areaCodes?: string[];
   propertyType?: string;
   serviceType?: string;
+  /** `daily` | `monthly` | `full` — optional rental cadence for rent listings. */
+  rentalType?: string;
   budget?: number;
   bedrooms?: number;
 
@@ -74,10 +88,23 @@ export function getSearchContextFromFilters(filters: Record<string, unknown>): S
   const ctx: SearchContext = {};
   const areaCode = filters.areaCode;
   if (areaCode != null && String(areaCode).trim() !== "") ctx.areaCode = String(areaCode).trim();
+  const areaCodesRaw = filters.areaCodes;
+  if (Array.isArray(areaCodesRaw)) {
+    const codes = areaCodesRaw
+      .map((v) => (typeof v === "string" ? v.trim().toLowerCase() : ""))
+      .filter((v) => v.length > 0);
+    const distinct = Array.from(new Set(codes));
+    if (distinct.length >= 2) ctx.areaCodes = distinct;
+  }
   const type = filters.type;
   if (type != null && String(type).trim() !== "") ctx.propertyType = String(type).trim();
   const serviceType = filters.serviceType;
   if (serviceType != null && String(serviceType).trim() !== "") ctx.serviceType = String(serviceType).trim();
+  const rentalType = filters.rentalType;
+  if (rentalType != null) {
+    const rt = String(rentalType).trim().toLowerCase();
+    if (rt === "daily" || rt === "monthly" || rt === "full") ctx.rentalType = rt;
+  }
   const budget = filters.budget;
   if (budget != null && typeof budget === "number" && !Number.isNaN(budget)) ctx.budget = budget;
   const bedrooms = filters.bedrooms;
@@ -106,8 +133,12 @@ export function getSearchContextFromFilters(filters: Record<string, unknown>): S
 export function contextToQueryFilters(context: SearchContext): Record<string, unknown> {
   const q: Record<string, unknown> = {};
   if (context.areaCode != null && context.areaCode !== "") q.areaCode = context.areaCode;
+  if (Array.isArray(context.areaCodes) && context.areaCodes.length >= 2) {
+    q.areaCodes = context.areaCodes.slice();
+  }
   if (context.propertyType != null && context.propertyType !== "") q.type = context.propertyType;
   if (context.serviceType != null && context.serviceType !== "") q.serviceType = context.serviceType;
+  if (context.rentalType != null && context.rentalType !== "") q.rentalType = context.rentalType;
   if (context.budget != null && !Number.isNaN(Number(context.budget))) q.budget = context.budget;
   if (context.bedrooms != null && !Number.isNaN(Number(context.bedrooms))) q.bedrooms = context.bedrooms;
   // Date Intelligence: only propagate when the full triple is present and consistent.

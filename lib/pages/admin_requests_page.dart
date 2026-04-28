@@ -12,7 +12,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:aqarai_app/services/firestore.dart';
 import 'package:aqarai_app/pages/admin_dashboard_page.dart';
-import 'package:aqarai_app/widgets/property_details_page.dart';
+import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/pages/wanted_details_page.dart';
 import 'package:aqarai_app/pages/valuation_details_page.dart';
 import 'package:aqarai_app/pages/admin_deal_detail_page.dart';
@@ -545,13 +545,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
 
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                PropertyDetailsPage(propertyId: id, isAdminView: true),
-          ),
-        );
+        context.pushPropertyDetails(propertyId: id, isAdminView: true);
       },
       child: Card(
         elevation: 3,
@@ -721,13 +715,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
 
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                PropertyDetailsPage(propertyId: id, isAdminView: true),
-          ),
-        );
+        context.pushPropertyDetails(propertyId: id, isAdminView: true);
       },
       child: Card(
         elevation: 3,
@@ -1315,12 +1303,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         return;
       }
       if (propertyId.isNotEmpty) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                PropertyDetailsPage(propertyId: propertyId, isAdminView: true),
-          ),
+        context.pushPropertyDetails(
+          propertyId: propertyId,
+          isAdminView: true,
         );
       }
     }
@@ -2217,14 +2202,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                         onPressed: propertyId.isEmpty
                             ? null
                             : () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => PropertyDetailsPage(
-                                      propertyId: propertyId,
-                                      isAdminView: true,
-                                    ),
-                                  ),
+                                context.pushPropertyDetails(
+                                  propertyId: propertyId,
+                                  isAdminView: true,
                                 );
                               },
                         icon: const Icon(Icons.home_work, size: 18),
@@ -2501,14 +2481,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
                 ),
                 TextButton.icon(
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PropertyDetailsPage(
-                          propertyId: pid,
-                          isAdminView: true,
-                        ),
-                      ),
+                    context.pushPropertyDetails(
+                      propertyId: pid,
+                      isAdminView: true,
                     );
                   },
                   icon: const Icon(Icons.open_in_new),
@@ -3253,14 +3228,9 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     if (isProperty) {
       return GestureDetector(
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PropertyDetailsPage(
-                propertyId: item.doc.id,
-                isAdminView: true,
-              ),
-            ),
+          context.pushPropertyDetails(
+            propertyId: item.doc.id,
+            isAdminView: true,
           );
         },
         child: card,

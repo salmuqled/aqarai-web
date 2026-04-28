@@ -2,7 +2,20 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
-import { requirePaymentEnabledOrExplain } from "./payments/myfatoorahRuntime";
+import {
+  myFatoorahApiKey,
+  myFatoorahAppReturnBaseUrl,
+  myFatoorahBaseUrl,
+  requirePaymentEnabledOrExplain,
+} from "./payments/myfatoorahRuntime";
+import {
+  myFatoorahGetPaymentStatusFlexible,
+  type MyFatoorahVerifyResult,
+} from "./payments/myfatoorahVerify";
+import {
+  resolveExecutePaymentSessionIds,
+  type ExecutePaymentResponse,
+} from "./payments/myfatoorahGateway";
 import { finalizeBookingAfterPayment, pendingPaymentStillHolds } from "./chalet_booking";
 import { ensureChaletLedgerForConfirmedBooking } from "./chalet_booking_finance";
 import { writeExceptionLog } from "./exceptionLogs";
@@ -26,10 +39,6 @@ function toFiniteNumber(v: unknown): number | null {
   return null;
 }
 
-function normalizeStatus(s: unknown): string {
-  return typeof s === "string" ? s.trim().toLowerCase() : "";
-}
-
 function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
@@ -44,16 +53,6 @@ type MyFatoorahInitiatePaymentResponse = {
       PaymentMethodAr?: string;
       IsDirectPayment?: boolean;
     }>;
-  };
-};
-
-type MyFatoorahExecutePaymentResponse = {
-  IsSuccess?: boolean;
-  Message?: string;
-  Data?: {
-    InvoiceId?: number;
-    PaymentURL?: string;
-    PaymentId?: string | number;
   };
 };
 
@@ -75,9 +74,7 @@ type MyFatoorahGetPaymentStatusResponse = {
 
 async function myFatoorahInitiatePayment(amountKwd: number): Promise<number> {
   const apiKey = process.env.MYFATOORAH_API_KEY;
-  const base = (process.env.MYFATOORAH_API_BASE_URL ?? "https://api.myfatoorah.com")
-    .trim()
-    .replace(/\/+$/, "");
+  const base = myFatoorahBaseUrl();
   requirePaymentEnabledOrExplain();
 
   const url = `${base}/v2/InitiatePayment`;
@@ -116,13 +113,18 @@ async function myFatoorahExecutePayment(args: {
   language: "AR" | "EN";
 }): Promise<{ paymentUrl: string; paymentId: string; invoiceId: string | null }> {
   const apiKey = process.env.MYFATOORAH_API_KEY;
-  const base = (process.env.MYFATOORAH_API_BASE_URL ?? "https://api.myfatoorah.com")
-    .trim()
-    .replace(/\/+$/, "");
+  const base = myFatoorahBaseUrl();
   requirePaymentEnabledOrExplain();
 
-  const callBackUrl = `aqarai://payment/success?bookingId=${encodeURIComponent(args.bookingId)}`;
-  const errorUrl = `aqarai://payment/error?bookingId=${encodeURIComponent(args.bookingId)}`;
+  const appReturn = myFatoorahAppReturnBaseUrl();
+  const callBackUrl = `${appReturn}?${new URLSearchParams({
+    s: "payment/success",
+    bookingId: args.bookingId,
+  }).toString()}`;
+  const errorUrl = `${appReturn}?${new URLSearchParams({
+    s: "payment/error",
+    bookingId: args.bookingId,
+  }).toString()}`;
 
   const url = `${base}/v2/ExecutePayment`;
   const res = await fetch(url, {
@@ -144,9 +146,9 @@ async function myFatoorahExecutePayment(args: {
   });
 
   const text = await res.text();
-  let json: MyFatoorahExecutePaymentResponse;
+  let json: ExecutePaymentResponse;
   try {
-    json = JSON.parse(text) as MyFatoorahExecutePaymentResponse;
+    json = JSON.parse(text) as ExecutePaymentResponse;
   } catch {
     throw new HttpsError("internal", `MyFatoorah invalid JSON (http ${res.status})`);
   }
@@ -155,92 +157,24 @@ async function myFatoorahExecutePayment(args: {
     throw new HttpsError("failed-precondition", `MyFatoorah error: ${msg}`);
   }
 
-  const paymentUrl = typeof json.Data?.PaymentURL === "string" ? json.Data.PaymentURL.trim() : "";
-  const paymentIdRaw = json.Data?.PaymentId;
-  const paymentId =
-    typeof paymentIdRaw === "string"
-      ? paymentIdRaw.trim()
-      : typeof paymentIdRaw === "number"
-        ? String(paymentIdRaw)
-        : "";
-  const invoiceId =
-    typeof json.Data?.InvoiceId === "number" ? String(json.Data.InvoiceId) : null;
-
-  if (!paymentUrl) throw new HttpsError("failed-precondition", "Missing PaymentURL");
-  if (!paymentId) throw new HttpsError("failed-precondition", "Missing PaymentId");
-
-  return { paymentUrl, paymentId, invoiceId };
+  return resolveExecutePaymentSessionIds(text, json);
 }
 
-async function myFatoorahGetPaymentStatus(paymentId: string): Promise<{
+function verifyResultToChaletShape(ver: MyFatoorahVerifyResult): {
   ok: boolean;
   status: string;
   amountKwd: number | null;
   currency: string | null;
   reference: string | null;
   raw: MyFatoorahGetPaymentStatusResponse;
-}> {
-  const apiKey = process.env.MYFATOORAH_API_KEY;
-  const base = (process.env.MYFATOORAH_API_BASE_URL ?? "https://api.myfatoorah.com")
-    .trim()
-    .replace(/\/+$/, "");
-  requirePaymentEnabledOrExplain();
-
-  const url = `${base}/v2/GetPaymentStatus`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey!.trim()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ Key: paymentId, KeyType: "PaymentId" }),
-  });
-
-  const text = await res.text();
-  let json: MyFatoorahGetPaymentStatusResponse;
-  try {
-    json = JSON.parse(text) as MyFatoorahGetPaymentStatusResponse;
-  } catch {
-    throw new HttpsError("internal", `MyFatoorah invalid JSON (http ${res.status})`);
-  }
-
-  if (!res.ok) {
-    const msg = json?.Message ? String(json.Message) : `http_${res.status}`;
-    throw new HttpsError("failed-precondition", `MyFatoorah error: ${msg}`);
-  }
-
-  const isSuccess = json.IsSuccess === true;
-  const data = json.Data;
-  const invoiceStatus = normalizeStatus(data?.InvoiceStatus);
-  const tx = data?.InvoiceTransactions && data.InvoiceTransactions.length > 0
-    ? data.InvoiceTransactions[0]
-    : undefined;
-  const txStatus = normalizeStatus(tx?.TransactionStatus);
-
-  const currency = typeof tx?.PaidCurrency === "string" ? tx.PaidCurrency.trim() : null;
-  const amount = typeof tx?.PaidCurrencyValue === "number" && Number.isFinite(tx.PaidCurrencyValue)
-    ? round3(tx.PaidCurrencyValue)
-    : (typeof data?.InvoiceValue === "number" && Number.isFinite(data.InvoiceValue) ? round3(data.InvoiceValue) : null);
-
-  const ok =
-    isSuccess &&
-    (invoiceStatus === "paid" || invoiceStatus === "success") &&
-    (txStatus === "" || txStatus === "succss" || txStatus === "success");
-
-  const reference =
-    (typeof data?.InvoiceReference === "string" && data.InvoiceReference.trim())
-      ? data.InvoiceReference.trim()
-      : (typeof tx?.ReferenceId === "string" && tx.ReferenceId.trim())
-        ? tx.ReferenceId.trim()
-        : null;
-
+} {
   return {
-    ok,
-    status: invoiceStatus || txStatus || "unknown",
-    amountKwd: amount,
-    currency,
-    reference,
-    raw: json,
+    ok: ver.ok,
+    status: ver.status,
+    amountKwd: ver.amountKwd,
+    currency: ver.currency,
+    reference: ver.reference,
+    raw: ver.raw as MyFatoorahGetPaymentStatusResponse,
   };
 }
 
@@ -250,7 +184,7 @@ async function myFatoorahGetPaymentStatus(paymentId: string): Promise<{
  * Creates a gateway payment URL for an existing booking in `pending_payment`.
  */
 export const createBookingMyFatoorahPayment = onCall(
-  { region: "us-central1" },
+  { region: "us-central1", secrets: [myFatoorahApiKey] },
   async (request) => {
     const uid = requireUid(request);
     const data = (request.data ?? {}) as Record<string, unknown>;
@@ -308,7 +242,7 @@ export const createBookingMyFatoorahPayment = onCall(
  * Server-side verification with MyFatoorah; only then sets `confirmed`.
  */
 export const verifyBookingMyFatoorahPayment = onCall(
-  { region: "us-central1" },
+  { region: "us-central1", secrets: [myFatoorahApiKey] },
   async (request) => {
     const uid = requireUid(request);
     const data = (request.data ?? {}) as Record<string, unknown>;
@@ -349,7 +283,9 @@ export const verifyBookingMyFatoorahPayment = onCall(
       throw new HttpsError("failed-precondition", "Invalid paymentId");
     }
 
-    const ver = await myFatoorahGetPaymentStatus(paymentId);
+    const ver = verifyResultToChaletShape(
+      await myFatoorahGetPaymentStatusFlexible(paymentId)
+    );
     if (!ver.ok) {
       throw new HttpsError("failed-precondition", `PAYMENT_NOT_SUCCESSFUL:${ver.status}`);
     }

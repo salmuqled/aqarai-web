@@ -105,6 +105,7 @@ export const recreateInvoiceForPayment = onCall(
       () => ({
         companyId: ctx.companyId,
         companyName: ctx.companyName,
+        clientId: ctx.clientId,
         amount: ctx.amount,
         serviceType: ctx.serviceType,
         area: ctx.area,

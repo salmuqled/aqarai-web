@@ -77,6 +77,18 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   final sizeController = TextEditingController();
   final priceController = TextEditingController();
 
+  // Optional ROI inputs — Phase 1 "Deterministic ROI / Yield".
+  //
+  // Shown ONLY for `serviceType == sale` AND
+  // `selectedPropertyType in {building, house}`. Both fields are optional.
+  // When the owner fills them, `aqaraiAgentComputeRoi` prefers the
+  // owner-provided path; when empty it falls back to same-area rental
+  // comparables. The fields are written to Firestore only when populated
+  // and valid (positive numbers) — we never persist zero or garbage.
+  final unitCountController = TextEditingController();
+  final estimatedMonthlyIncomeKwdController = TextEditingController();
+  bool _investmentSectionExpanded = false;
+
   // Extra features
   bool hasElevator = false;
   bool hasCentralAC = false;
@@ -122,6 +134,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     parkingCountController.dispose();
     sizeController.dispose();
     priceController.dispose();
+    unitCountController.dispose();
+    estimatedMonthlyIncomeKwdController.dispose();
     _termsLinkTap.dispose();
     super.dispose();
   }
@@ -277,6 +291,16 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
 
   /// Single source of truth: top-level service intent is sale.
   bool isSaleListing() => selectedServiceType == 'sale';
+
+  /// ROI / investment inputs are meaningful only for multi-unit sale
+  /// listings. We surface the section for `building` and `house` on sale —
+  /// apartments / shops / chalets are single-unit or have different
+  /// valuation dynamics and would only add noise.
+  bool _investmentFieldsApplicable() {
+    if (!isSaleListing()) return false;
+    final t = (selectedPropertyType ?? '').trim().toLowerCase();
+    return t == 'building' || t == 'house';
+  }
 
   /// Chalet offered as daily booking (never apply sale-style KWD ×1000 heuristic).
   bool isChaletDailyBooking() =>
@@ -543,6 +567,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       final priceType = PropertyPriceType.forNewListing(
         propertyType: selectedPropertyType!,
         serviceType: selectedServiceType,
+        // Chalet-monthly / chalet-sale must not land as "daily" — the old
+        // default bug inflated ROI math and put the "/ ليلة" suffix on
+        // monthly chalets. Always forward the mode so the util can pick the
+        // right unit.
+        chaletMode: selectedPropertyType == 'chalet' ? selectedChaletMode : null,
       );
 
       // Matches `searchDailyProperties` filters (`daily` | `monthly`); chalet `sale`
@@ -654,6 +683,25 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "hasPoolIndoor": hasPoolIndoor,
         "hasPoolOutdoor": hasPoolOutdoor,
         "isBeachfront": isBeachfront,
+
+        // Investment / ROI inputs (optional, sale + building/house only).
+        // Both values are saved only when the field makes sense for the
+        // listing AND the owner typed a positive number; otherwise we
+        // omit them so legacy listings stay clean.
+        if (_investmentFieldsApplicable())
+          ...(() {
+            final extras = <String, dynamic>{};
+            final unitCount = parsePropertyInt(unitCountController.text);
+            if (unitCount > 0) {
+              extras['unitCount'] = unitCount;
+            }
+            final monthlyIncome =
+                parsePropertyDouble(estimatedMonthlyIncomeKwdController.text);
+            if (monthlyIncome > 0) {
+              extras['estimatedMonthlyIncomeKwd'] = monthlyIncome;
+            }
+            return extras;
+          })(),
 
         if (videoUrlController.text.trim().isNotEmpty)
           "videoUrl": videoUrlController.text.trim(),
@@ -1418,6 +1466,83 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                 value: isBeachfront,
                 onChanged: (v) => setState(() => isBeachfront = v!),
               ),
+
+              // Investment (optional) — collapsible. Only shown for
+              // `sale` + building/house since only multi-unit sale listings
+              // benefit from owner-declared ROI inputs. Kept visually quiet
+              // (a ghost theme card) so it never distracts the regular flow.
+              if (_investmentFieldsApplicable()) ...[
+                const SizedBox(height: 12),
+                Card(
+                  elevation: 0,
+                  margin: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      dividerColor: Colors.transparent,
+                    ),
+                    child: ExpansionTile(
+                      tilePadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                      ),
+                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                      initiallyExpanded: _investmentSectionExpanded,
+                      onExpansionChanged: (v) => setState(
+                        () => _investmentSectionExpanded = v,
+                      ),
+                      title: Text(
+                        isArabic
+                            ? 'استثمار (اختياري)'
+                            : 'Investment (optional)',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        isArabic
+                            ? 'يساعد حاسبة العائد على إعطاء رقم دقيق للمشتري'
+                            : 'Helps the yield calculator show buyers an accurate number',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 12,
+                        ),
+                      ),
+                      children: [
+                        TextFormField(
+                          controller: unitCountController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: isArabic
+                                ? 'عدد الوحدات القابلة للتأجير'
+                                : 'Number of rentable units',
+                            hintText: isArabic
+                                ? 'مثلاً 4 شقق داخل البناية'
+                                : 'e.g. 4 apartments in the building',
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: estimatedMonthlyIncomeKwdController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: isArabic
+                                ? 'الدخل الشهري المتوقع (د.ك)'
+                                : 'Expected monthly income (KWD)',
+                            hintText: isArabic
+                                ? 'مجموع الإيجار الشهري لكل الوحدات'
+                                : 'Total monthly rent across all units',
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 12),
 

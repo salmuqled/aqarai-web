@@ -5,8 +5,8 @@ import 'package:aqarai_app/utils/property_listing_cover.dart';
 import 'package:aqarai_app/utils/property_price_display.dart';
 import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 import 'package:intl/intl.dart';
+import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/services/firestore.dart';
-import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 
 class FeaturedCarousel extends StatelessWidget {
@@ -209,15 +209,9 @@ class FeaturedCarousel extends StatelessWidget {
                     coverUrl: coverUrl,
                     isArabic: isArabic,
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              PropertyDetailsPage(
-                                propertyId: doc.id,
-                                leadSource: DealLeadSource.featured,
-                              ),
-                        ),
+                      context.pushPropertyDetails(
+                        propertyId: doc.id,
+                        leadSource: DealLeadSource.featured,
                       );
                     },
                   );

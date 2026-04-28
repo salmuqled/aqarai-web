@@ -4,18 +4,15 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'package:aqarai_app/firebase_options.dart';
-import 'package:aqarai_app/auth/login_page.dart';
-import 'package:aqarai_app/pages/assistant_page.dart';
-import 'package:aqarai_app/app/navigation_keys.dart';
+import 'package:aqarai_app/app/app_router.dart';
+import 'package:aqarai_app/app/auth_bootstrap.dart';
 import 'package:aqarai_app/services/admin_client_error_reporter.dart';
-import 'package:aqarai_app/services/auth_service.dart';
 import 'package:aqarai_app/services/deal_follow_up_local_notifications.dart';
 import 'package:aqarai_app/services/notification_service.dart';
-import 'package:aqarai_app/widgets/banned_user_session_gate.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -26,6 +23,7 @@ import 'package:aqarai_app/app/locale_notifier.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy();
 
   try {
     await Firebase.initializeApp(
@@ -83,8 +81,8 @@ class MyApp extends StatelessWidget {
     return ValueListenableBuilder<Locale>(
       valueListenable: appLocale,
       builder: (context, locale, _) {
-        return MaterialApp(
-          navigatorKey: rootNavigatorKey,
+        return MaterialApp.router(
+          routerConfig: appRouter,
           debugShowCheckedModeBanner: false,
           theme: aqarAiLightTheme(),
 
@@ -121,77 +119,9 @@ class MyApp extends StatelessWidget {
               onTap: () {
                 FocusManager.instance.primaryFocus?.unfocus();
               },
-              child: child,
+              child: AuthBootstrap(child: child ?? const SizedBox.shrink()),
             );
           },
-
-          home: const AuthGate(),
-        );
-      },
-    );
-  }
-}
-
-/// ----------------------------------------------------------------
-/// 🔐 AuthGate
-/// ----------------------------------------------------------------
-class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
-
-  @override
-  State<AuthGate> createState() => _AuthGateState();
-}
-
-class _AuthGateState extends State<AuthGate> {
-  StreamSubscription<User?>? _authSub;
-  String? _followUpLaunchFlushUid;
-
-  @override
-  void initState() {
-    super.initState();
-    // يجبر تحديث التوكن عند أي جلسة (بعد تعيين admin على السيرفر لازم يبان في Firestore).
-    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
-      if (user != null) {
-        unawaited(AuthService.refreshIdTokenClaims());
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _authSub?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (!snapshot.hasData) {
-          _followUpLaunchFlushUid = null;
-          return const LoginPage();
-        }
-
-        final uid = snapshot.data!.uid;
-        if (_followUpLaunchFlushUid != uid) {
-          _followUpLaunchFlushUid = uid;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            DealFollowUpLocalNotifications.flushPendingLaunchNavigation();
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              DealFollowUpLocalNotifications.flushPendingLaunchNavigation();
-            });
-          });
-        }
-
-        return const BannedUserSessionGate(
-          child: AssistantPage(),
         );
       },
     );

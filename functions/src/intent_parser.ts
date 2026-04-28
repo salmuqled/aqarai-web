@@ -3,7 +3,10 @@
  * Exposes parseUserMessage and supporting helpers.
  */
 import { KUWAIT_AREAS } from "./kuwait_areas";
-import { resolveAreaCodeFromMessage } from "./resolve_area_code_text";
+import {
+  resolveAreaCodeFromMessage,
+  stripArabicGreetings,
+} from "./resolve_area_code_text";
 
 // ---------------------------------------------------------------------------
 // Arabic normalization
@@ -28,6 +31,59 @@ const SERVICE_PHRASES: { phrases: string[]; value: string }[] = [
   { phrases: ["للبيع", "بيع"], value: "sale" },
 ];
 
+// Rental cadence (only meaningful for `serviceType == rent`). Phrases are
+// matched after `normalizeArabic`, so they must be written in the normalized
+// form (أ/إ/آ -> ا, ة -> ه, ى -> ي, diacritics stripped).
+const RENTAL_TYPE_PHRASES: { phrases: string[]; value: string }[] = [
+  {
+    phrases: [
+      "يومي",
+      "يوميه",
+      "باليوم",
+      "بالليله",
+      "بالليلة",
+      "nightly",
+      "per night",
+      "weekend",
+      "ويكند",
+      "نهايه الاسبوع",
+      "ليالي",
+      "ليلتين",
+    ],
+    value: "daily",
+  },
+  {
+    phrases: [
+      "شهري",
+      "شهريه",
+      "بالشهر",
+      "طويل الامد",
+      "طويل المده",
+      "long term",
+      "long-term",
+      "monthly",
+      "للسكن",
+      "سكني طويل",
+    ],
+    value: "monthly",
+  },
+];
+
+// Daily-cadence regex (numeric night counts): "3 ليالي", "ليلتين", "2 nights",
+// "ليلة وحدة", etc. When the customer counts nights at all in their request,
+// it's a strong implicit signal that they want a per-night booking — i.e.
+// `rentalType=daily`. We catch this AFTER the phrase loop so explicit signals
+// (e.g. "شهري") still win in mixed messages.
+const DAILY_NIGHT_COUNT_REGEX =
+  /(?:\d+|ثلاث|اربع|خمس|ست|سبع|ثمان|تسع|عشر)\s*(?:ليله|ليلة|ليالي|nights?)\b/i;
+
+// Keep in sync with the `type` enum in the add-property form
+// (`lib/pages/add_property_page.dart`) and the JSON schema in
+// `ANALYZE_SYSTEM` (`agent_brain.ts`). Types not present in BOTH places
+// are dead-ends for the search pipeline — the matched phrase would
+// silently produce zero Firestore results. `villa` is kept because it's
+// commonly typed by customers and accepted by the schema; when the form
+// eventually exposes it, it will already be populated from parsed intent.
 const PROPERTY_PHRASES: { phrases: string[]; value: string }[] = [
   { phrases: ["شاليهات", "شاليه"], value: "chalet" },
   { phrases: ["منزل", "بيت", "سكني"], value: "house" },
@@ -36,8 +92,6 @@ const PROPERTY_PHRASES: { phrases: string[]; value: string }[] = [
   { phrases: ["بناية", "بنايه", "عمارة", "عماره", "استثماري"], value: "building" },
   { phrases: ["فيلا", "فيله"], value: "villa" },
   { phrases: ["مكتب"], value: "office" },
-  { phrases: ["تجاري"], value: "commercial" },
-  { phrases: ["مخزن"], value: "warehouse" },
   { phrases: ["محل"], value: "shop" },
 ];
 
@@ -57,6 +111,7 @@ const FLOORS_PHRASES: { phrases: string[]; value: number }[] = [
 export interface KuwaitiIntentNormalized {
   propertyType?: string;
   serviceType?: string;
+  rentalType?: string;
   requestType?: string;
   features?: string[];
   floors?: number;
@@ -68,6 +123,7 @@ export function normalizeKuwaitiIntent(text: string): KuwaitiIntentNormalized {
   const tNorm = normalizeArabic(t);
   let propertyType: string | undefined;
   let serviceType: string | undefined;
+  let rentalType: string | undefined;
   let requestType: string | undefined;
   const features: string[] = [];
   let floors: number | undefined;
@@ -77,6 +133,18 @@ export function normalizeKuwaitiIntent(text: string): KuwaitiIntentNormalized {
       serviceType = value;
       break;
     }
+  }
+  for (const { phrases, value } of RENTAL_TYPE_PHRASES) {
+    if (phrases.some((p) => tNorm.includes(normalizeArabic(p)))) {
+      rentalType = value;
+      break;
+    }
+  }
+  // Implicit daily signal: customer is counting nights ("3 ليالي", "ليلتين",
+  // "2 nights"). Only fires when no explicit cadence phrase already matched
+  // — preserves the explicit "شهري" win in mixed wording.
+  if (!rentalType && DAILY_NIGHT_COUNT_REGEX.test(tNorm)) {
+    rentalType = "daily";
   }
   for (const { phrases, value } of PROPERTY_PHRASES) {
     if (phrases.some((p) => tNorm.includes(normalizeArabic(p)))) {
@@ -102,9 +170,25 @@ export function normalizeKuwaitiIntent(text: string): KuwaitiIntentNormalized {
     }
   }
 
+  // INTENTIONAL: do NOT auto-infer rentalType="daily" for chalets here.
+  //
+  // Background: chalets in Kuwait are rented BOTH daily (weekend stays) and
+  // monthly (long-term leases by employees / families). They have very
+  // different price ranges and selection logic. Auto-stamping every chalet
+  // request with "daily" caused two real bugs:
+  //   1) Customers asking "ابي شالي للايجار" never got the daily/monthly
+  //      clarifying question — the chat just guessed daily.
+  //   2) Many older chalet listings have no `rentalType` field on the doc;
+  //      strict `where('rentalType', '==', 'daily')` then returned ZERO
+  //      hits even though the regular browse showed those exact chalets
+  //      (the public list does NOT filter by rentalType).
+  // Leaving rentalType undefined here lets `agent_brain.ts` ask the user,
+  // and lets the search avoid over-filtering when the cadence isn't known.
+
   const out: KuwaitiIntentNormalized = {
     propertyType,
     serviceType,
+    rentalType,
     requestType,
     normalizedText: t,
   };
@@ -119,13 +203,72 @@ export function normalizeKuwaitiIntent(text: string): KuwaitiIntentNormalized {
 
 export function extractAreaFromText(text: string): string | null {
   if (!text || typeof text !== "string") return null;
-  const normalized = normalizeArabic(text);
+  // Strip multi-token greetings first; "السلام عليكم" must not hijack the
+  // substring matcher into returning `al_salam`, and "صباح الخير" must not
+  // resolve to the "صباح الأحمد السكنية" slug. A bare "السلام" / "صباح"
+  // typed on its own still resolves normally.
+  const stripped = stripArabicGreetings(text);
+  if (!stripped) return null;
+  const normalized = normalizeArabic(stripped);
   const entries = Object.entries(KUWAIT_AREAS).sort((a, b) => b[0].length - a[0].length);
   for (const [areaAr, code] of entries) {
     const normalizedArea = normalizeArabic(areaAr);
     if (normalizedArea && normalized.includes(normalizedArea)) return code;
   }
   return null;
+}
+
+/**
+ * Multi-area extractor. Returns ALL distinct `areaCode` values whose Arabic
+ * name appears as a substring in [text].
+ *
+ * Why this exists: the chat used to call [extractAreaFromText] (single best
+ * match) and, on failure, fall back to slugifying the entire user phrase as
+ * an `areaCode`. That produced fake slugs like `khairan_benider_jaleea`
+ * whenever a customer listed multiple chalet areas in one breath ("الخيران
+ * بنيدر جليعه ابي اشوف شنو متوفر") — the Firestore query then matched zero
+ * rows because no listing is filed under that fabricated slug.
+ *
+ * This function lets the orchestrator detect the multi-area case explicitly
+ * and ship `areaCodes: string[]` to the search service, which uses Firestore
+ * `whereIn` to query the union — exactly the user's mental model.
+ *
+ * Implementation notes:
+ *   • Greedy longest-name matching is preserved by reusing the same sorted
+ *     [KUWAIT_AREAS] iteration as [extractAreaFromText]. After a match, the
+ *     matched substring is removed from the working text so a longer name
+ *     (e.g. "صباح الاحمد البحرية - الخيران") can't get re-counted as its
+ *     shorter alias ("الخيران") on the next pass.
+ *   • Spelling-variant aliases collapse onto the same canonical slug, so the
+ *     returned list is automatically deduplicated by code (not by name).
+ *   • Greetings are stripped first using the same rule as [extractAreaFromText]
+ *     to avoid "السلام عليكم" hijacking the matcher.
+ *   • Returns `[]` (not `null`) when nothing matches — easier to compose with.
+ */
+export function extractAllAreaCodesFromText(text: string): string[] {
+  if (!text || typeof text !== "string") return [];
+  const stripped = stripArabicGreetings(text);
+  if (!stripped) return [];
+  let working = normalizeArabic(stripped);
+  const entries = Object.entries(KUWAIT_AREAS).sort((a, b) => b[0].length - a[0].length);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const [areaAr, code] of entries) {
+    const normalizedArea = normalizeArabic(areaAr);
+    if (!normalizedArea) continue;
+    if (working.includes(normalizedArea)) {
+      if (!seen.has(code)) {
+        seen.add(code);
+        out.push(code);
+      }
+      // Strip the matched substring (all occurrences) so the same span isn't
+      // re-counted as a shorter alias on the next iteration. Use a safe
+      // global replace built from the literal area string.
+      const escaped = normalizedArea.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      working = working.replace(new RegExp(escaped, "g"), " ");
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +314,57 @@ export function detectBuyerIntent(text: string): "residential" | "investment" {
     return "investment";
   }
   return "residential";
+}
+
+/**
+ * Narrow "investment question" detector — fires when the user is asking a
+ * direct ROI / yield / payback / total-income question about a specific
+ * listing. This is the trigger that injects real ROI numbers into the
+ * compose prompt (see `aqaraiAgentComputeRoi`). Keep it tight: we only want
+ * it to fire when the user is unambiguously asking for a number; generic
+ * talk about "investment" falls back to `detectBuyerIntent`.
+ */
+export function isInvestmentQuestion(text: string): boolean {
+  if (!text) return false;
+  const t = normalizeArabic(text).toLowerCase();
+  // English
+  const en = [
+    "yield",
+    "roi",
+    "return on investment",
+    "payback",
+    "cap rate",
+    "rental income",
+  ];
+  for (const p of en) {
+    if (t.includes(p)) return true;
+  }
+  // Arabic — phrase-level to avoid matching generic "ايجار" in search queries.
+  const ar = [
+    "كم العائد",
+    "العائد السنوي",
+    "العائد الاستثماري",
+    "كم مدخول",
+    "كم المدخول",
+    "كم الدخل",
+    "الدخل السنوي",
+    "دخل سنوي",
+    "كم تدخل",
+    "كم يدخل",
+    "كم ترجع فلوسي",
+    "متى ترجع",
+    "فتره الاسترداد",
+    "فترة الاسترداد",
+    "مقارنه ايجار بيع",
+    "مقارنة ايجار بيع",
+    "هل الاستثمار مربح",
+    "كم نسبه العائد",
+    "كم نسبة العائد",
+  ];
+  for (const p of ar) {
+    if (t.includes(p)) return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -448,7 +642,21 @@ export function isGreetingOnly(text: string): boolean {
 // New search trigger
 // ---------------------------------------------------------------------------
 
-const NEW_SEARCH_TRIGGERS = ["أبي", "ابي", "دور لي", "أبحث عن", "ابحث عن"];
+const NEW_SEARCH_TRIGGERS = [
+  "أبي",
+  "ابي",
+  "أبغى",
+  "ابغى",
+  "أريد",
+  "اريد",
+  "ودي",
+  "بدي",
+  "نبي",
+  "دور لي",
+  "دوّر لي",
+  "أبحث عن",
+  "ابحث عن",
+];
 
 export function isNewSearchTrigger(text: string): boolean {
   const t = normalizeArabic((text || "").trim());
@@ -950,6 +1158,14 @@ export interface ParsedIntentResult {
   buyerIntent?: "residential" | "investment";
   isNewSearch?: boolean;
   detectedAreaCode?: string | null;
+  /**
+   * Distinct `areaCode` values detected in the message when the customer
+   * named two or more areas in one breath ("الخيران بنيدر جليعه"). Empty /
+   * absent when only one area (or none) was mentioned — the orchestrator
+   * then falls back to the single [detectedAreaCode]. See
+   * [extractAllAreaCodesFromText].
+   */
+  detectedAreaCodes?: string[];
   /** For orchestrator: requestType, features, floors from Kuwaiti intent */
   requestType?: string;
   features?: string[];
@@ -977,12 +1193,22 @@ export function parseUserMessage(rawMessage: string, _locale: string): ParsedInt
   // Full message first, then word n-grams; fall back to legacy Arabic substring map.
   const detectedAreaCode =
     resolveAreaCodeFromMessage(msg) ?? extractAreaFromText(msg);
+  // Multi-area detection: the customer mentioned 2+ distinct areas in one
+  // message ("الخيران بنيدر جليعه"). We surface the full list so the
+  // orchestrator can run a `whereIn` Firestore query instead of dropping to
+  // a single-area best-match (the old behavior, which then sometimes fell
+  // back to a fabricated concatenated slug — the `khairan_benider_jaleea`
+  // bug). When only 0 or 1 area is found, this stays empty and the caller
+  // continues to use [detectedAreaCode].
+  const allAreaCodes = extractAllAreaCodesFromText(msg);
+  const detectedAreaCodes = allAreaCodes.length >= 2 ? allAreaCodes : [];
   const modifier = detectSearchModifier(msg);
   const buyerIntent = detectBuyerIntent(msg);
   const isNewSearch = isNewSearchTrigger(msg);
 
   const paramsPatch: Record<string, unknown> = {};
   if (detectedAreaCode) paramsPatch.areaCode = detectedAreaCode;
+  if (detectedAreaCodes.length >= 2) paramsPatch.areaCodes = detectedAreaCodes;
   if (kuwaiti.propertyType) paramsPatch.type = kuwaiti.propertyType;
   if (kuwaiti.serviceType) paramsPatch.serviceType = kuwaiti.serviceType;
 
@@ -999,6 +1225,7 @@ export function parseUserMessage(rawMessage: string, _locale: string): ParsedInt
     buyerIntent,
     isNewSearch,
     detectedAreaCode: detectedAreaCode ?? null,
+    detectedAreaCodes: detectedAreaCodes,
     dateRange: dateRange ?? null,
   };
   if (kuwaiti.requestType) result.requestType = kuwaiti.requestType;

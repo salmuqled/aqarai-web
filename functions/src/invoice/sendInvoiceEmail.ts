@@ -23,8 +23,18 @@ export async function sendInvoiceEmails(params: {
   companyEmail: string | null;
   pdfBuffer: Buffer;
   pdfFileName: string;
+  /** Defaults: [EMAIL_SUBJECT] / [EMAIL_BODY_TEXT] from constants. */
+  subject?: string;
+  bodyText?: string;
 }): Promise<SendInvoiceEmailsResult> {
-  const { smtp, companyEmail, pdfBuffer, pdfFileName } = params;
+  const {
+    smtp,
+    companyEmail,
+    pdfBuffer,
+    pdfFileName,
+    subject,
+    bodyText,
+  } = params;
   const { user: smtpUser, pass: smtpPass } = normalizeSmtpAuth(smtp.user, smtp.pass);
 
   if (!smtpPass || !smtpUser) {
@@ -53,12 +63,14 @@ export async function sendInvoiceEmails(params: {
     }
     recipients.add(adminEmail.trim().toLowerCase());
 
+    const subj = (subject ?? EMAIL_SUBJECT).trim() || EMAIL_SUBJECT;
+    const body = (bodyText ?? EMAIL_BODY_TEXT).trim() || EMAIL_BODY_TEXT;
     for (const to of recipients) {
       await transporter.sendMail({
         from,
         to,
-        subject: EMAIL_SUBJECT,
-        text: EMAIL_BODY_TEXT,
+        subject: subj,
+        text: body,
         attachments: [attachment],
       });
     }

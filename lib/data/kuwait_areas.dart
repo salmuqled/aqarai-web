@@ -110,6 +110,35 @@ String? resolveAreaCodeFromText(String input) {
   return bestScore > 0 ? bestCode : null;
 }
 
+/// Kuwait's chalet coastal belt — canonical `areaCode` slugs that customers
+/// treat as a single colloquial "chalet zone". Mirrors `CHALET_BELT_AREAS`
+/// in `functions/src/kuwait_areas.ts`. Used by the conversational search
+/// service to:
+///
+///   1. Expand a vague "ابي شاليه أي منطقة" request to the whole belt.
+///   2. Validate that a multi-area request the LLM produced refers to belt
+///      slugs only (no fabricated `khairan_benider_jaleea` style slugs).
+///
+/// Khiran's three sibling slugs are all included because customers say
+/// "الخيران" to mean "anywhere in the Khiran corridor".
+const List<String> chaletBeltAreas = [
+  'khiran',
+  'sabah_al_ahmad_marine_khiran',
+  'khiran_residential_inland',
+  'bneider',
+  'julaia',
+  'dhubaiya',
+  'zour',
+  'nuwaiseeb',
+  'mina_abdullah',
+];
+
+bool isChaletBeltArea(String? areaCode) {
+  if (areaCode == null) return false;
+  final code = areaCode.trim().toLowerCase();
+  return chaletBeltAreas.contains(code);
+}
+
 /// Unified `areaCode` generator:
 /// 1) canonical code via [kuwaitAreas] matching (Arabic or English),
 /// 2) fallback to [propertyLocationCode] slug when not found.

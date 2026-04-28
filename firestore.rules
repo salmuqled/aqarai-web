@@ -94,10 +94,15 @@ service cloud.firestore {
           'title',
           'description',
           'price',
+          'priceType',
           'type',
           'serviceType',
+          'rentalType',
           'listingCategory',
           'chaletMode',
+          'chaletName',
+          'chaletNameLower',
+          'chaletNameSearch',
 
           // Location (display + search codes)
           'governorateAr',
@@ -106,6 +111,9 @@ service cloud.firestore {
           'areaEn',
           'governorateCode',
           'areaCode',
+          'googleMapsLink',
+          'lat',
+          'lng',
 
           // Details
           'roomCount',
@@ -113,6 +121,11 @@ service cloud.firestore {
           'bathroomCount',
           'parkingCount',
           'size',
+
+          // Investment (optional, multi-unit sale listings only — see
+          // Phase 1 `aqaraiAgentComputeRoi` spec).
+          'unitCount',
+          'estimatedMonthlyIncomeKwd',
 
           // Amenities
           'hasElevator',
@@ -1021,9 +1034,13 @@ service cloud.firestore {
         && request.resource.data.description is string
         && request.resource.data.images is list
         && request.resource.data.acceptLowerStartPrice is bool
+        // Canonical pricing guard (Financial Hardening Phase 1): the auction
+        // listing fee is hard-pinned to 100 KWD on the server. If the value
+        // ever needs to change, update both this rule AND the
+        // `AUCTION_LISTING_FEE_KWD` constant in
+        // `functions/src/payments/pricing.ts`.
         && request.resource.data.auctionFee is number
-        && request.resource.data.auctionFee >= 1
-        && request.resource.data.auctionFee <= 1000000
+        && request.resource.data.auctionFee == 100
         && request.resource.data.auctionFeeStatus == 'pending'
         && !request.resource.data.keys().hasAny(['auctionFeePaidAt', 'paymentReference']);
       allow update: if isAdmin();
@@ -1144,11 +1161,40 @@ service cloud.firestore {
     }
 
     /* ============================================================
+        MyFatoorah webhook deliveries (server-to-server; Functions only)
+    ============================================================ */
+
+    match /payment_webhooks/{key} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /payment_webhooks_unclaimed_features/{key} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /payment_webhooks_unclaimed_auction/{key} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /* ============================================================
         Invoices (PDF receipts — created only by Cloud Functions)
     ============================================================ */
 
     match /invoices/{invoiceId} {
-      allow read: if isAdmin();
+      // Admins read everything. Users may read their own invoices via the
+      // server-stamped `clientId` field (Auth UID of the payer / addressee).
+      // Owner of the underlying chalet booking may also read its invoice
+      // via `ownerId` (set by `generateBookingInvoice`).
+      allow read: if isAdmin()
+        || (isSignedIn()
+            && 'clientId' in resource.data
+            && resource.data.clientId == request.auth.uid)
+        || (isSignedIn()
+            && 'ownerId' in resource.data
+            && resource.data.ownerId == request.auth.uid);
       allow create, update, delete: if false;
     }
 

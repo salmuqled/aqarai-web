@@ -33,6 +33,8 @@ function serviceDescriptionLine(t: InvoiceServiceType): string {
       return "Property Rental Service";
     case "chalet":
       return "Chalet Booking Service";
+    case "property_feature":
+      return "Property Featuring Service";
     default:
       return "Property Sale Service";
   }
@@ -370,9 +372,13 @@ export async function renderInvoicePdfBuffer(params: {
   const billToHtml = formatBillToHtml(billFields.name, billFields.email);
 
   const areaEn = areaDisplayEnglish(ctx.area);
-  const lineItemDesc = serviceDescriptionLine(ctx.serviceType);
+  const lineItemDesc = ctx.lineItemTitleOverrideEn?.trim()
+    ? ctx.lineItemTitleOverrideEn.trim()
+    : serviceDescriptionLine(ctx.serviceType);
   const serviceDescription = lineItemDesc;
-  const lineItemDetailsHtml = buildLineItemDetailsHtml(areaEn, ctx);
+  const lineItemDetailsHtml = ctx.lineItemDetailsOverrideHtml?.trim()
+    ? ctx.lineItemDetailsOverrideHtml
+    : buildLineItemDetailsHtml(areaEn, ctx);
   const amountFormatted = formatKwd(ctx.amount);
 
   const html = buildInvoiceHtml({

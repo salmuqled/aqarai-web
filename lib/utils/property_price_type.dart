@@ -18,28 +18,70 @@ abstract final class PropertyPriceType {
   static String _norm(String? s) => (s ?? '').trim().toLowerCase();
 
   /// When [stored] is missing/invalid, infer from [listingType] slug.
-  static String inferMissingFromListingType(String listingType) {
+  ///
+  /// For chalets the caller MUST pass the [chaletMode] (daily/monthly/sale) —
+  /// a chalet booked monthly has a monthly price unit, a chalet for sale is
+  /// `full`, and only a chalet rented by the night is `daily`. Omitting
+  /// [chaletMode] falls back to `daily` for backwards compatibility but is
+  /// considered a bug in the new call path (use [infer] instead).
+  static String inferMissingFromListingType(
+    String listingType, {
+    String? chaletMode,
+  }) {
     final t = _norm(listingType);
-    if (t == 'chalet') return 'daily';
+    if (t == 'chalet') {
+      final m = _norm(chaletMode);
+      if (m == 'sale') return 'full';
+      if (m == 'monthly') return 'monthly';
+      return 'daily';
+    }
     if (legacyMonthlyTypes.contains(t)) return 'monthly';
     return 'full';
   }
 
   /// Reads stored [priceType] or infers from [listingType] slug (e.g. `chalet`).
-  static String infer({String? stored, required String listingType}) {
+  /// Pass [chaletMode] (from the listing document) so chalet-monthly / chalet-sale
+  /// are correctly mapped when [stored] is missing or invalid.
+  static String infer({
+    String? stored,
+    required String listingType,
+    String? chaletMode,
+  }) {
     final s = _norm(stored);
-    if (values.contains(s)) return s;
-    return inferMissingFromListingType(listingType);
+    if (values.contains(s)) {
+      // Correct legacy bug: some chalet-monthly listings were persisted with
+      // `priceType: "daily"` (old `forNewListing` default forced daily for
+      // every chalet). When the listing's `chaletMode` says monthly, trust
+      // the mode over the stale field so price display and ROI math stay
+      // consistent.
+      if (_norm(listingType) == 'chalet') {
+        final m = _norm(chaletMode);
+        if (m == 'monthly' && s == 'daily') return 'monthly';
+        if (m == 'sale' && s != 'full') return 'full';
+      }
+      return s;
+    }
+    return inferMissingFromListingType(listingType, chaletMode: chaletMode);
   }
 
   /// Auto value for new listings from [AddPropertyPage] (no manual override).
+  ///
+  /// Pass [chaletMode] when the listing is a chalet so we distinguish:
+  /// `daily` (nightly rent) → "daily", `monthly` → "monthly", `sale` → "full".
+  /// Omitting it defaults to `daily` for backward compatibility.
   static String forNewListing({
     required String propertyType,
     required String serviceType,
+    String? chaletMode,
   }) {
     final t = _norm(propertyType);
     final svc = _norm(serviceType);
-    if (t == 'chalet') return 'daily';
+    if (t == 'chalet') {
+      final m = _norm(chaletMode);
+      if (m == 'sale') return 'full';
+      if (m == 'monthly') return 'monthly';
+      return 'daily';
+    }
     if (t == 'apartment' || t == 'house') return 'monthly';
     if (t == 'land') return 'full';
     if (svc == 'sale') return 'full';

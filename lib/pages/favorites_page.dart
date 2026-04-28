@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
-import 'package:aqarai_app/widgets/property_details_page.dart';
+import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/utils/property_listing_cover.dart';
 import 'package:aqarai_app/utils/property_price_display.dart';
@@ -212,15 +212,9 @@ class _FavoritePropertyTileState extends State<_FavoritePropertyTile> {
           elevation: 3,
           child: InkWell(
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      PropertyDetailsPage(
-                        propertyId: widget.propertyId,
-                        leadSource: DealLeadSource.direct,
-                      ),
-                ),
+              context.pushPropertyDetails(
+                propertyId: widget.propertyId,
+                leadSource: DealLeadSource.direct,
               );
             },
             borderRadius: BorderRadius.circular(12),

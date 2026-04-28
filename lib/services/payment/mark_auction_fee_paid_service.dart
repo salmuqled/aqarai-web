@@ -9,15 +9,23 @@ abstract final class MarkAuctionFeePaidService {
 
   static Future<MarkAuctionFeePaidResult> call({
     required String requestId,
+    required String paymentId,
   }) async {
-    final trimmed = requestId.trim();
-    if (trimmed.isEmpty) {
+    final trimmedRequest = requestId.trim();
+    if (trimmedRequest.isEmpty) {
       throw ArgumentError('requestId is required');
+    }
+    final trimmedPayment = paymentId.trim();
+    if (trimmedPayment.isEmpty) {
+      throw ArgumentError('paymentId is required');
     }
     final fn = FirebaseFunctions.instanceFor(
       region: _region,
     ).httpsCallable(_callableName);
-    final res = await fn.call<Map<String, dynamic>>({'requestId': trimmed});
+    final res = await fn.call<Map<String, dynamic>>({
+      'requestId': trimmedRequest,
+      'paymentId': trimmedPayment,
+    });
     final data = res.data;
     final ok = data['ok'] == true;
     final ref = data['paymentReference']?.toString();

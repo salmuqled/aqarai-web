@@ -9,14 +9,15 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 // ✅ بدل main.dart
+import 'package:go_router/go_router.dart';
+
 import 'package:aqarai_app/app/navigation_keys.dart';
+import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/pages/admin_deal_detail_page.dart';
-import 'package:aqarai_app/pages/assistant_page.dart';
 import 'package:aqarai_app/pages/auction_details_page.dart';
 import 'package:aqarai_app/pages/owner_dashboard_page.dart';
 import 'package:aqarai_app/services/notification_click_tracking_service.dart';
-import 'package:aqarai_app/widgets/property_details_page.dart';
 
 // ✅ للتهيئة الآمنة داخل الهاندلر الخلفي
 import 'package:firebase_core/firebase_core.dart';
@@ -193,17 +194,15 @@ class NotificationService {
     unawaited(_markNotificationOpenedIfPresent(data));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        final nav = rootNavigatorKey.currentState;
-        if (nav == null) return;
+        final ctx = rootNavigatorKey.currentContext;
+        if (ctx == null) return;
 
         void pushHome() {
-          nav.push(
-            MaterialPageRoute<void>(builder: (_) => const AssistantPage()),
-          );
+          GoRouter.of(ctx).go('/');
         }
 
         void pushOwnerDashboard() {
-          nav.push(
+          Navigator.of(ctx).push<void>(
             MaterialPageRoute<void>(
               builder: (_) => const OwnerDashboardPage(),
             ),
@@ -216,12 +215,10 @@ class NotificationService {
             pushHome();
             return;
           }
-          nav.push(
-            MaterialPageRoute<void>(
-              builder: (_) => PropertyDetailsPage(
-                propertyId: trimmed,
-                leadSource: DealLeadSource.direct,
-              ),
+          GoRouter.of(ctx).push(
+            PropertyRoute.location(
+              propertyId: trimmed,
+              leadSource: DealLeadSource.direct,
             ),
           );
         }

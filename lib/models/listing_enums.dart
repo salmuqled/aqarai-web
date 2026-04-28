@@ -299,6 +299,34 @@ String closureButtonLabelAr(String serviceType) {
   }
 }
 
+/// My Ads: owner CTA to **ask admin to close the listing** after a real
+/// off-platform deal. Not related to «featured / تمييز» (that is a separate
+/// payment flow).
+String closureRequestActionButtonLabel(String serviceType, String languageCode) {
+  final st = (serviceType).toString().toLowerCase().trim();
+  final isAr = languageCode == 'ar';
+  if (isAr) {
+    switch (st) {
+      case 'rent':
+        return 'طلب إغلاق الإعلان بعد التأجير';
+      case 'exchange':
+        return 'طلب إغلاق الإعلان بعد البدل';
+      case 'sale':
+      default:
+        return 'طلب إغلاق الإعلان بعد البيع';
+    }
+  }
+  switch (st) {
+    case 'rent':
+      return 'Request to close listing after rent';
+    case 'exchange':
+      return 'Request to close listing after exchange';
+    case 'sale':
+    default:
+      return 'Request to close listing after sale';
+  }
+}
+
 String closeRequestTypeForServiceType(String? serviceType) {
   switch ((serviceType ?? 'sale').toLowerCase().trim()) {
     case 'rent':

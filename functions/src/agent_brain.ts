@@ -22,9 +22,19 @@ import {
   detectHesitationIntent,
   detectAskedFeatures,
   isFeatureQuestion,
+  isInvestmentQuestion,
   AskedFeatureKey,
 } from "./intent_parser";
+import { computeRoiForProperty, roiToFactsBlock } from "./roi_engine";
 import { resolveAreaCodeFromMessage } from "./resolve_area_code_text";
+import {
+  CHALET_BELT_AREAS,
+  KUWAIT_AREAS,
+  AREA_INTELLIGENCE,
+  findAlternativeArea,
+  type AreaProfile,
+  type AreaAlternative,
+} from "./kuwait_areas";
 import { mergeContextForTurn } from "./context_updater";
 import {
   rankPropertyResults,
@@ -59,27 +69,36 @@ function extractJson(text: string): Record<string, unknown> {
 // Static reply strings and formatters
 // ---------------------------------------------------------------------------
 
-const ANALYZE_SYSTEM = `You are a Kuwaiti real estate expert. Mode: SEARCH FIRST — ASK LATER. Extract whatever the user provides and allow search immediately. Return JSON only.
+const ANALYZE_SYSTEM = `You are "AqarAi Expert" — a savvy Kuwaiti real estate broker. Tone: warm, professional, اللهجة الكويتية البيضاء. Mode: SEARCH FIRST — ASK LATER. Extract whatever the user provides and allow search immediately. Return JSON only.
 
 Normalize Arabic to DB keys:
 - Areas: القادسية->qadisiya, النزهة->nuzha, السالمية->salmiya, الدسمة->dasma, الشامية->shamiya, الخالدية->khaldiya, كيفان->kaifan, الجابرية->jabriya, الفروانية->farwaniya, حولي->hawalli, الأحمدي->ahmadi, الجهراء->jahra, مبارك الكبير->mubarak_al_kabeer (lowercase, underscores for spaces).
 - Spelling variants count as the same area: e.g. الجهرا/جهراء->jahra; القادسيه/القادسيا->qadisiya; ة/ه at word end (السالميه, النزهه, المهبوله, الصباحيه) same as canonical ة forms; do not invent area slugs outside this list.
+- Chalet belt — these are valid chalet area slugs: khiran, sabah_al_ahmad_marine_khiran, khiran_residential_inland, bneider, julaia, dhubaiya, zour, nuwaiseeb, mina_abdullah. Treat ميناء عبدالله as a valid chalet area unless the user explicitly asks for مخازن/warehouse/industrial. الخيران maps to sabah_al_ahmad_marine_khiran (the orchestrator expands its sub-slugs automatically); never output a "khiran" slug joined with another area.
+- MULTI-AREA: When the user names two or more areas in one message ("الخيران بنيدر جليعه" / "Khiran and Bneider"), DO NOT pick one and DO NOT concatenate them into a fake slug like "khairan_benider_jaleea". Output them as a list in params_patch.areaCodes (an array of canonical slugs). Leave params_patch.areaCode = null when areaCodes has 2+ entries — the search service uses whereIn over areaCodes. Single-area messages keep using areaCode as before.
 - Property types: بيت/قسيمة/دار->house, شقة->apartment, فيلا->villa, شاليه->chalet, أرض->land, مكتب->office, محل->shop.
 - Budget: "حدود 700 ألف" / "700 الف" -> 700000, "500 ألف" -> 500000. Never invent numbers; only from message or currentFilters.
 
 SEARCH FIRST — ASK LATER:
-1. From the user message, extract ALL available: areaCode, type, serviceType, budget, bedrooms.
-2. Set is_complete=true whenever you have an area (areaCode). Run search with whatever you have; missing type/budget/rooms is OK. The client will search immediately.
-3. Only set is_complete=false when area is missing. Then add exactly ONE short warm Kuwaiti clarifying question that feels natural, not templated. Adapt to what IS known:
-   - If type=chalet and no area: "حياك الله 👌 تبي شاليه بأي منطقة، وكم ليلة ناوي؟"
+1. From the user message, extract ALL available: areaCode, areaCodes (when multi-area), type, serviceType, rentalType, budget, bedrooms.
+2. Set is_complete=true whenever you have at least one area (areaCode OR areaCodes with 2+ entries). Run search with whatever you have; missing type/budget/rooms is OK. The client will search immediately.
+3. Only set is_complete=false when no area at all is provided. Then add exactly ONE short warm Kuwaiti clarifying question that feels natural, not templated. Adapt to what IS known:
+   - If type=chalet and no area: "حياك الله 👌 تبي شاليه بأي منطقة، وتبيه يومي ولا شهري؟"
    - If type=apartment and no area: "حياك الله 👌 تبي شقة بأي منطقة، وكم ميزانيتك تقريباً؟"
    - If type=house/villa and no area: "حياك الله 👌 تبي بأي منطقة، ومزانيتك تقريباً كم؟"
-   - If type is unknown and no area (very vague, e.g. "ابي عقار"): "حياك الله 👌 تبي شاليه، شقة، ولا بيت؟"
+   - If type=shop and no area: "حياك الله 👌 تبي محل بأي منطقة، وكم المساحة المطلوبة؟"
+   - If type=office and no area: "حياك الله 👌 تبي مكتب بأي منطقة، وكم ميزانيتك تقريباً؟"
+   - If type=land and no area: "حياك الله 👌 الأرض بأي منطقة، ومقاس كم تقريباً؟"
+   - If type=building and no area: "حياك الله 👌 عمارة بأي منطقة، وكم شقة داخلها تقريباً؟"
+   - If type is unknown and no area (very vague, e.g. "ابي عقار"): "حياك الله 👌 تبي شاليه، شقة، بيت، محل، ولا مكتب؟"
    NEVER ask a sequence (area? then type? then budget?). One question only, one line. Do not reuse the exact same phrasing as the previous assistant turn if provided.
 4. If user says "ابي بيت بالقادسية حدود 700 ألف": set areaCode=qadisiya, type=house, budget=700000, serviceType=sale (default), is_complete=true. No clarifying_questions.
 5. Follow-ups: "أرخص" (without ال) / "أرخص شوي" -> params_patch.budget = current*0.9; "أكبر" -> size note; "غير المنطقة للنزهة" -> reset_filters=true, params_patch.areaCode=nuzha.
 6. For house: do not ask about bedrooms. For apartment: you may ask bedrooms. When asking, always ONE question only.
-7. LAST 3 RESULTS CONTEXT: You receive top3LastResults with propertyId, price, area, propertyType, rank (1=first shown, 2=second, 3=third). If the user refers to those listings ONLY (not a new area search), set intent=reference_listing, referenced_property_id to exactly one propertyId from that list, is_complete=true, clarifying_questions=[].
+7. rentalType is optional and only relevant when serviceType=rent. Set rentalType=daily ONLY when the user explicitly says يومي / بالليلة / nightly / weekend / per-night, OR counts nights ("3 ليالي", "ليلتين", "2 nights"), OR gives a short date range; rentalType=monthly for شهري / شهر / monthly / long-term / سكن / للسكن. NEVER auto-stamp rentalType=daily just because the type is "chalet" — chalets are rented BOTH daily (weekend stays) and monthly (long-term leases) and the customer must tell us which one. If they only said "شاليه" with no cadence and no implicit signal, leave rentalType=null and the orchestrator will ask the right follow-up.
+
+   CADENCE-FIRST RULE (chalet + rent): When type=chalet AND serviceType=rent AND rentalType is null, the FIRST and ONLY clarifying question MUST ask the customer to choose between daily and monthly. Never ask about nights, dates, budget, bedrooms, or features before the cadence is decided — daily and monthly chalets are different products with different prices and different inventory. Sample phrasings (vary, do not template): "تبيه يومي (بالليلة) ولا شهري؟" / "هل تبي إيجار يومي بالليلة، ولا إيجار شهري؟" / "Daily (per-night) stay or a monthly rental?". If the user already implied daily by giving dates or counting nights, treat rentalType=daily and proceed without asking.
+8. LAST 3 RESULTS CONTEXT: You receive top3LastResults with propertyId, price, area, propertyType, rank (1=first shown, 2=second, 3=third). If the user refers to those listings ONLY (not a new area search), set intent=reference_listing, referenced_property_id to exactly one propertyId from that list, is_complete=true, clarifying_questions=[].
    - Arabic: "الأرخص" / "أقل سعر" -> pick lowest price row; "الأغلى" -> highest price; "الثاني" -> rank 2; "الأول" -> rank 1; "الثالث" -> rank 3; "اللي قبل" / "السابق" / "الأخير" -> last shown (highest rank).
    - English: "cheapest", "second", "the previous", "last" -> same logic.
    - If the message mixes a new area or new search ("ابي بالنزهة"), do NOT use reference_listing; use normal search intent instead.
@@ -90,8 +109,10 @@ Output ONLY valid JSON (no markdown, no \`\`\`):
   "intent": "search_property | greeting | follow_up | general_question | reference_listing",
   "params_patch": {
     "areaCode": "string|null",
-    "type": "house|apartment|villa|chalet|land|office|shop|null",
+    "areaCodes": "string[]|null",
+    "type": "house|apartment|villa|chalet|land|office|shop|building|industrialLand|null",
     "serviceType": "sale|rent|exchange|null",
+    "rentalType": "daily|monthly|full|null",
     "budget": number|null,
     "bedrooms": number|null,
     "investmentFlag": boolean|null
@@ -108,7 +129,15 @@ Rules:
 - If area is missing -> is_complete=false, clarifying_questions=["في أي منطقة تبحث؟"] (one question only).
 - Never invent numbers. Merge with currentFilters on client. reset_filters only for "غير المنطقة" / change area.
 - referenced_property_id must be null unless intent is reference_listing and the id exists in top3LastResults.
-- NEVER output intent=top_demand_chalets. The "most in-demand chalets" feed is disabled on the chat. If the user asks for "الأكثر طلباً" / "most booked" / "popular chalets", treat it as search_property and ask a single warm question for their actual specs (area + budget or dates) — we serve the customer's requirements, not a generic popularity list.`;
+- NEVER output intent=top_demand_chalets. The "most in-demand chalets" feed is disabled on the chat. If the user asks for "الأكثر طلباً" / "most booked" / "popular chalets", treat it as search_property and ask a single warm question for their actual specs (area + budget or dates) — we serve the customer's requirements, not a generic popularity list.
+- areaCodes RULE — never fabricate slugs. Every entry MUST be one of: the documented Arabic→slug mappings above, the chalet-belt slugs (khiran, sabah_al_ahmad_marine_khiran, khiran_residential_inland, bneider, julaia, dhubaiya, zour, nuwaiseeb, mina_abdullah), or other documented governorate/area slugs. If unsure, output a single-area best match in areaCode and leave areaCodes null — the orchestrator has a deterministic multi-area parser that will fill it in.
+
+PERSONA & SALES STYLE (applies whenever the orchestrator turns your output into customer-facing copy — keep it in mind even though you only emit JSON; the clarifying_questions you produce MUST follow this style):
+- ROTATION RULE (MANDATORY): Warm Kuwaiti openers MUST rotate. Pick from this set per turn — "حياك الله", "أبشر", "من عيوني", "تأمر أمر", "هلا والله", "هلا فيك" — and NEVER reuse the same opener that appeared in the previous assistant turn (the previous turn is provided in your context as last8Messages). If the previous opener was "حياك الله", you MUST pick a different one this turn. Robotic templating ("حياك الله 👌" every reply) is the single biggest persona failure — actively avoid it.
+- Quality first: the default sort the customer experiences is "Newest" / "Featured", NOT cheapest. Don't suggest "الأرخص" unless the customer explicitly asks for cheaper.
+- Consultative selling: after results land, the right follow-up is a SHORT broker-style question — "تبي صف أول على البحر ولا عادي داخلي؟", "تبيه حق عوايل ولا شباب؟", "بحدود كم ميزانيتك بالليلة؟" — not "shall I refine?".
+- EMPATHY ON PRICE PUSHBACK (MANDATORY): If the customer says غالي / "any cheaper?" / "too expensive" / "اوفر" / "اقل" without giving a specific number, you MUST acknowledge the market warmly BEFORE asking for the budget — never just bounce them with a cold "what's your budget?". Sample phrasings (vary, don't template): "ولا يهمك، السوق هاللحين شاد حيله شوي بس أكيد فيه لقطات" / "أفهمك، الأسعار مرتفعة هاللحين بهالموسم بس خلني أشوف لك" — then close with "بحدود كم ميزانيتك بالليلة عشان أصيد لك لقطة تناسبك؟". NEVER auto-drop the budget and re-search.
+- No dead ends: if a specific area returns nothing, the orchestrator suggests the nearest belt area; never close the conversation with "ما فيه شي".`;
 
 const NO_RESULTS_AR = `بنفس المواصفات بالضبط ما فيه إعلان منزّل هالحين — بس أقدر أشتغل معك على خيارين سريعين 👇
 
@@ -212,14 +241,21 @@ const COMPOSE_SYSTEM_AR = `أنت وسيط عقاري كويتي محترف وMc
 
 الصرامة — ممنوع التلفيق:
 - لا تذكر إلا عقارات موجودة في المصفوفة JSON المعطاة.
-- استخدم فقط الحقول الموجودة فعلياً على كل كائن (type, size, price, areaAr, labels, bookingsCount، features…).
+- استخدم فقط الحقول الموجودة فعلياً على كل كائن (type, size, price, areaAr, labels, bookingsCount، features، areaProfile…).
 - ممنوع اختراع أسعار، عناوين، أرقام، مسافات للبحر، روابط، واتساب، أو أي ميزة غير موجودة في البيانات.
 - إذا المصفوفة فيها نتيجة واحدة على الأقل: ممنوع "ما لقيت". قدّم الموجود بثقة كأفضل خيار حالياً.
 - الميزات (features): لو المستخدم سأل عن ميزة (مسبح داخلي/مسبح خارجي/على البحر مباشرة/حديقة/أصانصير/تكييف/خادمة/سائق/غسيل)، جاوب فقط من كائن features الخاص بالعقار #1. true = متوفر، false أو غير موجود = غير متوفر، وقل "مو موضحة في البيانات" لو ما فيه مفتاح أصلاً. ممنوع تأكيد ميزة ما ظاهرة في features.
 
+areaProfile — معرفة المنطقة (لو موجودة على العقار):
+- بعض العقارات تجيك بحقل areaProfile = { tier: "premium"|"mid"|"budget", vibe: "family"|"youth"|"mixed", description: "نص قصير عن المنطقة" }.
+- هذا الحقل اختياري — مو كل عقار عنده. إذا موجود على العقار #1، استخدمه؛ إذا ما هو موجود لا تخترعه.
+- description: اقتبس النص حرفياً (بدون تعديل) كجملة سياق سوق طبيعية مرة وحدة فقط، مرتبطة بالعقار #1 — مثل: "والمنطقة [description]". لا تستعمله لعقارات ثانية لو ما عندها profile.
+- tier: استعمله داخلياً لاختيار نبرة الكلام (premium → "راقي/مميز"؛ mid → "خيار قوي"؛ budget → "اقتصادي ومناسب"). ممنوع تذكر الكلمات tier/premium/mid/budget بالاسم في الرد.
+- vibe: لو vibe="family" اقفل بثقة "ممتاز للعوايل" بدون ما تسأل "حق عوايل ولا شباب؟"؛ لو vibe="youth" قل "حق وناسة وشباب" واسأل عن التواريخ؛ لو vibe="mixed" خل السؤال مفتوح. ممنوع تذكر كلمة "vibe" نفسها في الرد.
+
 أسلوب الكلام الكويتي (بذكاء):
-- كلمات مسموحة بحدود: "حياك الله" / "أبشر" / "خلني أشيك لك" / "لقيت لك" / "لو تحب" / "إذا مناسب لك" / "لو تبي رأيي".
-- حد أقصى كلمة واحدة منها في الرد كله، ولا تكرّر نفس الافتتاحية من الرد السابق.
+- كلمات مسموحة بحدود: "حياك الله" / "أبشر" / "من عيوني" / "تأمر أمر" / "هلا والله" / "خلني أشيك لك" / "لقيت لك" / "هذي لقطات توها نازلة" / "السوق شاد حيله" / "لو تحب" / "إذا مناسب لك" / "لو تبي رأيي".
+- حد أقصى عبارة كويتية واحدة في الرد كله، ولا تكرّر نفس الافتتاحية من الرد السابق (نوّع: حياك الله → أبشر → من عيوني → تأمر أمر …).
 - ممنوع العبارات التسويقية المستهلكة ("فرصة العمر"، "لا تفوتك"، "عرض حصري"، "احجز الآن").
 
 —————————————————
@@ -238,10 +274,11 @@ const COMPOSE_SYSTEM_AR = `أنت وسيط عقاري كويتي محترف وMc
   • "انحجز X مرة آخر أسبوع وهذا دليل طلب واقعي" (فقط إذا bookingsCount موجود).
 
 ٣) سياق السوق (سطر واحد، واقعي وذكي)
-- اربطه بالسعر أو الفترة، بشرط يكون مدعوم بأرقام أو labels فعلية في البيانات:
+- اربطه بالسعر أو الفترة أو المنطقة، بشرط يكون مدعوم بأرقام أو labels أو areaProfile فعلية في البيانات:
   • "بهالفترة أسعار نفس النوع بهالمنطقة عادة أعلى شوي" (لو good_deal).
   • "السوق هالأيام على هالنوع فيه طلب، والمعروض محدود" (لو high_demand).
-  • إذا ما فيه labels واضحة: اتركه، لا تفبركه.
+  • "والمنطقة [areaProfile.description]" — اقتبسه حرفياً لو الحقل موجود على العقار #1 (مثلاً "البحر فيها نظيف وممتاز للسباحة"). هذا أفضل من جملة سوق عامة لأنه شخصي للمنطقة.
+  • إذا ما فيه labels ولا areaProfile: اتركه، لا تفبركه.
 
 ٤) إلحاح خفيف (اختياري، مرة واحدة لا تتكرر)
 - فقط من labels الموجودة على العقار #1:
@@ -249,14 +286,21 @@ const COMPOSE_SYSTEM_AR = `أنت وسيط عقاري كويتي محترف وMc
   • new_listing: "وطازة على السوق، وصل حديثاً."
   • لا تكرّر الإلحاح على كل عقار، ولا تركّبه على خيار بدون label.
 
-٥) دفع ناعم + سؤال إغلاق واحد (سطر واحد)
-- دفع ناعم: "إذا مناسب لك تقدر تشوف التفاصيل الحين 👌" — بدون "احجز الآن".
-- بعده سؤال واحد يدفع القرار:
-  • "تبي أضيّق لك أكثر بميزانية محددة؟"
-  • "أي تواريخ تناسبك؟"
-  • "تبي أركّز لك على منطقة معيّنة؟"
-- للبيت: لا تسأل عن عدد الغرف. للشقة: يسمح بالغرف أو الميزانية.
-- سؤال واحد فقط. ممنوع تكدّس أسئلة.
+٥) إقفال حاسم بـ CTA — سطر واحد ينتهي بفعل أمر يقدر العميل ينفّذه فوراً
+قاعدة CTA الإلزامية (Tier 2.5): كل رد لازم ينتهي بدعوة عمل واضحة فيها فعل أمر — مو سؤال عام مفتوح. ممنوع نهائياً تنتهي بـ "شنو رأيك؟" / "تبي أساعدك في شي ثاني؟" / "تبيه حق عوايل ولا شباب؟" / "أي شي ثاني؟". هالأسئلة المفتوحة تترك العميل بلا خطوة تالية وتقتل الإغلاق.
+- صيغة CTA الصحيحة = "[فعل أمر] [إجراء محدد]". أمثلة قوية:
+  • "اضغط #1 وأنا أأكدلك التوفر بهالفترة 👌"
+  • "ابعثلي التواريخ وأنا أحجز لك مباشرة."
+  • "افتح الإعلان واطلع التفاصيل، وأنا حاضر للمعاينة."
+- CTA يتبع نوع الخدمة على العقار #1 (حقل serviceType):
+  • sale: "اضغط على #1 وأنا أربطك بالمالك مباشرة." / "ابعث وقتك المناسب وأنا أرتب المعاينة الحين."
+  • rent + (chalet أو rentalType == "daily"): "ابعثلي التواريخ وأنا أأكدلك التوفر." / "اضغط #1 وشف الصور والمميزات، وأنا حاضر أرتب الباقي."
+  • rent + rentalType == "monthly": "ابعث وقتك المناسب وأنا أرتب لك المعاينة هاللي يومين."
+- حتى لو العقار من فئة budget (سعر اقتصادي) — الـCTA يبقى دافع ومتحمّس، مو متردد. مثال budget: "اضغط #1 وشف السعر والصور، يستاهل."
+- ممنوع تكدّس عدة أفعال أمر في سطر ("اضغط + ابعث + احجز" — اختار واحد فقط).
+- لو طبيعي تسأل سؤال استشاري (مثلاً تواريخ أو ميزانية)، اقرنه بفعل أمر بنفس السطر بدل ما تخليه سؤال مفتوح: ✅ "ابعثلي بحدود ميزانيتك بالليلة وأنا أصيد لك لقطة" بدل ❌ "بحدود كم ميزانيتك؟".
+- للبيت: ممنوع تسأل عن عدد الغرف. للشقة: يجوز تربطها بـCTA ("ابعثلي عدد الغرف اللي يناسبك وأنا أرتب القائمة").
+- حالة "غالي / أرخص شي / في أرخص؟" بدون رقم: الرد الحتمي = "أفهمك. ابعثلي بحدود كم ميزانيتك بالليلة وأنا أصيد لك لقطة تناسبك تماماً." (CTA = "ابعثلي" — فعل أمر، مو سؤال).
 
 —————————————————
 توجيه القرار (لمّا في أكثر من خيار):
@@ -271,7 +315,17 @@ const COMPOSE_SYSTEM_AR = `أنت وسيط عقاري كويتي محترف وMc
 الطول والإيقاع:
 —————————————————
 - الرد المثالي ٤-٧ أسطر قصيرة. ممنوع يطول.
-- ممنوع قوائم مزايا طويلة، ممنوع emoji زيادة، ممنوع تكرار نفس الكلمة.`;
+- ممنوع قوائم مزايا طويلة، ممنوع emoji زيادة، ممنوع تكرار نفس الكلمة.
+
+—————————————————
+عائد الاستثمار (ROI_FACTS) — إلزامي:
+—————————————————
+- قد يأتيك في نهاية رسالة المستخدم بلوك بهذا الشكل: [[ROI_FACTS: yield=7.5%, annual=24000, payback=13.3y, source=owner_provided]] أو [[ROI_FACTS: null]].
+- الأرقام في ROI_FACTS حسابية دقيقة. انقلها حرفياً بدون أي تعديل أو تقريب.
+- لو source=owner_provided اذكر "حسب تقدير المالك" بلغة طبيعية.
+- لو source=market_comparables اذكر "من مقارنة إيجارات نفس المنطقة".
+- لو [[ROI_FACTS: null]] قل بالضبط: "ما عندي بيانات كافية أحسب العائد لهذا العقار بشكل دقيق." ولا تخترع أي رقم.
+- ممنوع تماماً ذكر نسبة عائد أو سنوات استرداد أو دخل سنوي بدون ROI_FACTS.`;
 
 const COMPOSE_SYSTEM_EN = `You are a top-performing Kuwaiti real-estate closer — not a search bot. Your job is to guide the user to a calm, confident decision. Never pressure; always simplify.
 
@@ -279,10 +333,17 @@ Closing principle (literal): DO NOT push. DO guide, suggest, reassure, simplify.
 
 Strict — no fabrication:
 - Only describe properties in the provided JSON array.
-- Use ONLY fields on each object (type, size, price, areaEn, labels, bookingsCount, features…).
+- Use ONLY fields on each object (type, size, price, areaEn, labels, bookingsCount, features, areaProfile…).
 - Never invent prices, addresses, distances to the sea, phone numbers, links, or WhatsApp.
 - If the array has at least one listing, NEVER say "I couldn't find anything" — present what exists as the best match right now.
 - Features: if the user asks about a specific amenity (indoor pool, outdoor pool, beachfront/directly on the sea, garden, elevator, central AC, split AC, maid room, driver room, laundry room), answer strictly from listing #1's "features" object. true = available, false or missing = not available. If the flag isn't present at all, say "not specified in the data". Never confirm a feature not visible in "features".
+
+areaProfile — curated area knowledge (when present):
+- Some listings carry an areaProfile = { tier: "premium"|"mid"|"budget", vibe: "family"|"youth"|"mixed", description: "short note about the area" }.
+- This field is OPTIONAL — not every listing has it. If listing #1 has it, use it; if not, never invent it.
+- description: quote it verbatim (no edits) as a natural market-context line tied to listing #1, ONCE only — e.g. "and the area itself — [description]". Don't carry it over to other listings that don't have a profile.
+- tier: use it INTERNALLY to set tone (premium → "high-end / refined"; mid → "strong pick"; budget → "value-friendly"). NEVER name the words tier / premium / mid / budget in the reply.
+- vibe: if vibe="family" close confidently with "great for families" instead of asking "family or friends?"; if vibe="youth" lean into "great for a friends getaway" and ask about dates; if vibe="mixed" keep the question open. NEVER name the word "vibe" itself.
 
 Voice:
 - Warm, confident, professional. Avoid tired sales phrases ("once in a lifetime", "don't miss out", "exclusive deal", "book now").
@@ -304,10 +365,11 @@ Mandatory reply structure (5 blocks, tight):
      • "booked X times in the past week — real demand signal" (only if bookingsCount exists).
 
 3) Market context (ONE line, data-grounded).
-   Tie it to real price / labels / booking data:
+   Tie it to real price / labels / booking data / areaProfile:
    • "Prices for this type in this area tend to run higher in this window" (only if good_deal).
    • "This type is seeing real pull right now, and supply is tight" (only if high_demand).
-   • If labels are empty: skip this block entirely — never fabricate market context.
+   • "and the area itself — [areaProfile.description]" — quote verbatim when listing #1 has the field. Prefer this over a generic market line because it's specific to the location.
+   • If labels AND areaProfile are both empty: skip this block entirely — never fabricate market context.
 
 4) Light urgency (optional, once only).
    Only if listing #1 carries the label:
@@ -315,14 +377,21 @@ Mandatory reply structure (5 blocks, tight):
    • new_listing → "freshly listed."
    Never stack urgency, never attach it to an option without the label.
 
-5) Soft push + one closing question (one line).
-   - Soft push: "If it's a fit, you can open it to see the full details 👌" — NOT "book now".
-   - Then a single decision-forward question:
-     • "Want me to narrow by a specific budget?"
-     • "What dates work for you?"
-     • "Want me to focus on a single area?"
-   - House: do NOT ask about bedrooms. Apartment: bedrooms or budget is fine.
-   - Exactly one question. No stacking.
+5) Decisive close — one line ending with a concrete CTA the user can act on RIGHT NOW.
+   MANDATORY CTA RULE (Tier 2.5): every reply MUST end with an action-oriented call to action — never a vague open question. Endings like "what do you think?" / "anything else?" / "family or friends?" are FORBIDDEN. They strand the customer with no next step and kill the close.
+   - Correct CTA shape = "[action verb] [specific action]". Strong examples:
+     • "Tap #1 and I'll lock in availability for those dates 👌"
+     • "Send me the dates and I'll book it directly."
+     • "Open the listing for the full details — I'm ready to set up the viewing."
+   - CTA follows listing #1's 'serviceType':
+     • sale: "Tap #1 and I'll connect you with the owner directly." / "Send me a time that works and I'll set up the viewing."
+     • rent + (chalet OR rentalType == "daily"): "Send me the dates and I'll confirm availability." / "Tap #1 to see the photos — I'm here to handle the rest."
+     • rent + rentalType == "monthly": "Send me a time and I'll arrange the viewing this week."
+   - Even for budget-tier listings, keep the CTA energetic — never timid. Example budget close: "Tap #1 — the price-to-value here is real."
+   - Never stack multiple action verbs in one line ("tap + send + book" — pick ONE).
+   - When a consultative question is natural (dates, budget, etc.), pair it with an action verb instead of leaving it open: ✅ "Send me your nightly budget and I'll pull a real match." NOT ❌ "What's your nightly budget?".
+   - House: do NOT ask about bedrooms. Apartment: pair the bedroom question with a CTA ("Send me your bedroom count and I'll line up the shortlist").
+   - Pushback case ("too expensive" / "any cheaper?" with no number): the mandated reply is "Got it — send me your nightly budget and I'll find a real match for you." (CTA = "send me" — an action verb, not an open question).
 
 —————————————————
 Decision guidance (when there are multiple options):
@@ -336,7 +405,17 @@ Decision guidance (when there are multiple options):
 —————————————————
 Length:
 —————————————————
-- Ideal reply: 4–7 short lines. No feature-lists, no emoji clutter, no repetition.`;
+- Ideal reply: 4–7 short lines. No feature-lists, no emoji clutter, no repetition.
+
+—————————————————
+ROI / yield facts (mandatory handling):
+—————————————————
+- The user message may end with a block like [[ROI_FACTS: yield=7.5%, annual=24000, payback=13.3y, source=owner_provided]] or [[ROI_FACTS: null]].
+- ROI_FACTS numbers are computed deterministically — quote them verbatim, never change or round.
+- source=owner_provided → phrase it as "based on the owner's estimate".
+- source=market_comparables → phrase it as "based on comparable rentals in the same area".
+- If [[ROI_FACTS: null]] say exactly: "I don't have enough data to calculate a reliable yield for this listing." NEVER guess a yield, annual income, or payback period.
+- Without a ROI_FACTS block, do NOT mention yield / payback / annual income numbers at all.`;
 
 // ---------------------------------------------------------------------------
 // Feature answer composer
@@ -517,7 +596,9 @@ function buildAreaClarifyQuestion(rawType: string, locale: "ar" | "en"): string 
   const t = (rawType || "").trim().toLowerCase();
   if (locale === "ar") {
     if (t === "chalet")
-      return "حياك الله 👌 تبي شاليه بأي منطقة، وكم ليلة ناوي؟ ولو عندك ميزانية في بالك قل لي.";
+      // Chalets rent BOTH daily (weekend) and monthly (long-term) at very
+      // different prices, so we ask the cadence up front instead of guessing.
+      return "حياك الله 👌 تبي شاليه بأي منطقة، ويومي (بالليلة) ولا شهري؟";
     if (t === "apartment")
       return "حياك الله 👌 تبي شقة بأي منطقة، وميزانيتك تقريباً كم؟";
     if (t === "house" || t === "villa")
@@ -529,7 +610,7 @@ function buildAreaClarifyQuestion(rawType: string, locale: "ar" | "en"): string 
     return "حياك الله 👌 تبي شاليه، شقة، ولا بيت؟ وبأي منطقة؟";
   }
   if (t === "chalet")
-    return "Welcome 👌 which area, how many nights, and any budget in mind?";
+    return "Welcome 👌 which area, and is it a daily (per-night) stay or a monthly rental?";
   if (t === "apartment")
     return "Welcome 👌 which area are you after, and roughly what's your budget?";
   if (t === "house" || t === "villa")
@@ -539,6 +620,163 @@ function buildAreaClarifyQuestion(rawType: string, locale: "ar" | "en"): string 
   if (t === "office" || t === "shop")
     return "Welcome 👌 which area are you after, and what's your budget?";
   return "Welcome 👌 chalet, apartment, or house? And which area?";
+}
+
+/**
+ * Warm clarifying question fired AFTER we already know the customer wants a
+ * chalet for rent in a specific area but the rental cadence is still missing.
+ * Daily chalets are weekend stays priced per night; monthly chalets are
+ * long-term leases priced per month — completely different listings, so we
+ * must ask before searching.
+ */
+function buildChaletCadenceClarifyQuestion(locale: "ar" | "en"): string {
+  if (locale === "ar") {
+    return "أبشر 👌 الشاليه يومي (بالليلة) ولا شهري؟ كل وحدة لها أسعار وخيارات تختلف عن الثانية.";
+  }
+  return "Got it 👌 daily (per-night) stay or a monthly rental? They're priced and listed very differently.";
+}
+
+/**
+ * Tier 2 — attach the curated [AreaProfile] to each listing before sending it
+ * to the compose LLM. Two reasons this lives here (rather than mutating the
+ * listing in-place upstream):
+ *
+ *   1) The `top3Results` returned to the client must stay clean — the Flutter
+ *      side has no use for `tier`/`vibe` and shouldn't pay for the bytes.
+ *      We build a *new* array for the prompt only.
+ *   2) Curation is sparse on purpose: only seeded slugs (see AREA_INTELLIGENCE)
+ *      get a profile; everything else is left as-is so the LLM falls back to
+ *      its existing data-grounded behavior. We never default-fill a tier or
+ *      vibe — guessing degrades the broker persona we just fought to install.
+ *
+ * Each enriched entry preserves all original fields and adds:
+ *   areaProfile?: { tier, vibe, description }
+ */
+function enrichListingsWithAreaProfile(
+  listings: Record<string, unknown>[]
+): Record<string, unknown>[] {
+  if (!Array.isArray(listings) || listings.length === 0) return listings;
+  return listings.map((row) => {
+    const code =
+      typeof row?.areaCode === "string"
+        ? (row.areaCode as string).trim().toLowerCase()
+        : "";
+    if (!code) return row;
+    const profile: AreaProfile | undefined = AREA_INTELLIGENCE[code];
+    if (!profile) return row;
+    return { ...row, areaProfile: profile };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Pivot fetcher — when the customer's requested area returns nothing, we
+// pull listings from the curated alternative slug surfaced by
+// [findAlternativeArea]. The query is intentionally minimal:
+//
+//   • approved == true              (publishable)
+//   • hiddenFromPublic == false     (lifecycle visibility)
+//   • areaCode == altSlug           (the alt itself; cluster expansion is
+//                                    deliberately skipped — the alt is
+//                                    already a single canonical slug)
+//   • serviceType == ...            (only when known — preserves rent/sale)
+//   • type == ...                   (only when known — preserves chalet/etc)
+//
+// Why we DON'T preserve `rentalType` and `budget`:
+//   • `rentalType` would over-filter when many older docs lack the field
+//     (same trade-off the Dart `_chaletMarketplaceQuery` makes — see the
+//     comment there). The pivot's job is to surface SOMETHING in the alt
+//     area; daily-vs-monthly nuance is a Tier 3 polish.
+//   • `budget` filtering on the alt would frequently produce a second empty
+//     query and we'd end up at NO_RESULTS_AR anyway. The customer already
+//     accepted "different area" by reaching this fallback; they'll accept
+//     a slightly different price band too.
+//
+// Returns up to [limit] raw documents (not yet ranked / labeled). The caller
+// runs them through `computeRankedTop3WithLabels` for parity with the
+// normal compose flow.
+// ---------------------------------------------------------------------------
+async function fetchPivotChalets(
+  altSlug: string,
+  filters: { serviceType?: string; propertyType?: string },
+  limit = 12
+): Promise<Record<string, unknown>[]> {
+  if (!altSlug) return [];
+  let q: admin.firestore.Query = db
+    .collection("properties")
+    .where("approved", "==", true)
+    .where("hiddenFromPublic", "==", false)
+    .where("areaCode", "==", altSlug);
+
+  const svc = (filters.serviceType ?? "").trim();
+  if (svc) q = q.where("serviceType", "==", svc);
+  const ptype = (filters.propertyType ?? "").trim();
+  if (ptype) q = q.where("type", "==", ptype);
+
+  try {
+    const snap = await q.orderBy("createdAt", "desc").limit(limit).get();
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
+  } catch (err) {
+    // Composite-index miss is the most likely failure here. Log and return
+    // empty so the caller falls through to NO_RESULTS_AR — the pivot is a
+    // best-effort enhancement, not a hard requirement.
+    console.error("Pivot fetch failed:", err);
+    return [];
+  }
+}
+
+/**
+ * Builds the deterministic Pivot intro line. We render this server-side
+ * (NOT via the LLM) so the wording is exactly under product control —
+ * the customer sees the same warm, on-brand copy every single time.
+ *
+ * The match-kind drives the connecting phrase:
+ *   • exact     → "بنفس الجو" / "with the same vibe"
+ *   • same_tier → "بنفس الفئة" / "in the same tier"
+ *   • same_vibe → "بنفس الذوق" / "with the same vibe"
+ *   • same_kind → "خيار قريب" / "a close alternative"
+ *
+ * Tier label → warm Kuwaiti adjective (premium / mid / budget). We never
+ * print the literal "tier" / "premium" / "vibe" tokens — those are internal.
+ */
+function buildPivotIntro(
+  locale: "ar" | "en",
+  requestedAreaLabel: string,
+  altLabel: string,
+  alt: AreaAlternative
+): string {
+  const { profile, matchKind } = alt;
+  if (locale === "ar") {
+    const tierLabel =
+      profile.tier === "premium"
+        ? "خيار راقي"
+        : profile.tier === "budget"
+          ? "خيار اقتصادي"
+          : "خيار قوي";
+    const matchLabel =
+      matchKind === "exact"
+        ? "بنفس الجو"
+        : matchKind === "same_tier"
+          ? "بنفس الفئة"
+          : matchKind === "same_vibe"
+            ? "بنفس الذوق"
+            : "خيار قريب";
+    return `للأسف ما نزل شي في ${requestedAreaLabel} هاللحين، بس ${altLabel} ${tierLabel} ${matchLabel} — ${profile.description} شوف هاللقطات بدلاً 👇`;
+  }
+  const tierLabel =
+    profile.tier === "premium"
+      ? "a high-end pick"
+      : profile.tier === "budget"
+        ? "a value-friendly pick"
+        : "a strong pick";
+  const matchLabel =
+    matchKind === "exact"
+      ? "with the same vibe"
+      : matchKind === "same_tier"
+        ? "in the same tier"
+        : matchKind === "same_vibe"
+          ? "with a similar feel"
+          : "a close alternative";
+  return `Nothing's listed in ${requestedAreaLabel} right now — but ${altLabel} is ${tierLabel} ${matchLabel}: ${profile.description} Check these out instead 👇`;
 }
 
 /** Confirmed bookings in rolling window at or above this count get the high-demand line + label. */
@@ -1129,7 +1367,10 @@ export async function buildTopDemandChaletsCompose(
 async function composeAgentReply(
   data: Record<string, unknown>
 ): Promise<{ reply: string; results?: Record<string, unknown>[] }> {
-  const top3Results = Array.isArray(data.top3Results) ? (data.top3Results as Record<string, unknown>[]) : [];
+  // `let` (not `const`) because the Tier 2.5 Pivot may swap this with the
+  // alternative-area listings when the customer's requested area returns
+  // nothing. See the pivot block before the 0-results fallback below.
+  let top3Results = Array.isArray(data.top3Results) ? (data.top3Results as Record<string, unknown>[]) : [];
   const locale = data.locale === "ar" ? "ar" : "en";
   const userAskedForMore = data.userAskedForMore === true;
   const isNearbyFallback = data.isNearbyFallback === true;
@@ -1184,8 +1425,80 @@ async function composeAgentReply(
     };
   }
 
+  // ---------------------------------------------------------------------
+  // Tier 2.5 PIVOT — dead-end recovery.
+  //
+  // When the customer's strict search returned zero rows AND the requested
+  // area is one we've curated in [AREA_INTELLIGENCE], we don't say "ما لقيت
+  // شي" and walk away. We pivot like a real dallal would:
+  //
+  //   1. Resolve the requested area's profile (tier + vibe).
+  //   2. Find the closest curated alternative — same tier+vibe ideally,
+  //      else same tier, else same vibe, else any same-kind area.
+  //   3. Fetch real listings from the alt area (server-side Firestore
+  //      query mirroring the chalet branch) preserving the original
+  //      serviceType + propertyType so we don't suggest the wrong product.
+  //   4. If the alt query yielded anything, swap [top3Results] with its
+  //      ranked top-3 and PREPEND a deterministic, on-brand pivot intro
+  //      to the LLM-composed reply.
+  //
+  // Three guardrails:
+  //   • [pivotIntro] is rendered server-side, not by the LLM, so the
+  //     wording is exactly what product approved.
+  //   • Same-kind matching ([findAlternativeArea] uses [isChaletBeltArea])
+  //     prevents nonsense pivots like "Bneider chalet → Qadisiya villa".
+  //   • If alt also returns zero rows we fall through to the existing
+  //     NO_RESULTS_AR — the pivot is a best-effort enhancement.
+  // ---------------------------------------------------------------------
+  let pivotIntro = "";
+  let effectiveAreaCode = areaCode;
+  let effectiveAreaLabel = requestedAreaLabel;
+  if (top3Results.length === 0 && areaCode) {
+    const alt = findAlternativeArea(areaCode);
+    if (alt) {
+      const altRaw = await fetchPivotChalets(alt.slug, {
+        serviceType,
+        propertyType,
+      });
+      if (altRaw.length > 0) {
+        const altRanked = await computeRankedTop3WithLabels(
+          altRaw,
+          alt.slug,
+          [],
+          userBudget ?? null
+        );
+        if (altRanked.length > 0) {
+          const altLabel =
+            (altRanked[0]?.areaAr as string) ||
+            (altRanked[0]?.areaEn as string) ||
+            alt.slug;
+          const reqLabel =
+            requestedAreaLabel ||
+            areaCode ||
+            (locale === "ar" ? "هذي المنطقة" : "this area");
+          pivotIntro = buildPivotIntro(locale, reqLabel, altLabel, alt);
+          top3Results = altRanked;
+          effectiveAreaCode = alt.slug;
+          effectiveAreaLabel = altLabel;
+          console.info(
+            JSON.stringify({
+              tag: "pivot.applied",
+              from: areaCode,
+              to: alt.slug,
+              matchKind: alt.matchKind,
+              altCount: altRanked.length,
+            })
+          );
+        }
+      }
+    }
+  }
+
+  // Recompute suggestions AFTER the pivot so the chips are anchored on the
+  // alt area when applicable (e.g. "بحث في رواضي شاليه شهري" should chip
+  // around Rawda, not the empty Bneider).
   const suggestions = buildSmartSuggestions({
-    area: areaCode || undefined,
+    area: effectiveAreaCode || undefined,
     propertyType: propertyType || undefined,
     serviceType: serviceType || undefined,
     locale,
@@ -1205,7 +1518,11 @@ async function composeAgentReply(
     return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
   }
 
-  if (top3Results.length === 1 && userAskedForMore) {
+  // `userAskedForMore` describes the original (pre-pivot) search. Once a
+  // pivot has fired we are no longer in the "only one match found" UX —
+  // we're explicitly showing alternatives — so the SINGLE_RESULT short-
+  // circuit must NOT swallow the pivot intro.
+  if (top3Results.length === 1 && userAskedForMore && !pivotIntro) {
     const reply = locale === "ar" ? SINGLE_RESULT_ASKED_MORE_AR : SINGLE_RESULT_ASKED_MORE_EN;
     return { reply: appendSuggestionsToReply(reply, suggestions, locale) };
   }
@@ -1232,14 +1549,18 @@ async function composeAgentReply(
   }
 
   const areaLabel =
-    requestedAreaLabel ||
+    effectiveAreaLabel ||
     (top3Results[0]?.areaAr as string) ||
     (top3Results[0]?.areaEn as string) ||
-    areaCode ||
+    effectiveAreaCode ||
     (locale === "ar" ? "هذه المنطقة" : "this area");
 
+  // Use [effectiveAreaCode] (post-pivot) so insights / market-signal /
+  // labeling all run against the area whose listings we're actually
+  // showing. Otherwise after a pivot we'd be quoting Bneider market data
+  // alongside Rawda listings — instant credibility loss.
   const context: SearchContext = {
-    areaCode: areaCode || undefined,
+    areaCode: effectiveAreaCode || undefined,
     propertyType: propertyType || undefined,
     serviceType: serviceType || undefined,
     budget: userBudget,
@@ -1255,19 +1576,67 @@ async function composeAgentReply(
       db,
     });
 
+    // Inject deterministic ROI facts when the user is asking an investment
+    // question about a sale listing. The LLM is instructed (in the system
+    // prompt) to quote these numbers verbatim and — when the block is
+    // `ROI_FACTS: null` — refuse to guess yields. This is the single most
+    // important guardrail for investment advice.
+    let roiFactsText = "";
+    try {
+      const primary = top3Results[0] || {};
+      const primaryService = String(primary.serviceType || "").toLowerCase();
+      const primaryId =
+        typeof primary.id === "string" ? primary.id : String(primary.id || "");
+      if (
+        rawMessage &&
+        primaryId &&
+        primaryService === "sale" &&
+        isInvestmentQuestion(rawMessage)
+      ) {
+        const roi = await computeRoiForProperty(primaryId);
+        if (roi) {
+          const f = roiToFactsBlock(roi);
+          roiFactsText = `\n\n[[ROI_FACTS: yield=${f.yield}, annual=${f.annual}, payback=${f.payback}, source=${f.source}${
+            f.sampleSize ? `, sample=${f.sampleSize}` : ""
+          }]]`;
+        } else {
+          roiFactsText = "\n\n[[ROI_FACTS: null]]";
+        }
+      }
+    } catch (err) {
+      console.error("ROI inject failed (non-fatal):", err);
+    }
+
     const openai = new OpenAI({ apiKey });
     const systemContent = locale === "ar" ? COMPOSE_SYSTEM_AR : COMPOSE_SYSTEM_EN;
+    // Enrich listings with curated area profile (tier/vibe/description) so the
+    // compose LLM can speak like a Kuwaiti dallal — quoting the area's vibe
+    // verbatim and matching the closing question to the customer's likely
+    // social context. The original `top3Results` (without `areaProfile`) is
+    // still what we return to the client below.
+    const top3ForCompose = enrichListingsWithAreaProfile(top3Results);
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemContent },
-        { role: "user", content: JSON.stringify(top3Results) },
+        {
+          role: "user",
+          content: JSON.stringify(top3ForCompose) + roiFactsText,
+        },
       ],
       max_tokens: 300,
     });
-    const mainReplyBody =
+    const llmReply =
       completion.choices?.[0]?.message?.content?.trim() ||
       (locale === "ar" ? "لقيت لك خيارات. ميزانيتك كم؟" : "Found some options. What's your budget?");
+
+    // Prepend the deterministic Pivot intro (if any). The intro frames WHY
+    // the customer is seeing alt-area listings; the LLM then continues
+    // with the normal three-listing pitch as if the alt area were the
+    // requested one. The blank line keeps the visual hierarchy clean.
+    const mainReplyBody = pivotIntro
+      ? `${pivotIntro}\n\n${llmReply}`
+      : llmReply;
 
     const payload = composeAssistantResponse({
       locale,
@@ -1498,11 +1867,37 @@ export const aqaraiAgentAnalyze = onCall(
         ? (openaiParsed.clarifying_questions as unknown[]).map((q) => String(q))
         : [];
 
+      // Defensive sanitization for LLM-emitted areaCodes. The model occasionally
+      // tries to "help" by joining typed area names into a single slug
+      // ("khairan_benider_jaleea") or by inventing English slugs that don't
+      // exist in the database. We only accept entries that match a known
+      // canonical slug from KUWAIT_AREAS (its set of values). If anything is
+      // unknown we drop the whole array and let the deterministic multi-area
+      // parser (extractAllAreaCodesFromText) populate it later in the flow.
+      if (Array.isArray(paramsPatch.areaCodes)) {
+        const knownSlugs = new Set(Object.values(KUWAIT_AREAS));
+        const cleaned = (paramsPatch.areaCodes as unknown[])
+          .map((v) => (typeof v === "string" ? v.trim().toLowerCase() : ""))
+          .filter((v) => v.length > 0 && knownSlugs.has(v));
+        const distinct = Array.from(new Set(cleaned));
+        if (distinct.length >= 2) {
+          paramsPatch.areaCodes = distinct;
+        } else {
+          delete paramsPatch.areaCodes;
+        }
+      }
+
       const kuwaiti = normalizeKuwaitiIntent(rawMessage);
       if (kuwaiti.propertyType && (paramsPatch.type == null || paramsPatch.type === ""))
         paramsPatch.type = kuwaiti.propertyType;
       if (kuwaiti.serviceType && (paramsPatch.serviceType == null || paramsPatch.serviceType === ""))
         paramsPatch.serviceType = kuwaiti.serviceType;
+      if (
+        kuwaiti.rentalType &&
+        (paramsPatch.rentalType == null || paramsPatch.rentalType === "")
+      ) {
+        paramsPatch.rentalType = kuwaiti.rentalType;
+      }
 
       let referencedPropertyId = "";
       const fromModelRef =
@@ -1535,6 +1930,49 @@ export const aqaraiAgentAnalyze = onCall(
         clarifyingQuestionsFinal = [];
       }
 
+      // Multi-area: when the customer named 2+ distinct areas in one breath
+      // ("الخيران بنيدر جليعه"), the deterministic parser surfaces the full
+      // list. We propagate it as `areaCodes` so the search service can run
+      // a `whereIn` query — the customer's mental model is "show me from any
+      // of these", not "pick one and search". The single `areaCode` stays
+      // populated (first match) for backward-compat consumers that haven't
+      // migrated to the array yet.
+      if (
+        Array.isArray(parsed.detectedAreaCodes) &&
+        parsed.detectedAreaCodes.length >= 2 &&
+        !Array.isArray(paramsPatch.areaCodes)
+      ) {
+        paramsPatch.areaCodes = parsed.detectedAreaCodes;
+        isCompleteFinal = true;
+        clarifyingQuestionsFinal = [];
+      }
+
+      // Chalet-belt expansion: when the customer wants a chalet but is
+      // location-vague ("ابي شاليه شنو متوفر" / "أي منطقة عندك" / "كله") and
+      // didn't name any specific area, expand to the canonical chalet belt
+      // so they see real inventory across الخيران، بنيدر، الجليعة... instead
+      // of getting bounced with "بأي منطقة؟". The intent here is curated
+      // browsing, not a pinpoint search.
+      // Tier 1 widening: Kuwaitis rarely phrase "show me everything" with the
+      // textbook phrasings. They use throwaway browse cues like "بس وريني",
+      // "ودّيني على شي", "انت شوف"، "أي شي" — all of which mean the same
+      // "I haven't picked an area, surface inventory and let me browse".
+      // Gating remains tight (`type === "chalet"` AND no area picked AND no
+      // multi-area list), so widening doesn't trigger on unrelated chat.
+      const chaletBeltVagueRegex =
+        /(?:ا?ي\s*منطق[هة])|(?:كل\s*ال?مناطق)|(?:شنو\s*متوفر)|(?:عاد[يى]\s*ا?ب[يى]\s*ا?شوف)|(?:كل[هه])|(?:any\s*area)|(?:show\s*me\s*all)|(?:ا?ي\s*ش[يى])|(?:بس\s*وريني)|(?:ودّ?يني)|(?:يعجبني)|(?:انت\s*شوف)|(?:عطني\s*لقط[هة])|(?:عرضلي\s*الموجود)|(?:وريني\s*شاليهات)/i;
+      const turnIsChaletVague =
+        (typeof paramsPatch.type === "string" &&
+          (paramsPatch.type as string).trim().toLowerCase() === "chalet" &&
+          !paramsPatch.areaCode &&
+          !Array.isArray(paramsPatch.areaCodes) &&
+          chaletBeltVagueRegex.test(rawMessage));
+      if (turnIsChaletVague) {
+        paramsPatch.areaCodes = CHALET_BELT_AREAS.slice();
+        isCompleteFinal = true;
+        clarifyingQuestionsFinal = [];
+      }
+
       // Date Intelligence Layer — OpenAI does not extract dates; our
       // deterministic parser does (intent_parser.extractDateRangeFromText).
       // Merge whenever the parser found a valid range for THIS turn.
@@ -1546,6 +1984,16 @@ export const aqaraiAgentAnalyze = onCall(
 
       const previousContext = getSearchContextFromFilters(currentFilters);
       if (!paramsPatch.areaCode && previousContext.areaCode) paramsPatch.areaCode = previousContext.areaCode;
+      // Carry forward an active multi-area selection if this turn didn't
+      // overwrite it (e.g., a refinement turn where the customer just changed
+      // budget but is still browsing the same belt).
+      if (
+        !Array.isArray(paramsPatch.areaCodes) &&
+        Array.isArray(previousContext.areaCodes) &&
+        previousContext.areaCodes.length >= 2
+      ) {
+        paramsPatch.areaCodes = previousContext.areaCodes.slice();
+      }
       if ((!paramsPatch.type || paramsPatch.type === "") && previousContext.propertyType)
         paramsPatch.type = previousContext.propertyType;
       if ((!paramsPatch.serviceType || paramsPatch.serviceType === "") && previousContext.serviceType)
@@ -1564,6 +2012,27 @@ export const aqaraiAgentAnalyze = onCall(
         paramsPatch.startDate = previousContext.startDate;
         paramsPatch.endDate = previousContext.endDate;
         if (previousContext.nights != null) paramsPatch.nights = previousContext.nights;
+      }
+
+      // HARD GUARD (budget_down with no anchor). When the customer pushes
+      // back with "أرخص" / "اقل" / "اوفر" but never gave us a number, the
+      // downstream `applyModifierToContext` multiplies a NULL budget by 0.9
+      // — a silent no-op. The query re-runs with identical filters and the
+      // customer sees the same listings, which feels like the bot ignored
+      // them. Refuse the modifier here, force a budget clarify, and let the
+      // turn close at "what's your nightly budget?" instead of pretending we
+      // refined anything. The empathy phrasing matches the persona prompt's
+      // "بحدود كم ميزانيتك بالليلة" line so server + LLM agree on copy.
+      if (
+        parsed.modifier?.type === "budget_down" &&
+        previousContext.budget == null &&
+        !referencedPropertyId
+      ) {
+        parsed.modifier = null;
+        isCompleteFinal = false;
+        clarifyingQuestionsFinal = [
+          "ولا يهمك، السوق هاللحين شاد حيله — بحدود كم ميزانيتك بالليلة عشان أصيد لك لقطة تناسبك؟",
+        ];
       }
 
       const hasPreviousSearch =
@@ -1619,6 +2088,98 @@ export const aqaraiAgentAnalyze = onCall(
             "";
           clarifyingQuestionsFinal = [buildAreaClarifyQuestion(inferredType, locale)];
         }
+      }
+
+      // HARD GUARD (chalet rental cadence) — AUTHORITATIVE.
+      //
+      //   When the customer wants a chalet for rent in a known area but never
+      //   said whether they want a daily (weekend / per-night) or a monthly
+      //   (long-term) chalet, we MUST resolve the cadence before searching.
+      //   The two segments live under different `rentalType` values in
+      //   Firestore and price very differently ("KWD 95 / ليلة" vs
+      //   "KWD X / شهر"), so guessing produces empty pages or off-budget
+      //   options.
+      //
+      //   This guard runs in two stages:
+      //
+      //   (1) SMART INFERENCE — if the user already gave us a strong daily
+      //       signal in the same turn (a parsed date range, an explicit
+      //       `nights` count, or counted nights via the static parser), we
+      //       stamp `rentalType=daily` and proceed straight to search. The
+      //       customer never sees a redundant "daily or monthly?" question
+      //       when they already implicitly answered it.
+      //
+      //   (2) FORCED CLARIFY — if cadence is still missing after inference,
+      //       we OVERRIDE whatever clarifying question the LLM produced
+      //       (e.g. "كم ليلة ناوي؟", which assumes daily) and replace it
+      //       with the proper "تبيه يومي ولا شهري؟" question. The previous
+      //       version gated this behind `length === 0`, which let the LLM's
+      //       wrong question win and skip the cadence check entirely — that
+      //       was the exact production bug customers reported.
+      const finalType =
+        typeof finalParamsPatch.type === "string"
+          ? (finalParamsPatch.type as string).trim().toLowerCase()
+          : "";
+      let finalServiceType =
+        typeof finalParamsPatch.serviceType === "string"
+          ? (finalParamsPatch.serviceType as string).trim().toLowerCase()
+          : "";
+      let finalRentalType =
+        typeof finalParamsPatch.rentalType === "string"
+          ? (finalParamsPatch.rentalType as string).trim().toLowerCase()
+          : "";
+
+      // SMART DEFAULT (chalet → rent). Kuwaiti chalet inventory is
+      // overwhelmingly rentals (daily weekend stays + monthly long-term).
+      // Sale-only chalets are rare and worded explicitly when they exist
+      // ("شاليه للبيع"). When the customer says "ابي شاليه" with no
+      // rent/sale phrase, leaving `serviceType=""` causes the cadence
+      // guard below to skip its `serviceType === "rent"` precondition,
+      // which then routes the turn into a no-cadence search and lands on
+      // mismatched results. Stamping rent here is product policy: we
+      // serve the dominant intent, and an explicit "للبيع" still wins
+      // because the LLM emits `serviceType=sale` in `paramsPatch` which
+      // already merged into `finalParamsPatch` above this line.
+      const finalServiceTypeIsBlank =
+        finalServiceType === "" || finalServiceType == null;
+      if (finalType === "chalet" && finalServiceTypeIsBlank) {
+        finalParamsPatch.serviceType = "rent";
+        finalServiceType = "rent";
+      }
+
+      // Stage (1): smart implicit-daily inference.
+      const cadenceGuardApplies =
+        !referencedPropertyId &&
+        intent !== "greeting" &&
+        intent !== "booking_intent" &&
+        intent !== "hesitation" &&
+        finalAreaCode !== "" &&
+        finalType === "chalet" &&
+        finalServiceType === "rent";
+
+      if (cadenceGuardApplies && finalRentalType === "") {
+        const hasParsedDateRange =
+          typeof finalParamsPatch.startDate === "string" &&
+          (finalParamsPatch.startDate as string).trim() !== "" &&
+          typeof finalParamsPatch.endDate === "string" &&
+          (finalParamsPatch.endDate as string).trim() !== "";
+        const parsedNights =
+          typeof finalParamsPatch.nights === "number"
+            ? (finalParamsPatch.nights as number)
+            : null;
+        const hasNightsCount =
+          parsedNights != null && Number.isFinite(parsedNights) && parsedNights > 0;
+        if (hasParsedDateRange || hasNightsCount) {
+          finalParamsPatch.rentalType = "daily";
+          finalRentalType = "daily";
+        }
+      }
+
+      // Stage (2): force the cadence question when still missing — this
+      // OVERRIDES any LLM-produced clarifying question for this turn.
+      if (cadenceGuardApplies && finalRentalType === "") {
+        isCompleteFinal = false;
+        clarifyingQuestionsFinal = [buildChaletCadenceClarifyQuestion(locale)];
       }
 
       const out: Record<string, unknown> = {

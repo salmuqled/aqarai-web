@@ -435,6 +435,7 @@ export {
   aqaraiAgentRankAndCompose,
   aqaraiAgentFindSimilar,
 } from "./agent_brain";
+export { aqaraiAgentComputeRoi } from "./roi_engine";
 export { onPropertyCreatedBuyerRadar } from "./buyer_radar";
 export { onPropertyUpdatedBuyerNotify } from "./buyer_notifications";
 export {
@@ -508,6 +509,10 @@ export {
   verifyBookingMyFatoorahPayment,
   cancelBookingPendingPayment,
 } from "./chalet_booking_payment_myfatoorah";
+export { myFatoorahWebhook } from "./myFatoorahWebhook";
+export { createAuctionFeeMyFatoorahPayment } from "./payments/createAuctionFeeMyFatoorahPayment";
+export { createFeaturePropertyMyFatoorahPayment } from "./payments/createFeaturePropertyMyFatoorahPayment";
+export { myFatoorahAppReturn } from "./payments/myfatoorahAppReturn";
 export { getTopDemandChalets } from "./get_top_demand_chalets";
 export { filterChatAvailability } from "./chat_availability";
 export { generateChatSmartSuggestions } from "./smart_suggestions";

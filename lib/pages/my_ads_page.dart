@@ -20,7 +20,7 @@ import 'package:aqarai_app/auth/login_page.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 
 // صفحة التفاصيل
-import 'package:aqarai_app/widgets/property_details_page.dart';
+import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/pages/wanted_details_page.dart';
 import 'package:aqarai_app/pages/valuation_details_page.dart';
 import 'package:aqarai_app/constants/deal_constants.dart';
@@ -33,6 +33,7 @@ import 'package:aqarai_app/widgets/listing_thumbnail_image.dart';
 import 'package:aqarai_app/services/image_processing_service.dart';
 import 'package:aqarai_app/services/property_listing_image_service.dart';
 import 'package:aqarai_app/services/featured_property_service.dart';
+import 'package:aqarai_app/services/payment/payment_service.dart';
 import 'package:aqarai_app/services/payment/payment_service_provider.dart';
 import 'package:aqarai_app/utils/listing_display.dart';
 import 'package:aqarai_app/pages/owner_chalet_finance_page.dart';
@@ -1288,14 +1289,9 @@ class _MyAdsPageState extends State<MyAdsPage> {
 
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PropertyDetailsPage(
-              propertyId: id,
-              leadSource: DealLeadSource.direct,
-            ),
-          ),
+        context.pushPropertyDetails(
+          propertyId: id,
+          leadSource: DealLeadSource.direct,
         );
       },
       child: Card(
@@ -1447,16 +1443,48 @@ class _MyAdsPageState extends State<MyAdsPage> {
                           ),
                         ],
                         if (showClosureBtn) ...[
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           Align(
                             alignment: Alignment.centerRight,
-                            child: FilledButton.tonal(
-                              onPressed: () => _confirmClosureAndSubmit(
-                                id,
-                                d['serviceType']?.toString() ?? 'sale',
-                              ),
-                              child: Text(
-                                closureButtonLabelAr(d['serviceType']?.toString() ?? 'sale'),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 340),
+                              child: OutlinedButton.icon(
+                                onPressed: () => _confirmClosureAndSubmit(
+                                  id,
+                                  d['serviceType']?.toString() ?? 'sale',
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: _primaryBlue,
+                                  backgroundColor: Colors.white,
+                                  side: BorderSide(
+                                    color: _primaryBlue.withValues(alpha: 0.45),
+                                    width: 1,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                icon: Icon(
+                                  Icons.assignment_turned_in_outlined,
+                                  size: 18,
+                                  color: _primaryBlue,
+                                ),
+                                label: Text(
+                                  closureRequestActionButtonLabel(
+                                    d['serviceType']?.toString() ?? 'sale',
+                                    locale,
+                                  ),
+                                  textAlign: TextAlign.end,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.25,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -1962,21 +1990,25 @@ class _ActionsState extends State<_Actions> {
 
   Future<void> _runFeatureFlow(BuildContext context) async {
     if (_loadingFeature) return;
-    final plan = await _pickPlan(context);
-    if (plan == null) return;
-
     setState(() => _loadingFeature = true);
     try {
+      final plan = await _pickPlan(context);
+      if (plan == null) return;
+
       final ui = await PaymentServiceProvider.instance.payFeaturedAd(
         amountKwd: plan.priceKwd.toDouble(),
+        durationDays: plan.durationDays,
         propertyId: widget.propertyId,
         description: 'تمييز إعلان',
       );
       if (!ui.success) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم إلغاء الدفع')),
-        );
+        final msg = messageForFeaturedAdFailureAr(ui.failure);
+        if (msg != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg)),
+          );
+        }
         return;
       }
       final pid = ui.paymentId?.trim() ?? '';

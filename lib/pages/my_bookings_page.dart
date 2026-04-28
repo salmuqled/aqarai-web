@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'package:aqarai_app/widgets/property_details_page.dart';
+import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 
 class MyBookingsPage extends StatelessWidget {
@@ -98,13 +98,9 @@ class MyBookingsPage extends StatelessWidget {
                   onTap: propertyId.isEmpty
                       ? null
                       : () {
-                          Navigator.of(context).push<void>(
-                            MaterialPageRoute<void>(
-                              builder: (_) => PropertyDetailsPage(
-                                propertyId: propertyId,
-                                leadSource: DealLeadSource.direct,
-                              ),
-                            ),
+                          context.pushPropertyDetails(
+                            propertyId: propertyId,
+                            leadSource: DealLeadSource.direct,
                           );
                         },
                 ),

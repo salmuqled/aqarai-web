@@ -163,25 +163,28 @@ export async function findSimilarProperties(
   getMarketSignal?: (areaCode: string, propertyType: string) => Promise<string>
 ): Promise<Record<string, unknown>[]> {
   const { propertyType, userBudget, nearbyAreaCodes, requestedSize } = params;
-  if (!propertyType?.trim()) return [];
   const areas = (nearbyAreaCodes || []).filter((a) => a != null && String(a).trim() !== "");
   if (areas.length === 0) return [];
 
+  // Phase 1 generalization: propertyType is optional. When the user gave us
+  // just an area (no type preference), we still surface nearby listings and
+  // let downstream ranking/composition adapt. When it's provided, we keep
+  // the strict equality filter for precision.
+  const typeTrim = propertyType?.trim() ?? "";
   const areaList = areas.length > 10 ? areas.slice(0, 10) : areas;
   const perAreaLimit = Math.max(4, Math.ceil(24 / areaList.length));
   const merged: QueryDocumentSnapshot[] = [];
   const seen = new Set<string>();
   for (const area of areaList) {
-    const snap = await db
+    let q = db
       .collection("properties")
       .where("approved", "==", true)
       .where("isActive", "==", true)
       .where("listingCategory", "==", "normal")
       .where("hiddenFromPublic", "==", false)
-      .where("type", "==", propertyType.trim())
-      .where("areaCode", "==", area)
-      .limit(perAreaLimit)
-      .get();
+      .where("areaCode", "==", area);
+    if (typeTrim) q = q.where("type", "==", typeTrim);
+    const snap = await q.limit(perAreaLimit).get();
     for (const d of snap.docs) {
       if (seen.has(d.id)) continue;
       seen.add(d.id);
@@ -218,9 +221,9 @@ export async function findSimilarProperties(
   const recommendations = withScore.slice(0, 3).map((x) => x.prop);
 
   let marketSignal = "normal";
-  if (getMarketSignal && params.requestedAreaCode?.trim() && params.propertyType?.trim()) {
+  if (getMarketSignal && params.requestedAreaCode?.trim() && typeTrim) {
     try {
-      marketSignal = await getMarketSignal(params.requestedAreaCode.trim(), params.propertyType.trim());
+      marketSignal = await getMarketSignal(params.requestedAreaCode.trim(), typeTrim);
     } catch {
       // non-fatal
     }
