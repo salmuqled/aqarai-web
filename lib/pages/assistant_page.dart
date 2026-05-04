@@ -38,6 +38,7 @@ import 'package:aqarai_app/services/ai_brain_service.dart';
 import 'package:aqarai_app/services/chat_analytics_service.dart';
 import 'package:aqarai_app/services/conversational_search_service.dart';
 import 'package:aqarai_app/services/user_interest_service.dart';
+import 'package:aqarai_app/services/auth_service.dart';
 import 'package:aqarai_app/services/notification_service.dart';
 import 'package:aqarai_app/services/user_activity_service.dart';
 import 'package:aqarai_app/widgets/chat_bubble.dart';
@@ -216,7 +217,8 @@ class _AssistantPageState extends State<AssistantPage>
       _fcmSetupDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         final user = FirebaseAuth.instance.currentUser;
-        final isAdmin = (await user?.getIdTokenResult(true))?.claims?['admin'] == true;
+        final claims = (await user?.getIdTokenResult(true))?.claims;
+        final isAdmin = AuthService.isAdminFromClaims(claims);
         if (mounted) {
           await NotificationService.setup(
             context,
@@ -269,7 +271,11 @@ class _AssistantPageState extends State<AssistantPage>
               userId: user.uid,
               filters: Map<String, dynamic>.from(_currentFilters),
             );
-          } catch (_) {}
+          } catch (e, st) {
+            debugPrint(
+              'Error in AssistantPage._sendMessage saveInterest (notify consent): $e\n$st',
+            );
+          }
           _awaitingNotifyConsent = false;
           _appendReply(_isAr
               ? 'تمام 👌 راح أبلغك أول ما ينزل شيء مناسب لك'
@@ -386,7 +392,11 @@ class _AssistantPageState extends State<AssistantPage>
               filters: _currentFilters,
             );
           }
-        } catch (_) {}
+        } catch (e, st) {
+          debugPrint(
+            'Error in AssistantPage._sendMessage saveInterest (reference_listing): $e\n$st',
+          );
+        }
         final areaCodeRef = _currentFilters['areaCode']?.toString().trim() ?? '';
         final userBudgetRef = _currentFilters['budget'] is num
             ? (_currentFilters['budget'] as num).toDouble()

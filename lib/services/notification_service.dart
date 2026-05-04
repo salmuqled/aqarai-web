@@ -1,5 +1,6 @@
 // lib/services/notification_service.dart
 import 'dart:async';
+import 'dart:math' show min;
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -73,7 +74,9 @@ class NotificationService {
     if (subscribeAdmin) {
       try {
         await _fcm.subscribeToTopic('admins');
-      } catch (_) {}
+      } catch (e, st) {
+        debugPrint('Error in NotificationService.setup subscribe admins: $e\n$st');
+      }
     }
 
     // 4) الحصول على التوكن بأمان (تجنب كراش السيموليتر ومشاكل APNs)
@@ -104,7 +107,10 @@ class NotificationService {
         token = await _fcm.getToken();
       }
       if (token != null) {
-        debugPrint('🎯 FCM token: $token');
+        if (token.isNotEmpty) {
+          final n = min(10, token.length);
+          debugPrint('FCM token prefix: ${token.substring(0, n)}...');
+        }
         final user = FirebaseAuth.instance.currentUser;
         if (user != null && token.isNotEmpty) {
           try {
@@ -489,7 +495,9 @@ class NotificationService {
       } else {
         await _fcm.unsubscribeFromTopic('admins');
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('Error in NotificationService.toggleAdminTopic: $e\n$st');
+    }
   }
 }
 

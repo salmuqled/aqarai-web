@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -228,7 +229,9 @@ abstract final class ImageProcessingService {
       if (await file.exists() && isProcessedTempFile(file)) {
         await file.delete();
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('Error in ImageProcessingService.tryDeleteTemp: $e\n$st');
+    }
   }
 
   static Future<void> tryDeleteTemps(Iterable<File> files) async {

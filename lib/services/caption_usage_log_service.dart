@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 import 'package:aqarai_app/utils/caption_factor_analyzer.dart';
 
@@ -33,6 +34,8 @@ abstract final class CaptionUsageLogService {
         'createdAt': FieldValue.serverTimestamp(),
         'adminUid': uid,
       });
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('Error in CaptionUsageLogService.logUsage: $e\n$st');
+    }
   }
 }

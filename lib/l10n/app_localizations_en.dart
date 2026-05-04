@@ -373,6 +373,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get legalTabTerms => 'Terms of Service';
 
   @override
+  String get legalOpenPrivacyPolicyWebsite => 'View full privacy policy online';
+
+  @override
   String get languageLabel => 'Language';
 
   @override

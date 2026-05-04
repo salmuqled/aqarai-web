@@ -1,7 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/widgets/terms_content_view.dart';
+
+/// Published privacy policy URL (GitHub Pages).
+const _kPrivacyPolicyWebUrl = 'https://salmuqled.github.io/aqarai-privacy/';
+
+Future<void> _openPrivacyPolicyWebsite(BuildContext context) async {
+  final loc = AppLocalizations.of(context)!;
+  final uri = Uri.parse(_kPrivacyPolicyWebUrl);
+  try {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!context.mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.instagramPostOpenFailed)),
+      );
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.instagramPostOpenFailed)),
+      );
+    }
+  }
+}
 
 /// Privacy Policy & Terms of Service (Arabic / English by app locale).
 /// Contact: aqaraiapp@gmail.com — general information only; not legal advice.
@@ -61,6 +85,7 @@ class _PrivacyPolicyBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final code = Localizations.localeOf(context).languageCode;
     final isAr = code == 'ar';
     final sections = isAr ? _privacyAr : _privacyEn;
@@ -68,6 +93,12 @@ class _PrivacyPolicyBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
       children: [
+        FilledButton.tonalIcon(
+          onPressed: () => _openPrivacyPolicyWebsite(context),
+          icon: const Icon(Icons.open_in_new, size: 20),
+          label: Text(loc.legalOpenPrivacyPolicyWebsite),
+        ),
+        const SizedBox(height: 20),
         for (final s in sections) ...[
           SelectableText(
             s.title,

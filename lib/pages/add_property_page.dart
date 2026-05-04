@@ -776,17 +776,29 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
           for (final up in batch) {
             try {
               await up.fullRef.delete();
-            } catch (_) {}
+            } catch (e, st) {
+              debugPrint(
+                '[AddProperty] cleanup delete fullRef after Firestore failure: $e\n$st',
+              );
+            }
             try {
               await up.thumbRef.delete();
-            } catch (_) {}
+            } catch (e, st) {
+              debugPrint(
+                '[AddProperty] cleanup delete thumbRef after Firestore failure: $e\n$st',
+              );
+            }
           }
           try {
             await createdRef.update({
               'id': createdRef.id,
               'updatedAt': FieldValue.serverTimestamp(),
             });
-          } catch (_) {}
+          } catch (e, st) {
+            debugPrint(
+              '[AddProperty] timestamp refresh after Firestore photo failure: $e\n$st',
+            );
+          }
           if (mounted) {
             _toast(
               isAr
@@ -804,7 +816,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
             'id': createdRef.id,
             'updatedAt': FieldValue.serverTimestamp(),
           });
-        } catch (_) {}
+        } catch (e2, st2) {
+          debugPrint(
+            '[AddProperty] timestamp refresh after FirebaseException: $e2\n$st2',
+          );
+        }
         if (mounted) {
           _toast(
             isAr
@@ -819,7 +835,11 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
             'id': createdRef.id,
             'updatedAt': FieldValue.serverTimestamp(),
           });
-        } catch (_) {}
+        } catch (e2, st2) {
+          debugPrint(
+            '[AddProperty] timestamp refresh after generic upload error: $e2\n$st2',
+          );
+        }
         if (mounted) {
           _toast(
             isAr
@@ -844,7 +864,9 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       if (createdRef != null) {
         try {
           await createdRef.delete();
-        } catch (_) {}
+        } catch (e, st) {
+          debugPrint('[AddProperty] rollback delete property after publish error: $e\n$st');
+        }
       }
       if (mounted) {
         _toast('${loc.errorLabel}: $e');

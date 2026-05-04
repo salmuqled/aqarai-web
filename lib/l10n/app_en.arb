@@ -347,6 +347,8 @@
   "@legalTabPrivacy": { "description": "Privacy policy tab" },
   "legalTabTerms": "Terms of Service",
   "@legalTabTerms": { "description": "Terms of service tab" },
+  "legalOpenPrivacyPolicyWebsite": "View full privacy policy online",
+  "@legalOpenPrivacyPolicyWebsite": { "description": "Button to open hosted privacy policy in external browser" },
   "languageLabel": "Language",
   "languageArabic": "Arabic",
   "languageEnglish": "English",

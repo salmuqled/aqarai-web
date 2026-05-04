@@ -170,7 +170,11 @@ abstract final class PropertyListingImageService {
       for (final ref in uploaded) {
         try {
           await ref.delete();
-        } catch (_) {}
+        } catch (e, st) {
+          debugPrint(
+            '[PropertyListingImage] cleanup Storage ref after batch failure: $e\n$st',
+          );
+        }
       }
       await UploadEventsService.logPropertyImageUpload(
         eventType: PropertyImageUploadEventType.imageUploadFailed,

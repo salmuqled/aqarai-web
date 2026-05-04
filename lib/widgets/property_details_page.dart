@@ -1,5 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -151,23 +151,29 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
   @override
   void initState() {
     super.initState();
-    // ignore: avoid_print
-    print(
-        '[LIFECYCLE] PropertyDetailsPage initState propertyId=${widget.propertyId} stayStart=${widget.stayStart} stayEnd=${widget.stayEnd}');
+    if (kDebugMode) {
+      debugPrint(
+        '[LIFECYCLE] PropertyDetailsPage initState propertyId=${widget.propertyId} stayStart=${widget.stayStart} stayEnd=${widget.stayEnd}',
+      );
+    }
     _bookingController.reset();
     if (widget.stayStart != null && widget.stayEnd != null) {
-      // ignore: avoid_print
-      print(
-          '[SEED] PropertyDetailsPage seed called start=${widget.stayStart} end=${widget.stayEnd}');
+      if (kDebugMode) {
+        debugPrint(
+          '[SEED] PropertyDetailsPage seed called start=${widget.stayStart} end=${widget.stayEnd}',
+        );
+      }
       _bookingController.seed(
         startDate: widget.stayStart,
         endDate: widget.stayEnd,
         nights: widget.stayEnd!.difference(widget.stayStart!).inDays,
       );
     } else {
-      // ignore: avoid_print
-      print(
-          '[SEED] PropertyDetailsPage seed SKIPPED (stayStart or stayEnd is null)');
+      if (kDebugMode) {
+        debugPrint(
+          '[SEED] PropertyDetailsPage seed SKIPPED (stayStart or stayEnd is null)',
+        );
+      }
     }
   }
 
@@ -2332,7 +2338,11 @@ class _RecordPropertyViewOnceState extends State<_RecordPropertyViewOnce> {
               .doc(widget.propertyId)
               .get();
           area = (d.data()?['areaAr'] ?? '').toString();
-        } catch (_) {}
+        } catch (e, st) {
+          debugPrint(
+            'Error in _RecordPropertyViewOnceState caption area prefetch: $e\n$st',
+          );
+        }
         await CaptionClickLogService.logClick(
           captionId: cid,
           propertyId: widget.propertyId,

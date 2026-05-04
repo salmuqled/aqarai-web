@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 import 'package:aqarai_app/models/auto_decision.dart';
 import 'package:aqarai_app/models/auto_decision_trust.dart';
@@ -217,7 +218,10 @@ abstract final class DecisionTrackingService {
   static Future<void> markAutoExecuted(String logId) async {
     try {
       await _db.collection(_logs).doc(logId).update({'autoExecuted': true});
-    } catch (_) {}
+    } catch (e, st) {
+      // Fire-and-forget: must not throw to callers.
+      debugPrint('Error in DecisionTrackingService.markAutoExecuted: $e\n$st');
+    }
   }
 
   /// Fire-and-forget safe: swallow all errors.

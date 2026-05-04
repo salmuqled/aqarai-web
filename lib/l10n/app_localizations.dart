@@ -815,6 +815,12 @@ abstract class AppLocalizations {
   /// **'Terms of Service'**
   String get legalTabTerms;
 
+  /// Button to open hosted privacy policy in external browser
+  ///
+  /// In en, this message translates to:
+  /// **'View full privacy policy online'**
+  String get legalOpenPrivacyPolicyWebsite;
+
   /// No description provided for @languageLabel.
   ///
   /// In en, this message translates to:

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+
 /// App-side chalet checkout path after a `pending_payment` booking exists.
 ///
 /// Use [getPaymentMode] everywhere the UI or services choose how to collect
@@ -23,6 +25,7 @@ PaymentMode getPaymentMode() {
 
 /// Debug log for payment routing (no PII).
 void logChaletPaymentMode(PaymentMode mode) {
-  // ignore: avoid_print
-  print('PAYMENT_MODE = $mode');
+  if (kDebugMode) {
+    debugPrint('PAYMENT_MODE = $mode');
+  }
 }

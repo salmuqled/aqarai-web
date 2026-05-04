@@ -30,6 +30,7 @@ import 'package:aqarai_app/widgets/featured_carousel.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/widgets/featured_wanted_carousel.dart';
 
+import 'package:aqarai_app/services/auth_service.dart';
 import 'package:flag/flag.dart';
 
 /// علم بجانب خيار اللغة في القائمة (كويت للعربية، بريطانيا للإنجليزية)
@@ -128,7 +129,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     final token = await user.getIdTokenResult(true);
-    final isAdmin = token.claims?['admin'] == true;
+    final isAdmin = AuthService.isAdminFromClaims(token.claims);
 
     if (!mounted) return;
 

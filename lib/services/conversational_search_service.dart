@@ -1,6 +1,8 @@
 // lib/services/conversational_search_service.dart
 // Phase 1: تحليل رسالة المستخدم (عربي/إنجليزي) واستخراج فلاتر + أسئلة توضيحية + بناء استعلام Firestore
 
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:aqarai_app/data/ar_to_en_mapping.dart';
@@ -593,8 +595,9 @@ class ConversationalSearchService {
       // Fail-open: on availability service outage, surface listings as-is
       // rather than break the entire chat result set. The booking form itself
       // is the final authoritative gate (`checkBookingAvailability`).
-      // ignore: avoid_print
-      print('chat_availability_gate_error: $err');
+      if (kDebugMode) {
+        debugPrint('chat_availability_gate_error: $err');
+      }
       return list;
     }
   }

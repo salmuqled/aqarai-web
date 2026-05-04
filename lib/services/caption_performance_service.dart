@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 import 'package:aqarai_app/models/caption_performance.dart';
 
@@ -30,7 +31,11 @@ class CaptionPerformanceService {
           impressions[id] = (impressions[id] ?? 0) + 1;
         }
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint(
+        'Error in CaptionPerformanceService.getPerformance usage sample: $e\n$st',
+      );
+    }
 
     try {
       final clickSnap = await _db
@@ -44,7 +49,11 @@ class CaptionPerformanceService {
           clicks[id] = (clicks[id] ?? 0) + 1;
         }
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint(
+        'Error in CaptionPerformanceService.getPerformance clicks sample: $e\n$st',
+      );
+    }
 
     final out = <CaptionPerformance>[];
     for (final id in kVariantIds) {

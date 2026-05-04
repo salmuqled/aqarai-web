@@ -725,13 +725,24 @@ class _MyAdsPageState extends State<MyAdsPage> {
           thumbnailUrl: up.thumbUrl,
           setDocumentIdField: false,
         );
-      } catch (_) {
+      } catch (e, st) {
+        debugPrint(
+          'Error in MyAdsPage._retryPropertyMainImageUpload applyUploadedImageToProperty: $e\n$st',
+        );
         try {
           await up.fullRef.delete();
-        } catch (_) {}
+        } catch (e, st) {
+          debugPrint(
+            'Error in MyAdsPage._retryPropertyMainImageUpload cleanup fullRef: $e\n$st',
+          );
+        }
         try {
           await up.thumbRef.delete();
-        } catch (_) {}
+        } catch (e, st) {
+          debugPrint(
+            'Error in MyAdsPage._retryPropertyMainImageUpload cleanup thumbRef: $e\n$st',
+          );
+        }
         rethrow;
       }
 

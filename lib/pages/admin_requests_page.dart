@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:aqarai_app/constants/deal_constants.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
@@ -8,8 +9,6 @@ import 'package:aqarai_app/utils/admin_deal_status_label.dart';
 import 'package:aqarai_app/utils/crm_lead_priority.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:aqarai_app/services/firestore.dart';
 import 'package:aqarai_app/pages/admin_dashboard_page.dart';
 import 'package:aqarai_app/app/property_route.dart';
@@ -404,21 +403,15 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     if (_isLoading(key)) return;
     _setLoading(key, true);
 
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
     try {
-      final url = Uri.parse(
-        "https://us-central1-aqarai-caf5d.cloudfunctions.net/approveListingV2",
-      );
+      final funcs = FirebaseFunctions.instanceFor(region: kFunctionsRegion);
+      final callable = funcs.httpsCallable('approveListing');
+      final res = await callable.call({'propertyId': id});
+      final raw = res.data;
+      final ok = (raw is Map) ? (raw['ok'] == true) : true;
 
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"id": id, "approved": true, "action": "approve"}),
-      );
-
-      final data = jsonDecode(response.body);
-      final ok = data["ok"] == true;
-      final isAr = Localizations.localeOf(context).languageCode == 'ar';
-
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -427,7 +420,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         ),
       );
     } catch (e) {
-      final isAr = Localizations.localeOf(context).languageCode == 'ar';
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));
@@ -471,24 +464,16 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
     _setLoading(key, true);
 
     try {
-      final url = Uri.parse(
-        "https://us-central1-aqarai-caf5d.cloudfunctions.net/approveListingV2",
-      );
+      final funcs = FirebaseFunctions.instanceFor(region: kFunctionsRegion);
+      final callable = funcs.httpsCallable('rejectListing');
+      final res = await callable.call({
+        'propertyId': id,
+        'reason': reason,
+      });
+      final raw = res.data;
+      final ok = (raw is Map) ? (raw['ok'] == true) : true;
 
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "id": id,
-          "approved": false,
-          "action": "reject",
-          "reason": reason,
-        }),
-      );
-
-      final data = jsonDecode(response.body);
-      final ok = data["ok"] == true;
-
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -497,6 +482,7 @@ class _AdminRequestsPageState extends State<AdminRequestsPage> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(isAr ? 'خطأ: $e' : 'Error: $e')));

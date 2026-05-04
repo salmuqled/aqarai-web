@@ -7,7 +7,7 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -62,26 +62,28 @@ class ChaletBookingController {
     required VoidCallback? submit,
     String? barBreakdownLine,
   }) {
-    // ignore: avoid_print
-    print(
-        '[CONTROLLER_UPDATE] incoming start=$startDate end=$endDate nights=$nights total=$totalPrice');
-    // ignore: avoid_print
-    print(
-        '[CONTROLLER_UPDATE] current BEFORE update start=${this.startDate} end=${this.endDate} nights=${this.nights}');
-    if (startDate == null && this.startDate != null) {
-      // ignore: avoid_print
-      print(
-          '[CRITICAL] OVERWRITE PREVENTED: startDate would be wiped from ${this.startDate} -> null');
-    }
-    if (endDate == null && this.endDate != null) {
-      // ignore: avoid_print
-      print(
-          '[CRITICAL] OVERWRITE PREVENTED: endDate would be wiped from ${this.endDate} -> null');
-    }
-    if (nights == 0 && this.nights > 0) {
-      // ignore: avoid_print
-      print(
-          '[CRITICAL] OVERWRITE PREVENTED: nights would be wiped from ${this.nights} -> 0');
+    if (kDebugMode) {
+      debugPrint(
+        '[CONTROLLER_UPDATE] incoming start=$startDate end=$endDate nights=$nights total=$totalPrice',
+      );
+      debugPrint(
+        '[CONTROLLER_UPDATE] current BEFORE update start=${this.startDate} end=${this.endDate} nights=${this.nights}',
+      );
+      if (startDate == null && this.startDate != null) {
+        debugPrint(
+          '[CRITICAL] OVERWRITE PREVENTED: startDate would be wiped from ${this.startDate} -> null',
+        );
+      }
+      if (endDate == null && this.endDate != null) {
+        debugPrint(
+          '[CRITICAL] OVERWRITE PREVENTED: endDate would be wiped from ${this.endDate} -> null',
+        );
+      }
+      if (nights == 0 && this.nights > 0) {
+        debugPrint(
+          '[CRITICAL] OVERWRITE PREVENTED: nights would be wiped from ${this.nights} -> 0',
+        );
+      }
     }
 
     // SAFE MERGE: never let a transient null / zero wipe a previously valid
@@ -97,9 +99,11 @@ class ChaletBookingController {
         ? totalPriceVN.value
         : totalPrice;
 
-    // ignore: avoid_print
-    print(
-        '[SAFE_UPDATE] final start=$newStart end=$newEnd nights=$newNights total=$safeTotal');
+    if (kDebugMode) {
+      debugPrint(
+        '[SAFE_UPDATE] final start=$newStart end=$newEnd nights=$newNights total=$safeTotal',
+      );
+    }
 
     if (_sameDay(_startDate, newStart) &&
         _sameDay(_endDate, newEnd) &&
@@ -1302,8 +1306,9 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
   @override
   void initState() {
     super.initState();
-    // ignore: avoid_print
-    print('[LIFECYCLE] ChaletBookingBody initState');
+    if (kDebugMode) {
+      debugPrint('[LIFECYCLE] ChaletBookingBody initState');
+    }
     _rebuildBookedIndexIfNeeded(force: true);
     // Pre-seed the range from caller-provided dates (e.g. list-page filter)
     // so the booking CTA is available on first paint without re-selection.
@@ -1382,11 +1387,13 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
     DateTime? start,
     DateTime? end,
   ) {
-    // ignore: avoid_print
-    print('[SEED_FROM_INITIAL] called with start=$start end=$end');
+    if (kDebugMode) {
+      debugPrint('[SEED_FROM_INITIAL] called with start=$start end=$end');
+    }
     if (start == null || end == null) {
-      // ignore: avoid_print
-      print('[SEED_FROM_INITIAL][FAIL] reason=START_OR_END_NULL');
+      if (kDebugMode) {
+        debugPrint('[SEED_FROM_INITIAL][FAIL] reason=START_OR_END_NULL');
+      }
       return null;
     }
     final s = DateTime(start.year, start.month, start.day);
@@ -1397,23 +1404,30 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       DateTime.now().day,
     );
     if (s.isBefore(todayOnly)) {
-      // ignore: avoid_print
-      print(
-          '[SEED_FROM_INITIAL][FAIL] reason=PAST_DATE start=$s today=$todayOnly');
+      if (kDebugMode) {
+        debugPrint(
+          '[SEED_FROM_INITIAL][FAIL] reason=PAST_DATE start=$s today=$todayOnly',
+        );
+      }
       return null;
     }
     if (!e.isAfter(s)) {
-      // ignore: avoid_print
-      print('[SEED_FROM_INITIAL][FAIL] reason=INVALID_RANGE start=$s end=$e');
+      if (kDebugMode) {
+        debugPrint(
+          '[SEED_FROM_INITIAL][FAIL] reason=INVALID_RANGE start=$s end=$e',
+        );
+      }
       return null;
     }
     // Hotel-industry nights formula: 27→29 ⇒ 2 nights (check-out day is
     // the morning the guest leaves, not a stayed night).
     final nights = e.difference(s).inDays;
     if (nights < math.max(1, widget.minNights)) {
-      // ignore: avoid_print
-      print(
-          '[SEED_FROM_INITIAL][FAIL] reason=BELOW_MIN_NIGHTS nights=$nights min=${widget.minNights}');
+      if (kDebugMode) {
+        debugPrint(
+          '[SEED_FROM_INITIAL][FAIL] reason=BELOW_MIN_NIGHTS nights=$nights min=${widget.minNights}',
+        );
+      }
       return null;
     }
     // Booked ranges are stored with the same exclusive check-out
@@ -1425,14 +1439,19 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
     for (final b in sorted) {
       if (!b.start.isBefore(e)) break;
       if (s.isBefore(b.end) && e.isAfter(b.start)) {
-        // ignore: avoid_print
-        print(
-            '[SEED_FROM_INITIAL][FAIL] reason=OVERLAP start=$s end=$e blockedStart=${b.start} blockedEnd=${b.end}');
+        if (kDebugMode) {
+          debugPrint(
+            '[SEED_FROM_INITIAL][FAIL] reason=OVERLAP start=$s end=$e blockedStart=${b.start} blockedEnd=${b.end}',
+          );
+        }
         return null;
       }
     }
-    // ignore: avoid_print
-    print('[SEED_FROM_INITIAL][SUCCESS] start=$s checkOut=$e nights=$nights');
+    if (kDebugMode) {
+      debugPrint(
+        '[SEED_FROM_INITIAL][SUCCESS] start=$s checkOut=$e nights=$nights',
+      );
+    }
     return (s, e);
   }
 
@@ -2054,9 +2073,11 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
 
   @override
   Widget build(BuildContext context) {
-    // ignore: avoid_print
-    print(
-        '[LIFECYCLE] ChaletBookingBody build start _rangeStart=$_rangeStart _rangeEnd=$_rangeEnd');
+    if (kDebugMode) {
+      debugPrint(
+        '[LIFECYCLE] ChaletBookingBody build start _rangeStart=$_rangeStart _rangeEnd=$_rangeEnd',
+      );
+    }
     // PERF — sample build frequency in debug. If this ever shouts every
     // few seconds without user input, something is triggering spurious
     // rebuilds (listener fan-out, animation loop, etc.).

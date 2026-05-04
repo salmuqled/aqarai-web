@@ -373,6 +373,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get legalTabTerms => 'شروط الاستخدام';
 
   @override
+  String get legalOpenPrivacyPolicyWebsite => 'عرض سياسة الخصوصية الكاملة عبر الويب';
+
+  @override
   String get languageLabel => 'اللغة';
 
   @override

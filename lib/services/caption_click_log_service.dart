@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 /// User-side opens attributed to a caption variant → [caption_clicks].
 abstract final class CaptionClickLogService {
@@ -26,6 +27,8 @@ abstract final class CaptionClickLogService {
         data['userId'] = uid;
       }
       await _db.collection('caption_clicks').add(data);
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('Error in CaptionClickLogService.logClick: $e\n$st');
+    }
   }
 }

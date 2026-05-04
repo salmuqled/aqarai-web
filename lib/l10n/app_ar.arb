@@ -347,6 +347,8 @@
   "@legalTabPrivacy": { "description": "تبويب سياسة الخصوصية" },
   "legalTabTerms": "شروط الاستخدام",
   "@legalTabTerms": { "description": "تبويب شروط الاستخدام" },
+  "legalOpenPrivacyPolicyWebsite": "عرض سياسة الخصوصية الكاملة عبر الويب",
+  "@legalOpenPrivacyPolicyWebsite": { "description": "زر فتح نسخة سياسة الخصوصية المنشورة في المتصفح" },
   "languageLabel": "اللغة",
   "languageArabic": "العربية",
   "languageEnglish": "English",

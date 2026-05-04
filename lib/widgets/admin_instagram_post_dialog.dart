@@ -523,7 +523,11 @@ Future<void> _runGenerateCarouselAndShowResult(
   var ctrMap = <String, double>{};
   try {
     ctrMap = await CaptionPerformanceService().getHistoricalCtrByVariant();
-  } catch (_) {}
+  } catch (e, st) {
+    debugPrint(
+      'Error in showAdminInstagramPostGenerator getHistoricalCtrByVariant: $e\n$st',
+    );
+  }
 
   final learningWeights = await CaptionLearningService.getWeights();
 
