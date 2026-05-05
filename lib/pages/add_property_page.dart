@@ -45,6 +45,10 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   String selectedServiceType = 'sale';
   String selectedChaletMode = ChaletMode.daily;
 
+  /// For rent + [PropertyPriceType.legacyMonthlyTypes] (apartment, shop, …).
+  /// Stored as `priceType` / drives `rentalTypeForSave` via [PropertyPriceType.forNewListing].
+  String nonChaletRentPriceCadence = 'monthly';
+
   int? _interestedBuyersCount;
 
   final List<ProcessedListingPhoto> _listingPhotos = [];
@@ -67,6 +71,15 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
   // listings never read this controller — the field is not rendered for
   // them and its value is not saved to Firestore.
   final googleMapsLinkController = TextEditingController();
+
+  /// Optional — اسم العمارة / الوحدة for daily apartment rent emails & listing context.
+  final dailyRentBuildingNameController = TextEditingController();
+
+  /// Google Maps link for daily apartment rent (`dailyRentMapsLink`), separate from chalet.
+  final dailyRentMapsLinkController = TextEditingController();
+
+  /// Contact at arrival (e.g. concierge / guard) — emailed to guest after payment.
+  final dailyRentContactPhoneController = TextEditingController();
 
   final descriptionController = TextEditingController();
   final videoUrlController = TextEditingController();
@@ -126,6 +139,9 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     ownerPhoneController.dispose();
     chaletNameController.dispose();
     googleMapsLinkController.dispose();
+    dailyRentBuildingNameController.dispose();
+    dailyRentMapsLinkController.dispose();
+    dailyRentContactPhoneController.dispose();
     descriptionController.dispose();
     videoUrlController.dispose();
     roomCountController.dispose();
@@ -307,6 +323,45 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       selectedPropertyType == 'chalet' &&
       selectedChaletMode == ChaletMode.daily;
 
+  bool _showsNonChaletRentCadenceUi() {
+    if (selectedServiceType != 'rent') return false;
+    final t = (selectedPropertyType ?? '').trim().toLowerCase();
+    return PropertyPriceType.legacyMonthlyTypes.contains(t);
+  }
+
+  String? _rentPriceCadenceArgForNewListing() =>
+      _showsNonChaletRentCadenceUi() ? nonChaletRentPriceCadence : null;
+
+  /// Apartment + rent + daily cadence: collects separate Firestore fields from chalet booking (`dailyRent*`).
+  bool get _isApartmentDailyRentDraft =>
+      selectedPropertyType == 'apartment' &&
+      selectedServiceType == 'rent' &&
+      nonChaletRentPriceCadence == 'daily';
+
+  InputDecoration _priceFieldDecoration(AppLocalizations loc) {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    if (!_showsNonChaletRentCadenceUi()) {
+      return InputDecoration(labelText: loc.propertyPrice);
+    }
+    switch (nonChaletRentPriceCadence) {
+      case 'daily':
+        return InputDecoration(
+          labelText: loc.propertyPrice,
+          hintText: isAr ? 'السعر لليلة الواحدة (د.ك)' : 'Price per night (KWD)',
+        );
+      case 'yearly':
+        return InputDecoration(
+          labelText: loc.propertyPrice,
+          hintText: isAr ? 'الإيجار السنوي (د.ك)' : 'Yearly rent (KWD)',
+        );
+      default:
+        return InputDecoration(
+          labelText: loc.propertyPrice,
+          hintText: isAr ? 'الإيجار الشهري (د.ك)' : 'Monthly rent (KWD)',
+        );
+    }
+  }
+
   /// When state is missing or not one of the known UI values, skip auto-normalization (fail closed).
   bool _priceNormalizationStateIsDefensible() {
     if (selectedPropertyType == null || selectedPropertyType!.trim().isEmpty) {
@@ -387,6 +442,24 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
     } catch (_) {
       if (mounted) setState(() => _interestedBuyersCount = null);
     }
+  }
+
+  Map<String, dynamic> _dailyRentFirestoreFragments() {
+    if (!_isApartmentDailyRentDraft) {
+      return {
+        'dailyRentBuildingName': FieldValue.delete(),
+        'dailyRentMapsLink': FieldValue.delete(),
+        'dailyRentContactPhone': FieldValue.delete(),
+      };
+    }
+    final building = dailyRentBuildingNameController.text.trim();
+    final maps = dailyRentMapsLinkController.text.trim();
+    final phone = dailyRentContactPhoneController.text.trim();
+    return {
+      if (building.isNotEmpty) 'dailyRentBuildingName': building,
+      'dailyRentMapsLink': maps,
+      'dailyRentContactPhone': phone,
+    };
   }
 
   bool _validate(AppLocalizations loc) {
@@ -501,6 +574,38 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
       }
     }
 
+    if (_isApartmentDailyRentDraft) {
+      final mapsTrim = dailyRentMapsLinkController.text.trim();
+      if (mapsTrim.isEmpty) {
+        _toast(
+          isAr
+              ? 'يرجى إدخال رابط موقع الشقة من Google Maps (الإيجار اليومي)'
+              : 'Please add a Google Maps link for the apartment (daily rent)',
+        );
+        return false;
+      }
+      if (!GoogleMapsLink.looksValid(mapsTrim)) {
+        _toast(
+          isAr
+              ? 'يرجى إدخال رابط صحيح من Google Maps'
+              : 'Please enter a valid Google Maps link',
+        );
+        return false;
+      }
+      final phoneDigits = dailyRentContactPhoneController.text.replaceAll(
+        RegExp(r'\D'),
+        '',
+      );
+      if (phoneDigits.length < 5) {
+        _toast(
+          isAr
+              ? 'يرجى إدخال رقم تواصل صحيح عند الوصول (مثل الحارس)'
+              : 'Please enter a valid on-arrival contact number',
+        );
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -572,10 +677,12 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         // monthly chalets. Always forward the mode so the util can pick the
         // right unit.
         chaletMode: selectedPropertyType == 'chalet' ? selectedChaletMode : null,
+        rentPriceCadence: _rentPriceCadenceArgForNewListing(),
       );
 
-      // Matches `searchDailyProperties` filters (`daily` | `monthly`); chalet `sale`
-      // mode must not be stored as `monthly`. Non-chalet follows `priceType`.
+      // Matches `searchDailyProperties` (`daily` | `monthly`; CF `propertyKind` slices
+      // apartments vs chalets). Chalet `sale` must not be stored as `monthly`.
+      // Non-chalet follows `priceType`.
       final String rentalTypeForSave = selectedPropertyType == 'chalet'
           ? switch (selectedChaletMode) {
               ChaletMode.daily => 'daily',
@@ -720,6 +827,8 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
         "rentalType": rentalTypeForSave,
         "hiddenFromPublic": false,
         "closeRequestSubmitted": false,
+
+        ..._dailyRentFirestoreFragments(),
 
         "createdAt": FieldValue.serverTimestamp(),
         "updatedAt": FieldValue.serverTimestamp(),
@@ -1205,12 +1314,138 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                     if (v == 'chalet') {
                       selectedChaletMode = ChaletMode.daily;
                     }
+                    final slug = (v ?? '').trim().toLowerCase();
+                    if (!PropertyPriceType.legacyMonthlyTypes.contains(slug)) {
+                      nonChaletRentPriceCadence = 'monthly';
+                    }
                   });
                   WidgetsBinding.instance.addPostFrameCallback(
                     (_) => _updateInterestedBuyersCount(),
                   );
                 },
               ),
+
+              if (_showsNonChaletRentCadenceUi()) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    Localizations.localeOf(context).languageCode == 'ar'
+                        ? 'نوع الإيجار'
+                        : 'Rental period',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                RadioListTile<String>(
+                  dense: true,
+                  title: Text(
+                    Localizations.localeOf(context).languageCode == 'ar'
+                        ? 'إيجار يومي (بالليلة)'
+                        : 'Daily rent (per night)',
+                  ),
+                  value: 'daily',
+                  groupValue: nonChaletRentPriceCadence,
+                  onChanged: (v) =>
+                      setState(() => nonChaletRentPriceCadence = v!),
+                ),
+                RadioListTile<String>(
+                  dense: true,
+                  title: Text(
+                    Localizations.localeOf(context).languageCode == 'ar'
+                        ? 'إيجار شهري'
+                        : 'Monthly rent',
+                  ),
+                  value: 'monthly',
+                  groupValue: nonChaletRentPriceCadence,
+                  onChanged: (v) =>
+                      setState(() => nonChaletRentPriceCadence = v!),
+                ),
+                RadioListTile<String>(
+                  dense: true,
+                  title: Text(
+                    Localizations.localeOf(context).languageCode == 'ar'
+                        ? 'إيجار سنوي'
+                        : 'Yearly rent',
+                  ),
+                  value: 'yearly',
+                  groupValue: nonChaletRentPriceCadence,
+                  onChanged: (v) =>
+                      setState(() => nonChaletRentPriceCadence = v!),
+                ),
+                if (_isApartmentDailyRentDraft) ...[
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      Localizations.localeOf(context).languageCode == 'ar'
+                          ? 'تفاصيل الوصول للإيجار اليومي'
+                          : 'Access details for daily rent',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: dailyRentBuildingNameController,
+                    maxLength: 80,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText:
+                          Localizations.localeOf(context).languageCode == 'ar'
+                              ? 'اسم العمارة / الوحدة (اختياري)'
+                              : 'Building / unit name (optional)',
+                      hintText:
+                          Localizations.localeOf(context).languageCode == 'ar'
+                              ? 'مثال: برج الخيران — الطابق ٥'
+                              : 'Example: Tower name — floor 5',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: dailyRentMapsLinkController,
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.next,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: InputDecoration(
+                      labelText:
+                          Localizations.localeOf(context).languageCode == 'ar'
+                              ? 'رابط موقع الشقة (Google Maps) — مطلوب'
+                              : 'Apartment location link (Google Maps) — required',
+                      hintText:
+                          Localizations.localeOf(context).languageCode == 'ar'
+                              ? 'الصق رابط الموقع من Google Maps'
+                              : 'Paste the location link from Google Maps',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.location_on_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: dailyRentContactPhoneController,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText:
+                          Localizations.localeOf(context).languageCode == 'ar'
+                              ? 'رقم تواصل عند الوصول (مثل الحارس)'
+                              : 'Contact on arrival (e.g. concierge)',
+                      hintText:
+                          Localizations.localeOf(context).languageCode == 'ar'
+                              ? 'يُرسل للضيف في الإيميل بعد الدفع'
+                              : 'Sent to the guest by email after payment',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ],
 
               if (selectedPropertyType == 'chalet') ...[
                 const SizedBox(height: 12),
@@ -1384,7 +1619,7 @@ class _AddPropertyPageState extends State<AddPropertyPage> {
                     child: TextFormField(
                       controller: priceController,
                       keyboardType: TextInputType.number,
-                      decoration: InputDecoration(labelText: loc.propertyPrice),
+                      decoration: _priceFieldDecoration(loc),
                     ),
                   ),
                 ],

@@ -36,6 +36,10 @@ import {
   logInvoiceSmtpDiagnostics,
 } from "./invoice/invoiceSmtpRuntime";
 import { COMMISSION_RATE } from "./chalet_booking_finance";
+import {
+  isDailyRentListingServer,
+  propertyTypeSlugBooking,
+} from "./chalet_booking";
 
 const invoiceSmtpPass = defineSecret("INVOICE_SMTP_PASS");
 const invoiceSmtpHost = defineString("INVOICE_SMTP_HOST", {
@@ -55,11 +59,15 @@ const SUPPORT_PHONE = "+965 9999 0000";
  *  customer email so both sides see the same wording. */
 const FALLBACK_CHALET_NAME_AR = "الشاليه";
 
+const FALLBACK_APARTMENT_BUILDING_AR = "الشقة";
+
+const EMAIL_SUBJECT_CHALET = "تم تأكيد حجز جديد على شاليهك";
+
+const EMAIL_SUBJECT_APARTMENT_DAILY = "تم تأكيد حجز جديد على وحدتك (إيجار يومي)";
+
 /** Shown when [SUPPORT_PHONE] is empty/missing. Keeps the footer row
  *  from rendering as a stray colon or blank. */
 const FALLBACK_SUPPORT_LINE_AR = "تواصل مع الدعم عبر التطبيق";
-
-const EMAIL_SUBJECT = "تم تأكيد حجز جديد على شاليهك";
 
 /**
  * Mandated payout-policy disclaimer. Kept as a constant so legal can
@@ -70,7 +78,9 @@ const PAYOUT_POLICY_NOTE_AR =
 
 interface ResolvedOwnerPayload {
   bookingId: string;
-  chaletName: string;
+  headlineAr: string;
+  listingLabelAr: string;
+  listingValueAr: string;
   startDate: string;
   endDate: string;
   nights: number;
@@ -152,9 +162,13 @@ async function resolveOwnerEmail(ownerId: string): Promise<string | null> {
   return null;
 }
 
-/** Fetch property doc once and extract only the fields the owner email
- *  needs. Client data is never touched from this file. */
-async function resolveChaletName(propertyId: string): Promise<string> {
+/** Fetch property doc once — listing headline + labels for chalet vs daily apartment. */
+async function resolveOwnerListingEmailContext(propertyId: string): Promise<{
+  emailSubjectAr: string;
+  headlineAr: string;
+  listingLabelAr: string;
+  listingValueAr: string;
+}> {
   try {
     const snap = await admin
       .firestore()
@@ -162,15 +176,43 @@ async function resolveChaletName(propertyId: string): Promise<string> {
       .doc(propertyId)
       .get();
     const d = snap.data();
+    if (
+      propertyTypeSlugBooking(d) === "apartment" &&
+      isDailyRentListingServer(d)
+    ) {
+      const rawBuilding =
+        typeof d?.dailyRentBuildingName === "string"
+          ? d.dailyRentBuildingName.trim()
+          : "";
+      const titleValue =
+        rawBuilding.length > 0 ? rawBuilding : FALLBACK_APARTMENT_BUILDING_AR;
+      return {
+        emailSubjectAr: EMAIL_SUBJECT_APARTMENT_DAILY,
+        headlineAr: "🎉 تم تأكيد حجز جديد على وحدتك (إيجار يومي)",
+        listingLabelAr: "اسم العمارة / الوحدة",
+        listingValueAr: titleValue,
+      };
+    }
     const raw =
       d && typeof d.chaletName === "string" ? d.chaletName.trim() : "";
-    return raw.length > 0 ? raw : FALLBACK_CHALET_NAME_AR;
+    const chaletName = raw.length > 0 ? raw : FALLBACK_CHALET_NAME_AR;
+    return {
+      emailSubjectAr: EMAIL_SUBJECT_CHALET,
+      headlineAr: "🎉 تم تأكيد حجز جديد على شاليهك",
+      listingLabelAr: "اسم الشاليه",
+      listingValueAr: chaletName,
+    };
   } catch (err) {
     logger.warn("sendBookingOwnerEmail.property_read_failed", {
       propertyId,
       error: sanitizeErrorMessage(err),
     });
-    return FALLBACK_CHALET_NAME_AR;
+    return {
+      emailSubjectAr: EMAIL_SUBJECT_CHALET,
+      headlineAr: "🎉 تم تأكيد حجز جديد على شاليهك",
+      listingLabelAr: "اسم الشاليه",
+      listingValueAr: FALLBACK_CHALET_NAME_AR,
+    };
   }
 }
 
@@ -248,7 +290,9 @@ function computeFinancials(after: Record<string, unknown>): {
  * carry client fields.
  */
 function renderOwnerHtml(p: ResolvedOwnerPayload): string {
-  const chaletName = escapeHtml(p.chaletName);
+  const headline = escapeHtml(p.headlineAr);
+  const listingLabel = escapeHtml(p.listingLabelAr);
+  const listingValue = escapeHtml(p.listingValueAr);
   const startDate = escapeHtml(p.startDate);
   const endDate = escapeHtml(p.endDate);
   const nights = String(p.nights);
@@ -270,9 +314,9 @@ function renderOwnerHtml(p: ResolvedOwnerPayload): string {
 <body style="font-family:Arial;background:#f6f7fb;padding:20px;">
   <div style="max-width:600px;background:#fff;margin:auto;padding:24px;border-radius:12px;">
 
-    <h2>🎉 تم تأكيد حجز جديد على شاليهك</h2>
+    <h2>${headline}</h2>
 
-    <p><b>اسم الشاليه:</b> ${chaletName}</p>
+    <p><b>${listingLabel}:</b> ${listingValue}</p>
     <p><b>تاريخ الدخول:</b> ${startDate}</p>
     <p><b>تاريخ الخروج:</b> ${endDate}</p>
     <p><b>عدد الليالي:</b> ${nights}</p>
@@ -359,9 +403,9 @@ export const sendBookingOwnerEmail = onDocumentUpdated(
 
     // Fan out the two network reads in parallel — they're independent and
     // together take ~50-100ms off the critical path.
-    const [ownerEmail, chaletName] = await Promise.all([
+    const [ownerEmail, listingCtx] = await Promise.all([
       resolveOwnerEmail(ownerId),
-      resolveChaletName(propertyId),
+      resolveOwnerListingEmailContext(propertyId),
     ]);
 
     if (!ownerEmail) {
@@ -388,7 +432,9 @@ export const sendBookingOwnerEmail = onDocumentUpdated(
 
     const payload: ResolvedOwnerPayload = {
       bookingId,
-      chaletName,
+      headlineAr: listingCtx.headlineAr,
+      listingLabelAr: listingCtx.listingLabelAr,
+      listingValueAr: listingCtx.listingValueAr,
       startDate: formatKuwaitDate(startTs),
       endDate: formatKuwaitDate(endTs),
       nights: daysCount,
@@ -437,7 +483,7 @@ export const sendBookingOwnerEmail = onDocumentUpdated(
       await transporter.sendMail({
         from: `"${INVOICE_BRAND.appName}" <${smtpUser}>`,
         to: ownerEmail.toLowerCase(),
-        subject: EMAIL_SUBJECT,
+        subject: listingCtx.emailSubjectAr,
         html,
       });
 

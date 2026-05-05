@@ -39,11 +39,15 @@ abstract final class ChaletBookingAvailabilityReason {
   static const notBookable = 'not_bookable';
   static const notDailyChalet = 'not_daily_chalet';
 
+  static const apartmentDailyAccessIncomplete =
+      'apartment_daily_access_incomplete';
+
   static const Set<String> known = {
     invalidDates,
     overlap,
     notBookable,
     notDailyChalet,
+    apartmentDailyAccessIncomplete,
   };
 }
 

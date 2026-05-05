@@ -33,7 +33,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:aqarai_app/home_page.dart';
+import 'package:go_router/go_router.dart';
 import 'package:aqarai_app/services/ai_brain_service.dart';
 import 'package:aqarai_app/services/chat_analytics_service.dart';
 import 'package:aqarai_app/services/conversational_search_service.dart';
@@ -44,7 +44,9 @@ import 'package:aqarai_app/services/user_activity_service.dart';
 import 'package:aqarai_app/widgets/chat_bubble.dart';
 import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/widgets/listing_card.dart';
+import 'package:aqarai_app/widgets/banned_user_session_gate.dart';
 import 'package:aqarai_app/widgets/notifications_inbox_bell_button.dart';
+import 'package:aqarai_app/widgets/property_details_page.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/utils/property_area_display.dart';
 import 'package:aqarai_app/data/governorates_data_ar.dart';
@@ -1457,9 +1459,11 @@ class _AssistantPageState extends State<AssistantPage>
   }
 
   void _closeToTraditionalSearch() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomePage()),
-    );
+    // Must update GoRouter location — replacing only the `/` page via
+    // [Navigator.pushReplacement] left the URI at `/`, so after opening a
+    // listing with [context.pushPropertyDetails] and popping, GoRouter
+    // rebuilt [AssistantPage]. `/home` keeps back navigation on the hub.
+    context.go('/home');
   }
 
   @override
@@ -1607,6 +1611,41 @@ class _AssistantPageState extends State<AssistantPage>
     );
   }
 
+  /// Opens listing details **on top of** this chat route via [Navigator.push], so
+  /// popping returns here with [_messages] intact. Using [GoRouter.push] from chat
+  /// breaks stacks opened with [Navigator.push] (e.g. Home → Assistant) and looks
+  /// like an empty restart after closing details. Web keeps URL routing via
+  /// [context.pushPropertyDetails].
+  Future<void> _openPropertyDetailsFromChat({
+    required String propertyId,
+    String? captionTrackingId,
+  }) async {
+    final id = propertyId.trim();
+    if (id.isEmpty || !mounted) return;
+
+    if (kIsWeb) {
+      if (!mounted) return;
+      context.pushPropertyDetails(
+        propertyId: id,
+        leadSource: DealLeadSource.aiChat,
+        captionTrackingId: captionTrackingId,
+      );
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (ctx) => BannedUserSessionGate(
+          child: PropertyDetailsPage(
+            propertyId: id,
+            leadSource: DealLeadSource.aiChat,
+            captionTrackingId: captionTrackingId,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(ChatMessage msg) {
     final isUser = msg.isUser;
     final assistantResults = msg.results != null && msg.results!.isNotEmpty
@@ -1659,10 +1698,7 @@ class _AssistantPageState extends State<AssistantPage>
                         onTap: id.isEmpty
                             ? null
                             : () {
-                                context.pushPropertyDetails(
-                                  propertyId: id,
-                                  leadSource: DealLeadSource.aiChat,
-                                );
+                                unawaited(_openPropertyDetailsFromChat(propertyId: id));
                               },
                       ),
                     );

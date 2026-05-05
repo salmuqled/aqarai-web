@@ -1,7 +1,7 @@
 /**
  * Single place that concatenates reply text blocks. Order: main → market → best deal → buyer intent → area suggestion → suggestions.
  */
-import type { InsightBundle } from "./insight_engine";
+import type { ComposeSegment, InsightBundle } from "./insight_engine";
 
 export interface ComposeResponseInput {
   locale: string;
@@ -9,6 +9,7 @@ export interface ComposeResponseInput {
   results: Record<string, unknown>[];
   insights: InsightBundle;
   suggestions: string[];
+  segment?: ComposeSegment;
 }
 
 export interface AssistantResponsePayload {
@@ -24,7 +25,7 @@ function appendBlock(reply: string, block: string | undefined): string {
 }
 
 export function composeAssistantResponse(input: ComposeResponseInput): AssistantResponsePayload {
-  const { locale, mainReplyBody, results, insights, suggestions } = input;
+  const { locale, mainReplyBody, results, insights, suggestions, segment } = input;
   const isAr = locale === "ar";
   let reply = mainReplyBody.trim();
 
@@ -35,9 +36,24 @@ export function composeAssistantResponse(input: ComposeResponseInput): Assistant
   reply = appendBlock(reply, insights.areaSuggestionText);
 
   if (suggestions.length > 0) {
-    const prefix = isAr ? "ممكن أيضاً:\n\n" : "You can also:\n\n";
-    const lines = suggestions.map((s) => `• ${s}`).join("\n");
-    reply = appendBlock(reply, prefix + lines);
+    if (segment === "renter") {
+      const cap = suggestions.slice(0, 3);
+      if (isAr) {
+        reply = appendBlock(
+          reply,
+          `ومن عيوني لو تحب أكمّل معاك على ${cap.join(" أو ")}، بس قول وأنا حاضر.`
+        );
+      } else {
+        reply = appendBlock(
+          reply,
+          `If you'd like, I'm happy to keep helping with ${cap.join(" or ")} — just let me know.`
+        );
+      }
+    } else {
+      const prefix = isAr ? "ممكن أيضاً:\n\n" : "You can also:\n\n";
+      const lines = suggestions.map((s) => `• ${s}`).join("\n");
+      reply = appendBlock(reply, prefix + lines);
+    }
   }
 
   return {

@@ -33,6 +33,10 @@ import {
   resolveInvoiceSmtp,
   logInvoiceSmtpDiagnostics,
 } from "./invoice/invoiceSmtpRuntime";
+import {
+  isDailyRentListingServer,
+  propertyTypeSlugBooking,
+} from "./chalet_booking";
 
 const invoiceSmtpPass = defineSecret("INVOICE_SMTP_PASS");
 const invoiceSmtpHost = defineString("INVOICE_SMTP_HOST", {
@@ -52,6 +56,9 @@ const SUPPORT_PHONE = "+965 9999 0000";
 /** Shown when [chaletName] is missing on the property doc. Per spec. */
 const FALLBACK_CHALET_NAME_AR = "الشاليه";
 
+/** Daily apartment rent — owner may omit building label on the listing doc. */
+const FALLBACK_APARTMENT_BUILDING_AR = "الشقة";
+
 /** Shown when [SUPPORT_PHONE] is empty/missing. Keeps the footer line
  *  intact so the email never renders a blank or broken row. */
 const FALLBACK_SUPPORT_LINE_AR = "تواصل مع الدعم عبر التطبيق";
@@ -68,7 +75,10 @@ function sanitizeErrorMessage(raw: unknown): string {
 
 interface ResolvedCustomerPayload {
   bookingId: string;
-  chaletName: string;
+  listingTitleLabelAr: string;
+  listingTitleValueAr: string;
+  /** Extra HTML block (already escaped) inserted before the map button — e.g. arrival contact phone. */
+  arrivalContactHtml: string;
   startDate: string;
   endDate: string;
   nights: number;
@@ -120,6 +130,9 @@ function buildGoogleMapsLink(
   if (!propertyData) return null;
 
   const explicit =
+    (typeof propertyData.dailyRentMapsLink === "string"
+      ? propertyData.dailyRentMapsLink.trim()
+      : "") ||
     (typeof propertyData.googleMapsLink === "string"
       ? propertyData.googleMapsLink.trim()
       : "") ||
@@ -151,7 +164,8 @@ function buildGoogleMapsLink(
  *  with escaping applied to every interpolated value. The map button is
  *  hidden when no link is available. */
 function renderConfirmationHtml(p: ResolvedCustomerPayload): string {
-  const chaletName = escapeHtml(p.chaletName);
+  const titleLabel = escapeHtml(p.listingTitleLabelAr);
+  const titleValue = escapeHtml(p.listingTitleValueAr);
   const startDate = escapeHtml(p.startDate);
   const endDate = escapeHtml(p.endDate);
   const nights = String(p.nights);
@@ -183,7 +197,8 @@ function renderConfirmationHtml(p: ResolvedCustomerPayload): string {
 
     <h2>🎉 تم تأكيد حجزك بنجاح</h2>
 
-    <p><b>اسم الشاليه:</b> ${chaletName}</p>
+    <p><b>${titleLabel}:</b> ${titleValue}</p>
+    ${p.arrivalContactHtml}
     <p><b>تاريخ الدخول:</b> ${startDate}</p>
     <p><b>تاريخ الخروج:</b> ${endDate}</p>
     <p><b>عدد الليالي:</b> ${nights}</p>
@@ -228,7 +243,9 @@ async function resolveClientEmail(clientId: string): Promise<string | null> {
 async function resolvePropertyBits(
   propertyId: string
 ): Promise<{
-  chaletName: string;
+  listingTitleLabelAr: string;
+  listingTitleValueAr: string;
+  arrivalContactHtml: string;
   googleMapsLink: string | null;
 }> {
   try {
@@ -238,19 +255,52 @@ async function resolvePropertyBits(
       .doc(propertyId)
       .get();
     const d = snap.data() ?? null;
+    const asDoc = d as admin.firestore.DocumentData | null;
+
+    if (
+      propertyTypeSlugBooking(asDoc ?? undefined) === "apartment" &&
+      isDailyRentListingServer(asDoc ?? undefined)
+    ) {
+      const rawBuilding =
+        d && typeof d.dailyRentBuildingName === "string"
+          ? d.dailyRentBuildingName.trim()
+          : "";
+      const titleValue =
+        rawBuilding.length > 0 ? rawBuilding : FALLBACK_APARTMENT_BUILDING_AR;
+      const rawPhone =
+        d && typeof d.dailyRentContactPhone === "string"
+          ? d.dailyRentContactPhone.trim()
+          : "";
+      const arrivalContactHtml =
+        rawPhone.length > 0
+          ? `<p><b>رقم التواصل عند الوصول:</b> ${escapeHtml(rawPhone)}</p>`
+          : "";
+      return {
+        listingTitleLabelAr: "اسم العمارة / الوحدة",
+        listingTitleValueAr: titleValue,
+        arrivalContactHtml,
+        googleMapsLink: buildGoogleMapsLink(d),
+      };
+    }
+
     const raw =
       d && typeof d.chaletName === "string" ? d.chaletName.trim() : "";
-    // Fall back to a generic Arabic label when the owner didn't name it.
     const chaletName = raw.length > 0 ? raw : FALLBACK_CHALET_NAME_AR;
-    const googleMapsLink = buildGoogleMapsLink(d);
-    return { chaletName, googleMapsLink };
+    return {
+      listingTitleLabelAr: "اسم الشاليه",
+      listingTitleValueAr: chaletName,
+      arrivalContactHtml: "",
+      googleMapsLink: buildGoogleMapsLink(d),
+    };
   } catch (err) {
     logger.warn("sendBookingCustomerEmail.property_read_failed", {
       propertyId,
       error: sanitizeErrorMessage(err),
     });
     return {
-      chaletName: FALLBACK_CHALET_NAME_AR,
+      listingTitleLabelAr: "اسم الشاليه",
+      listingTitleValueAr: FALLBACK_CHALET_NAME_AR,
+      arrivalContactHtml: "",
       googleMapsLink: null,
     };
   }
@@ -346,7 +396,9 @@ export const sendBookingCustomerEmail = onDocumentUpdated(
 
     const payload: ResolvedCustomerPayload = {
       bookingId,
-      chaletName: propertyBits.chaletName,
+      listingTitleLabelAr: propertyBits.listingTitleLabelAr,
+      listingTitleValueAr: propertyBits.listingTitleValueAr,
+      arrivalContactHtml: propertyBits.arrivalContactHtml,
       startDate: formatKuwaitDate(startTs),
       endDate: formatKuwaitDate(endTs),
       nights: daysCount,

@@ -81,6 +81,7 @@ export type BookingStatus = "pending_payment" | "confirmed" | "cancelled";
 export type CheckBookingAvailabilityReason =
   | "not_bookable"
   | "not_daily_chalet"
+  | "apartment_daily_access_incomplete"
   | "overlap"
   | "invalid_dates";
 
@@ -169,6 +170,16 @@ function canReadChaletBusyCalendar(
   }
   if (isAdminAuth(request.auth)) return true;
   return false;
+}
+
+function canReadAnyDailyBookingBusyCalendar(
+  pdata: admin.firestore.DocumentData | undefined,
+  request: { auth?: { uid?: string; token?: Record<string, unknown> } }
+): boolean {
+  return (
+    canReadChaletBusyCalendar(pdata, request) ||
+    canReadApartmentDailyBusyCalendar(pdata, request)
+  );
 }
 
 /** Booking rows that block the calendar (confirmed + active pending_payment holds). No PII in response. */
@@ -294,6 +305,126 @@ function chaletPropertyBookable(data: admin.firestore.DocumentData | undefined):
     weekendPricePerNight: weekendPrice,
     weekendWeekdays,
   };
+}
+
+/** Firestore `properties.type` slug (lowercase). */
+export function propertyTypeSlugBooking(
+  data: admin.firestore.DocumentData | undefined
+): string {
+  return String(data?.type ?? "").trim().toLowerCase();
+}
+
+/** Rent priced per night (matches app `rentalType` / `priceType` daily). */
+export function isDailyRentListingServer(
+  data: admin.firestore.DocumentData | undefined
+): boolean {
+  if (!data) return false;
+  const svc = String(data.serviceType ?? "").trim().toLowerCase();
+  if (svc !== "rent") return false;
+  const rt = String(data.rentalType ?? "").trim().toLowerCase();
+  const pt = String(data.priceType ?? "").trim().toLowerCase();
+  return rt === "daily" || pt === "daily";
+}
+
+/** Daily apartment rent: maps link + contact required before booking / guest calendar (mirrors app). */
+export function apartmentDailyAccessCompleteServer(
+  data: admin.firestore.DocumentData | undefined
+): boolean {
+  if (!data) return false;
+  const maps = String(data.dailyRentMapsLink ?? "").trim();
+  const phone = String(data.dailyRentContactPhone ?? "").trim();
+  const digits = phone.replace(/\D/g, "");
+  return maps.startsWith("http") && digits.length >= 5;
+}
+
+/**
+ * Apartment daily rent — parallel to [chaletPropertyBookable], separate fields (`dailyRent*`).
+ * Flat nightly rate (`price`); no peak weekends.
+ */
+function apartmentDailyPropertyBookable(data: admin.firestore.DocumentData | undefined): {
+  ok: boolean;
+  ownerId: string;
+  pricePerNight: number;
+  weekendPricePerNight: number;
+  weekendWeekdays: number[];
+} {
+  const bad = {
+    ok: false,
+    ownerId: "",
+    pricePerNight: 0,
+    weekendPricePerNight: 0,
+    weekendWeekdays: [4, 5, 6],
+  };
+  if (!data) return bad;
+  if (propertyTypeSlugBooking(data) !== "apartment") return bad;
+  if (String(data.serviceType ?? "").trim().toLowerCase() !== "rent") return bad;
+  if (!isDailyRentListingServer(data)) return bad;
+  if (!apartmentDailyAccessCompleteServer(data)) return bad;
+  if (data.approved !== true) return bad;
+  if (data.hiddenFromPublic !== false) return bad;
+  if (data.isActive !== true) return bad;
+  const owner = data.ownerId;
+  if (typeof owner !== "string" || !owner.trim()) return bad;
+  const price = typeof data.price === "number" ? data.price : Number(data.price);
+  if (!Number.isFinite(price) || price <= 0) return bad;
+  return {
+    ok: true,
+    ownerId: owner.trim(),
+    pricePerNight: price,
+    weekendPricePerNight: price,
+    weekendWeekdays: [],
+  };
+}
+
+/** Chalet daily OR apartment daily rent — single pricing shape for [createBooking] / finalize guards. */
+export function resolveDailyRentBookableProperty(
+  data: admin.firestore.DocumentData | undefined
+):
+  | { ok: false }
+  | {
+      ok: true;
+      ownerId: string;
+      pricePerNight: number;
+      weekendPricePerNight: number;
+      weekendWeekdays: number[];
+    } {
+  const ch = chaletPropertyBookable(data);
+  if (ch.ok) return ch;
+  const apt = apartmentDailyPropertyBookable(data);
+  if (apt.ok) return apt;
+  return { ok: false };
+}
+
+function assertPropertyEligibleForPaidBookingFinalize(
+  pdata: admin.firestore.DocumentData | undefined
+): void {
+  const r = resolveDailyRentBookableProperty(pdata);
+  if (!r.ok) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Property is not available for booking"
+    );
+  }
+}
+
+function canReadApartmentDailyBusyCalendar(
+  pdata: admin.firestore.DocumentData | undefined,
+  request: { auth?: { uid?: string; token?: Record<string, unknown> } }
+): boolean {
+  if (!pdata) return false;
+  if (propertyTypeSlugBooking(pdata) !== "apartment") return false;
+  if (String(pdata.serviceType ?? "").trim().toLowerCase() !== "rent") return false;
+  if (!isDailyRentListingServer(pdata)) return false;
+
+  const uid = request.auth?.uid;
+  const owner =
+    uid &&
+    typeof pdata.ownerId === "string" &&
+    pdata.ownerId.trim() === uid.trim();
+  if (owner || isAdminAuth(request.auth)) return true;
+
+  if (!propertyPublicDiscoveryServer(pdata)) return false;
+  return apartmentDailyAccessCompleteServer(pdata);
 }
 
 /**
@@ -543,7 +674,7 @@ export const checkBookingAvailability = onCall(
 
       const propSnap = await db.collection("properties").doc(propertyId).get();
       const pdata = propSnap.data();
-      if (!pdata || pdata.listingCategory !== "chalet") {
+      if (!pdata) {
         const reason = "not_bookable" satisfies CheckBookingAvailabilityReason;
         console.warn({
           event: "booking.availability.check",
@@ -551,13 +682,63 @@ export const checkBookingAvailability = onCall(
           category: BOOKING_LOG_CATEGORY,
           action: BOOKING_LOG_ACTION.availabilityCheck,
           propertyId,
-          chaletMode: effectiveChaletMode(pdata),
           result: "blocked",
           reason,
         });
         return { available: false, reason };
       }
-      if (effectiveChaletMode(pdata) !== "daily") {
+
+      const bookableResolved = resolveDailyRentBookableProperty(pdata);
+      if (bookableResolved.ok) {
+        const available = await isDateRangeAvailable(propertyId, start, end);
+        if (!available) {
+          const reason = "overlap" satisfies CheckBookingAvailabilityReason;
+          console.warn({
+            event: "booking.availability.check",
+            legacyEvent: BOOKING_LOG_LEGACY_EVENT.availabilityCheck,
+            category: BOOKING_LOG_CATEGORY,
+            action: BOOKING_LOG_ACTION.availabilityCheck,
+            propertyId,
+            result: "blocked",
+            reason,
+          });
+          return { available: false, reason };
+        }
+        console.info({
+          event: "booking.availability.check",
+          legacyEvent: BOOKING_LOG_LEGACY_EVENT.availabilityCheck,
+          category: BOOKING_LOG_CATEGORY,
+          action: BOOKING_LOG_ACTION.availabilityCheck,
+          propertyId,
+          chaletMode: effectiveChaletMode(pdata),
+          startDate: start?.toMillis?.(),
+          endDate: end?.toMillis?.(),
+          result: "available",
+          reason: null,
+        });
+        return { available: true };
+      }
+
+      if (
+        propertyTypeSlugBooking(pdata) === "apartment" &&
+        isDailyRentListingServer(pdata) &&
+        !apartmentDailyAccessCompleteServer(pdata)
+      ) {
+        const reason =
+          "apartment_daily_access_incomplete" satisfies CheckBookingAvailabilityReason;
+        console.warn({
+          event: "booking.availability.check",
+          legacyEvent: BOOKING_LOG_LEGACY_EVENT.availabilityCheck,
+          category: BOOKING_LOG_CATEGORY,
+          action: BOOKING_LOG_ACTION.availabilityCheck,
+          propertyId,
+          result: "blocked",
+          reason,
+        });
+        return { available: false, reason };
+      }
+
+      if (pdata.listingCategory === "chalet" && effectiveChaletMode(pdata) !== "daily") {
         const reason = "not_daily_chalet" satisfies CheckBookingAvailabilityReason;
         console.warn({
           event: "booking.availability.check",
@@ -572,33 +753,18 @@ export const checkBookingAvailability = onCall(
         return { available: false, reason };
       }
 
-      const available = await isDateRangeAvailable(propertyId, start, end);
-      if (!available) {
-        const reason = "overlap" satisfies CheckBookingAvailabilityReason;
-        console.warn({
-          event: "booking.availability.check",
-          legacyEvent: BOOKING_LOG_LEGACY_EVENT.availabilityCheck,
-          category: BOOKING_LOG_CATEGORY,
-          action: BOOKING_LOG_ACTION.availabilityCheck,
-          propertyId,
-          result: "blocked",
-          reason,
-        });
-        return { available: false, reason };
-      }
-      console.info({
+      const reason = "not_bookable" satisfies CheckBookingAvailabilityReason;
+      console.warn({
         event: "booking.availability.check",
         legacyEvent: BOOKING_LOG_LEGACY_EVENT.availabilityCheck,
         category: BOOKING_LOG_CATEGORY,
         action: BOOKING_LOG_ACTION.availabilityCheck,
         propertyId,
         chaletMode: effectiveChaletMode(pdata),
-        startDate: start?.toMillis?.(),
-        endDate: end?.toMillis?.(),
-        result: "available",
-        reason: null,
+        result: "blocked",
+        reason,
       });
-      return { available: true };
+      return { available: false, reason };
     } catch (err: unknown) {
       logBookingError(err, propertyId);
       throw err;
@@ -622,7 +788,7 @@ export const getChaletBusyDateRanges = onCall(
 
     const propSnap = await db.collection("properties").doc(propertyId).get();
     const pdata = propSnap.data();
-    if (!canReadChaletBusyCalendar(pdata, request)) {
+    if (!canReadAnyDailyBookingBusyCalendar(pdata, request)) {
       throw new HttpsError("permission-denied", "Cannot load calendar for this property");
     }
 
@@ -665,7 +831,7 @@ export const createBooking = onCall(
     const propRef = db.collection("properties").doc(propertyId);
     const propSnap = await propRef.get();
     const pdata = propSnap.data();
-    const bookable = chaletPropertyBookable(pdata);
+    const bookable = resolveDailyRentBookableProperty(pdata);
     if (!bookable.ok) {
       if (pdata?.listingCategory === "chalet" && effectiveChaletMode(pdata) !== "daily") {
         throw new HttpsError(
@@ -675,7 +841,7 @@ export const createBooking = onCall(
       }
       throw new HttpsError(
         "failed-precondition",
-        "Property is not available for chalet booking"
+        "Property is not available for booking"
       );
     }
     if (bookable.ownerId === clientId) {
@@ -1005,6 +1171,7 @@ export async function finalizeBookingAfterPayment(
         }
         const propSnapMf = await tx.get(db.collection("properties").doc(propertyIdMf));
         assertPropertyPublicForGuestBookingPayment(propSnapMf.data());
+        assertPropertyEligibleForPaidBookingFinalize(propSnapMf.data());
 
         const startMf = data.startDate as admin.firestore.Timestamp | undefined;
         const endMf = data.endDate as admin.firestore.Timestamp | undefined;
@@ -1110,16 +1277,8 @@ export async function finalizeBookingAfterPayment(
         const propRefBooking = db.collection("properties").doc(propertyId);
         const propSnapBooking = await tx.get(propRefBooking);
         const propDataBooking = propSnapBooking.data();
-        if (!propDataBooking || propDataBooking.listingCategory !== "chalet") {
-          throw new HttpsError("failed-precondition", "Property is not available for chalet booking");
-        }
-        if (effectiveChaletMode(propDataBooking) !== "daily") {
-          throw new HttpsError(
-            "failed-precondition",
-            "Booking not allowed for this property type"
-          );
-        }
         assertPropertyPublicForGuestBookingPayment(propDataBooking);
+        assertPropertyEligibleForPaidBookingFinalize(propDataBooking);
 
         await assertNoFinalizationOverlapInTx(tx, propertyId, start, end, bid);
 
@@ -1238,16 +1397,8 @@ export async function finalizeBookingAfterPayment(
       const propRefFake = db.collection("properties").doc(propertyIdFake);
       const propSnapFake = await tx.get(propRefFake);
       const propDataFake = propSnapFake.data();
-      if (!propDataFake || propDataFake.listingCategory !== "chalet") {
-        throw new HttpsError("failed-precondition", "Property is not available for chalet booking");
-      }
-      if (effectiveChaletMode(propDataFake) !== "daily") {
-        throw new HttpsError(
-          "failed-precondition",
-          "Booking not allowed for this property type"
-        );
-      }
       assertPropertyPublicForGuestBookingPayment(propDataFake);
+      assertPropertyEligibleForPaidBookingFinalize(propDataFake);
 
       await assertNoFinalizationOverlapInTx(tx, propertyIdFake, startFake, endFake, bid);
 

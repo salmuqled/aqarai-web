@@ -42,6 +42,10 @@ import {
   logInvoiceSmtpDiagnostics,
 } from "./invoice/invoiceSmtpRuntime";
 import { COMMISSION_RATE } from "./chalet_booking_finance";
+import {
+  isDailyRentListingServer,
+  propertyTypeSlugBooking,
+} from "./chalet_booking";
 
 const invoiceSmtpPass = defineSecret("INVOICE_SMTP_PASS");
 const invoiceSmtpHost = defineString("INVOICE_SMTP_HOST", {
@@ -69,7 +73,9 @@ interface AdminEmailPayload {
   // owner
   ownerPhone: string;
   // booking
-  chaletName: string;
+  listingKindRowLabel: string;
+  listingDisplayName: string;
+  arrivalContactPhone: string;
   startDate: string;
   endDate: string;
   nights: number;
@@ -281,10 +287,11 @@ function renderAdminHtml(p: AdminEmailPayload): string {
     ].join(""))}
 
     ${section("4. Booking", [
-      row("Chalet Name", p.chaletName),
+      row(p.listingKindRowLabel, p.listingDisplayName),
       row("Start Date", p.startDate),
       row("End Date", p.endDate),
       row("Nights", String(p.nights)),
+      row("Arrival contact (guest-facing)", p.arrivalContactPhone),
     ].join(""))}
 
     ${section("5. Financials", [
@@ -408,14 +415,44 @@ export const sendBookingAdminEmail = onDocumentUpdated(
       ? clientUserSnap.data() ?? {}
       : {};
 
-    const chaletName =
-      typeof propData.chaletName === "string" && propData.chaletName.trim().length > 0
-        ? propData.chaletName.trim()
-        : "—";
-    const googleMapsLink =
-      typeof propData.googleMapsLink === "string"
-        ? propData.googleMapsLink.trim()
-        : "";
+    const pd = propData as admin.firestore.DocumentData;
+    const apartmentDaily =
+      propertyTypeSlugBooking(pd) === "apartment" &&
+      isDailyRentListingServer(pd);
+
+    let listingKindRowLabel = "Chalet Name";
+    let listingDisplayName = "—";
+    let arrivalContactPhone = "—";
+    let googleMapsLink = "";
+
+    if (apartmentDaily) {
+      listingKindRowLabel = "Building / unit (daily apartment)";
+      const b =
+        typeof propData.dailyRentBuildingName === "string"
+          ? propData.dailyRentBuildingName.trim()
+          : "";
+      listingDisplayName = b.length > 0 ? b : "—";
+      const ac =
+        typeof propData.dailyRentContactPhone === "string"
+          ? propData.dailyRentContactPhone.trim()
+          : "";
+      arrivalContactPhone = ac.length > 0 ? ac : "—";
+      const dm =
+        typeof propData.dailyRentMapsLink === "string"
+          ? propData.dailyRentMapsLink.trim()
+          : "";
+      googleMapsLink = dm.startsWith("http") ? dm : "";
+    } else {
+      listingDisplayName =
+        typeof propData.chaletName === "string" && propData.chaletName.trim().length > 0
+          ? propData.chaletName.trim()
+          : "—";
+      googleMapsLink =
+        typeof propData.googleMapsLink === "string"
+          ? propData.googleMapsLink.trim()
+          : "";
+    }
+
     const ownerPhone =
       (typeof propData.ownerPhone === "string" && propData.ownerPhone.trim()) ||
       "";
@@ -462,7 +499,9 @@ export const sendBookingAdminEmail = onDocumentUpdated(
       clientEmail: orDash(clientEmail),
       clientPhone: orDash(clientPhone),
       ownerPhone: orDash(ownerPhone),
-      chaletName: orDash(chaletName),
+      listingKindRowLabel,
+      listingDisplayName: orDash(listingDisplayName),
+      arrivalContactPhone: orDash(arrivalContactPhone),
       startDate: formatKuwaitDate(startTs),
       endDate: formatKuwaitDate(endTs),
       nights: daysCount,

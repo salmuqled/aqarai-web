@@ -69,10 +69,15 @@ abstract final class PropertyPriceType {
   /// Pass [chaletMode] when the listing is a chalet so we distinguish:
   /// `daily` (nightly rent) → "daily", `monthly` → "monthly", `sale` → "full".
   /// Omitting it defaults to `daily` for backward compatibility.
+  ///
+  /// For [legacyMonthlyTypes] with `serviceType == rent`, pass [rentPriceCadence]
+  /// (`daily` | `monthly` | `yearly`) so apartments/offices can be listed as
+  /// nightly stays (`priceType` / `rentalType` = `daily`).
   static String forNewListing({
     required String propertyType,
     required String serviceType,
     String? chaletMode,
+    String? rentPriceCadence,
   }) {
     final t = _norm(propertyType);
     final svc = _norm(serviceType);
@@ -81,6 +86,12 @@ abstract final class PropertyPriceType {
       if (m == 'sale') return 'full';
       if (m == 'monthly') return 'monthly';
       return 'daily';
+    }
+    if (svc == 'rent' && legacyMonthlyTypes.contains(t)) {
+      final c = _norm(rentPriceCadence);
+      if (c == 'daily') return 'daily';
+      if (c == 'yearly') return 'yearly';
+      return 'monthly';
     }
     if (t == 'apartment' || t == 'house') return 'monthly';
     if (t == 'land') return 'full';

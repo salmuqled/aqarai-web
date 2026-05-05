@@ -7,6 +7,8 @@ import { detectBuyerIntent } from "./intent_parser";
 import { computeAveragePrice, detectBestDeal } from "./ranking_engine";
 import { isNormalListingMarketplaceVisible } from "./propertyVisibility";
 
+export type ComposeSegment = "renter" | "buyer";
+
 export interface InsightBundle {
   priceRangeText?: string;
   marketText?: string;
@@ -216,9 +218,15 @@ export async function buildInsights(params: {
   rawMessage?: string;
   locale: string;
   db?: Firestore;
+  /** Rent flows skip investment/market/cross-area fragments — living-focused UX only. */
+  segment?: ComposeSegment;
 }): Promise<InsightBundle> {
-  const { context, areaLabel, topResults, rawMessage, locale, db } = params;
+  const { context, areaLabel, topResults, rawMessage, locale, db, segment } = params;
   const bundle: InsightBundle = {};
+
+  if (segment === "renter") {
+    return bundle;
+  }
 
   const priceRange = computeAreaPriceRange(topResults);
   bundle.priceRangeText = buildPriceRangeInsight(areaLabel, priceRange, locale);

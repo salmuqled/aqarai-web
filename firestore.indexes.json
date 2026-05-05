@@ -1243,6 +1243,19 @@
         {"fieldPath": "isActive", "order": "ASCENDING"},
         {"fieldPath": "serviceType", "order": "ASCENDING"},
         {"fieldPath": "rentalType", "order": "ASCENDING"},
+        {"fieldPath": "type", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "properties",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "approved", "order": "ASCENDING"},
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "serviceType", "order": "ASCENDING"},
+        {"fieldPath": "rentalType", "order": "ASCENDING"},
         {"fieldPath": "createdAt", "order": "DESCENDING"},
         {"fieldPath": "__name__", "order": "DESCENDING"}
       ]

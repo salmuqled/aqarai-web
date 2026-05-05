@@ -61,8 +61,21 @@ async function resolveUserIdentity(uid: string): Promise<{
 }
 
 function propertyTitleFromPropertyDoc(p: Record<string, unknown> | undefined): string {
+  const type = str(p?.type).toLowerCase();
+  const svc = str(p?.serviceType).toLowerCase();
+  const rt = str(p?.rentalType).toLowerCase();
+  const pt = str(p?.priceType).toLowerCase();
+  const apartmentDaily =
+    type === "apartment" &&
+    svc === "rent" &&
+    (rt === "daily" || pt === "daily");
+  if (apartmentDaily) {
+    const bn = str(p?.dailyRentBuildingName);
+    const area = str(p?.areaAr ?? p?.area);
+    const parts = [(bn || "Daily apartment").slice(0, 120), area].filter((x) => x.length > 0);
+    if (parts.length > 0) return parts.join(" · ").slice(0, 200);
+  }
   const area = str(p?.areaAr ?? p?.area);
-  const type = str(p?.type);
   const parts = [area, type].filter((x) => x.length > 0);
   if (parts.length > 0) return parts.join(" · ").slice(0, 200);
   const desc = str(p?.description);

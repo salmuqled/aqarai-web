@@ -973,6 +973,7 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                   hasPoolIndoor,
                   hasPoolOutdoor,
                   isBeachfront,
+                  showUncheckedBooleanFeatures: isAdmin,
                 ),
 
                 const SizedBox(height: 16),
@@ -1401,10 +1402,15 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
                     ? DateTime(e.year, e.month, e.day)
                     : null;
                 final ppn = price.toDouble();
+                final flatProduct = ppn * nights;
                 final breakdownLine = nights > 0
                     ? (isAr
-                        ? '${fmt.format(ppn)} × $nights ليالي = ${fmt.format(ppn * nights)} $cur'
-                        : '${fmt.format(ppn)} × $nights nights = ${fmt.format(ppn * nights)} $cur')
+                        ? ((total - flatProduct).abs() < 0.005
+                            ? '${fmt.format(ppn)} × $nights ليالي = ${fmt.format(total)} $cur'
+                            : '${fmt.format(total)} $cur · ليالي عادية وذروة ($nights ليالي)')
+                        : ((total - flatProduct).abs() < 0.005
+                            ? '${fmt.format(ppn)} × $nights nights = ${fmt.format(total)} $cur'
+                            : '${fmt.format(total)} $cur · weekday/peak ($nights nights)'))
                     : null;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1820,27 +1826,40 @@ class _PropertyDetailsPageState extends State<PropertyDetailsPage> {
     bool hasGarden,
     bool hasPoolIndoor,
     bool hasPoolOutdoor,
-    bool isBeachfront,
-  ) {
+    bool isBeachfront, {
+    /// Admin tooling keeps ✓/✗ so moderation sees full checklist; guests see only selected perks.
+    bool showUncheckedBooleanFeatures = false,
+  }) {
     final loc = AppLocalizations.of(context)!;
 
-    final features = [
+    final features = <Widget>[
       _featureItem("${loc.roomCount}: $roomCount"),
       _featureItem("${loc.masterRoomCount}: $masterRoomCount"),
       _featureItem("${loc.bathroomCount}: $bathroomCount"),
       _featureItem("${loc.propertySize}: $size"),
       _featureItem("${loc.parkingCount}: $parkingCount"),
-      _featureItem("${loc.hasElevator}: ${hasElevator ? "✓" : "✗"}"),
-      _featureItem("${loc.hasCentralAC}: ${hasCentralAC ? "✓" : "✗"}"),
-      _featureItem("${loc.hasSplitAC}: ${hasSplitAC ? "✓" : "✗"}"),
-      _featureItem("${loc.hasMaidRoom}: ${hasMaidRoom ? "✓" : "✗"}"),
-      _featureItem("${loc.hasDriverRoom}: ${hasDriverRoom ? "✓" : "✗"}"),
-      _featureItem("${loc.hasLaundryRoom}: ${hasLaundryRoom ? "✓" : "✗"}"),
-      _featureItem("${loc.hasGarden}: ${hasGarden ? "✓" : "✗"}"),
-      _featureItem("${loc.hasPoolIndoor}: ${hasPoolIndoor ? "✓" : "✗"}"),
-      _featureItem("${loc.hasPoolOutdoor}: ${hasPoolOutdoor ? "✓" : "✗"}"),
-      _featureItem("${loc.isBeachfront}: ${isBeachfront ? "✓" : "✗"}"),
     ];
+
+    void addBool(bool flag, String labelArEn) {
+      if (showUncheckedBooleanFeatures) {
+        features.add(
+          _featureItem("$labelArEn: ${flag ? "✓" : "✗"}"),
+        );
+      } else if (flag) {
+        features.add(_featureItem("$labelArEn: ✓"));
+      }
+    }
+
+    addBool(hasElevator, loc.hasElevator);
+    addBool(hasCentralAC, loc.hasCentralAC);
+    addBool(hasSplitAC, loc.hasSplitAC);
+    addBool(hasMaidRoom, loc.hasMaidRoom);
+    addBool(hasDriverRoom, loc.hasDriverRoom);
+    addBool(hasLaundryRoom, loc.hasLaundryRoom);
+    addBool(hasGarden, loc.hasGarden);
+    addBool(hasPoolIndoor, loc.hasPoolIndoor);
+    addBool(hasPoolOutdoor, loc.hasPoolOutdoor);
+    addBool(isBeachfront, loc.isBeachfront);
 
     return Container(
       padding: const EdgeInsets.all(16),

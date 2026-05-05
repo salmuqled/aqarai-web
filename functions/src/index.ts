@@ -179,16 +179,35 @@ import {
   fetchUnavailablePropertyIdsBatched as fetchUnavailablePropertyIdsSearchDaily,
 } from "./shared_availability";
 
+type SearchDailyPropertyKind = "any" | "apartment" | "chalet";
+
+function normalizeSearchDailyPropertyKind(raw: unknown): SearchDailyPropertyKind {
+  if (typeof raw !== "string") return "any";
+  const p = raw.trim().toLowerCase();
+  if (p === "apartment") return "apartment";
+  if (p === "chalet") return "chalet";
+  return "any";
+}
+
 function buildSearchDailyBaseQuery(
   db: admin.firestore.Firestore,
-  rentalType: "daily" | "monthly"
+  rentalType: "daily" | "monthly",
+  propertyKind: SearchDailyPropertyKind
 ): admin.firestore.Query {
-  return db
+  let q: admin.firestore.Query = db
     .collection("properties")
     .where("serviceType", "==", "rent")
     .where("rentalType", "==", rentalType)
     .where("approved", "==", true)
-    .where("isActive", "==", true)
+    .where("isActive", "==", true);
+
+  if (propertyKind === "apartment") {
+    q = q.where("type", "==", "apartment");
+  } else if (propertyKind === "chalet") {
+    q = q.where("type", "==", "chalet");
+  }
+
+  return q
     .orderBy("createdAt", "desc")
     .orderBy(admin.firestore.FieldPath.documentId(), "desc");
 }
@@ -232,11 +251,18 @@ export const searchDailyProperties = onCall(
     try {
       console.log("DEBUG_REQUEST_DATA:", JSON.stringify(request.data));
       const db = admin.firestore();
-      const { startDate, endDate, cursor, rentalType: rentalTypeRaw } = (request.data || {}) as {
+      const {
+        startDate,
+        endDate,
+        cursor,
+        rentalType: rentalTypeRaw,
+        propertyKind: propertyKindRaw,
+      } = (request.data || {}) as {
         startDate?: unknown;
         endDate?: unknown;
         cursor?: unknown;
         rentalType?: unknown;
+        propertyKind?: unknown;
       };
 
       let rentalType: "daily" | "monthly" = "daily";
@@ -245,6 +271,8 @@ export const searchDailyProperties = onCall(
         if (t === "monthly") rentalType = "monthly";
         else if (t === "daily") rentalType = "daily";
       }
+
+      const propertyKind = normalizeSearchDailyPropertyKind(propertyKindRaw);
 
       console.log("DEBUG_RENTAL_TYPE:", rentalType);
 
@@ -273,7 +301,7 @@ export const searchDailyProperties = onCall(
         throw new HttpsError("invalid-argument", "startDate must be before endDate");
       }
 
-      let q = buildSearchDailyBaseQuery(db, rentalType);
+      let q = buildSearchDailyBaseQuery(db, rentalType, propertyKind);
 
       if (rawCursor.length > 0) {
         let payload: { createdAtMs?: unknown; documentId?: unknown };
@@ -305,6 +333,7 @@ export const searchDailyProperties = onCall(
       console.log("DEBUG_QUERY_FILTER:", {
         serviceType: "rent",
         rentalType: rentalType,
+        propertyKind,
       });
 
       const pageSize = SEARCH_DAILY_PROPERTIES_PAGE_SIZE;
@@ -358,7 +387,10 @@ export const searchDailyProperties = onCall(
         const dLast = lastDoc.data();
         const ca = (dLast as { createdAt?: admin.firestore.Timestamp }).createdAt;
         if (!(ca instanceof admin.firestore.Timestamp)) break;
-        q = buildSearchDailyBaseQuery(db, rentalType).startAfter(ca, lastDoc.id);
+        q = buildSearchDailyBaseQuery(db, rentalType, propertyKind).startAfter(
+          ca,
+          lastDoc.id
+        );
       }
 
       const availableDocs = collected.slice(0, pageSize);

@@ -6,7 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:aqarai_app/l10n/app_localizations.dart';
 import 'package:aqarai_app/widgets/stay_dates_picker.dart';
 
-/// Daily rental browse: list data from [searchDailyProperties] (Cloud Function).
+/// Browse daily/monthly **apartment** rentals via [searchDailyProperties]
+/// (`propertyKind: apartment`). Chalets use search elsewhere (e.g. chalet filters).
 class DailyRentPage extends StatefulWidget {
   const DailyRentPage({super.key});
 
@@ -99,6 +100,7 @@ class _DailyRentPageState extends State<DailyRentPage> {
           : null;
 
       final payload = <String, dynamic>{
+        'propertyKind': 'apartment',
         'rentalType': selectedRentalType,
         if (cursorToSend != null) 'cursor': cursorToSend,
         if (startUtc != null && endUtc != null) 'startDate': startUtc.toIso8601String(),
@@ -295,12 +297,16 @@ class _DailyRentPageState extends State<DailyRentPage> {
     final loc = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).languageCode;
     final isAr = locale == 'ar';
-    final areaTitle = isAr ? 'إيجار يومي' : 'Daily rental';
+    final areaTitle = isAr
+        ? 'شقق للإيجار (يومي/شهري)'
+        : 'apartments — daily & monthly';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
       appBar: AppBar(
-        title: Text(loc.propertiesInArea(areaTitle)),
+        title: Text(
+          isAr ? 'شقق بالأحياء للإيجار' : 'Neighborhood apartments',
+        ),
       ),
       body: SafeArea(
         child: Column(
@@ -380,8 +386,8 @@ class _DailyRentPageState extends State<DailyRentPage> {
                                     startDate != null &&
                                     endDate != null
                                 ? (isAr
-                                    ? 'بحث عن الشاليهات المتاحة'
-                                    : 'Find available chalets')
+                                    ? 'بحث عن الشقق المتاحة'
+                                    : 'Find available apartments')
                                 : (isAr ? 'بحث' : 'Search'),
                             style: const TextStyle(
                               fontSize: 16,

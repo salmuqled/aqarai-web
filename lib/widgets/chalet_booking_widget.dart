@@ -61,43 +61,48 @@ class ChaletBookingController {
     required bool submitting,
     required VoidCallback? submit,
     String? barBreakdownLine,
+    /// When true (calendar → controller sync), incoming null / zero overwrites
+    /// stored selection so clears and partial picks propagate to parent UI.
+    bool calendarAuthoritative = false,
   }) {
     if (kDebugMode) {
       debugPrint(
-        '[CONTROLLER_UPDATE] incoming start=$startDate end=$endDate nights=$nights total=$totalPrice',
+        '[CONTROLLER_UPDATE] incoming start=$startDate end=$endDate nights=$nights total=$totalPrice authoritative=$calendarAuthoritative',
       );
       debugPrint(
         '[CONTROLLER_UPDATE] current BEFORE update start=${this.startDate} end=${this.endDate} nights=${this.nights}',
       );
-      if (startDate == null && this.startDate != null) {
-        debugPrint(
-          '[CRITICAL] OVERWRITE PREVENTED: startDate would be wiped from ${this.startDate} -> null',
-        );
-      }
-      if (endDate == null && this.endDate != null) {
-        debugPrint(
-          '[CRITICAL] OVERWRITE PREVENTED: endDate would be wiped from ${this.endDate} -> null',
-        );
-      }
-      if (nights == 0 && this.nights > 0) {
-        debugPrint(
-          '[CRITICAL] OVERWRITE PREVENTED: nights would be wiped from ${this.nights} -> 0',
-        );
+      if (!calendarAuthoritative) {
+        if (startDate == null && this.startDate != null) {
+          debugPrint(
+            '[CRITICAL] OVERWRITE PREVENTED: startDate would be wiped from ${this.startDate} -> null',
+          );
+        }
+        if (endDate == null && this.endDate != null) {
+          debugPrint(
+            '[CRITICAL] OVERWRITE PREVENTED: endDate would be wiped from ${this.endDate} -> null',
+          );
+        }
+        if (nights == 0 && this.nights > 0) {
+          debugPrint(
+            '[CRITICAL] OVERWRITE PREVENTED: nights would be wiped from ${this.nights} -> 0',
+          );
+        }
       }
     }
 
-    // SAFE MERGE: never let a transient null / zero wipe a previously valid
-    // value. Only legitimate non-null / non-zero updates can overwrite state.
-    // Explicit clearing of state must go through [reset()] (which bypasses
-    // this method).
-    final DateTime? newStart = startDate ?? _startDate;
-    final DateTime? newEnd = endDate ?? _endDate;
-    final int newNights = (nights == 0 && nightsVN.value > 0)
-        ? nightsVN.value
-        : nights;
-    final double safeTotal = (nights == 0 && nightsVN.value > 0)
-        ? totalPriceVN.value
-        : totalPrice;
+    final DateTime? newStart =
+        calendarAuthoritative ? startDate : (startDate ?? _startDate);
+    final DateTime? newEnd =
+        calendarAuthoritative ? endDate : (endDate ?? _endDate);
+    final int newNights = calendarAuthoritative
+        ? nights
+        : ((nights == 0 && nightsVN.value > 0) ? nightsVN.value : nights);
+    final double safeTotal = calendarAuthoritative
+        ? totalPrice
+        : ((nights == 0 && nightsVN.value > 0)
+            ? totalPriceVN.value
+            : totalPrice);
 
     if (kDebugMode) {
       debugPrint(
@@ -166,6 +171,7 @@ class ChaletBookingController {
       submitting: submittingVN.value,
       submit: _submit,
       barBreakdownLine: barBreakdownLineVN.value,
+      calendarAuthoritative: true,
     );
   }
 
@@ -294,6 +300,31 @@ const List<int> kChaletDefaultPeakWeekdays = <int>[
   DateTime.friday,
   DateTime.saturday,
 ];
+
+/// Client-side stay total before the server quotes [createBooking] — sums
+/// [weekdayPrice] vs [peakPrice] for each stayed night (`checkOut` morning is
+/// exclusive, same convention as the calendar).
+double estimateChaletStayTotalKwd({
+  required DateTime checkInDay,
+  required DateTime checkOutExclusiveDay,
+  required double weekdayPrice,
+  required double peakPrice,
+  required List<int> peakDartWeekdays,
+}) {
+  final ci = DateTime(checkInDay.year, checkInDay.month, checkInDay.day);
+  final co = DateTime(
+    checkOutExclusiveDay.year,
+    checkOutExclusiveDay.month,
+    checkOutExclusiveDay.day,
+  );
+  if (!co.isAfter(ci)) return 0;
+  final peakSet = peakDartWeekdays.toSet();
+  var sum = 0.0;
+  for (var d = ci; d.isBefore(co); d = d.add(const Duration(days: 1))) {
+    sum += peakSet.contains(d.weekday) ? peakPrice : weekdayPrice;
+  }
+  return sum;
+}
 
 /// Rolling horizon (in days from today) for materializing blocked-day
 /// keys into the O(1) lookup set. Any booked night past this window is
@@ -1295,6 +1326,53 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
   // etc. should NOT be triggering 50+ rebuilds per interaction).
   int _buildCount = 0;
 
+  void _scheduleSyncBookingController() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncBookingControllerWithSelection();
+    });
+  }
+
+  /// Pushes calendar selection into [widget.controller] **outside** [build] so
+  /// parent summaries (e.g. property details nights/total row) receive notifier
+  /// updates safely — updating during build can skip [ListenableBuilder] rebuilds.
+  void _syncBookingControllerWithSelection() {
+    final c = widget.controller;
+    if (c == null) return;
+
+    final boundsLive = _liveStayBounds;
+    final liveNights = _liveNights;
+    final canBook = _isValidSelection && !_submitting;
+    final storedTotal = c.totalPriceVN.value;
+
+    double totalForSync = storedTotal;
+    if (boundsLive != null && liveNights >= 1 && storedTotal <= 0) {
+      totalForSync = estimateChaletStayTotalKwd(
+        checkInDay: boundsLive.$1,
+        checkOutExclusiveDay: boundsLive.$2,
+        weekdayPrice: widget.weekdayPrice,
+        peakPrice: widget.peakPrice,
+        peakDartWeekdays: widget.peakDartWeekdays,
+      );
+    }
+
+    final barBreakdownLine =
+        liveNights > 0 && storedTotal <= 0 && totalForSync <= 0 ? '' : null;
+
+    c._update(
+      startDate: boundsLive?.$1,
+      endDate: boundsLive?.$2,
+      nights: liveNights,
+      totalPrice: totalForSync,
+      canBook: canBook,
+      isProvisional: _isProvisionalPricing,
+      submitting: _submitting,
+      submit: canBook ? () => unawaited(_payNowFlow()) : null,
+      barBreakdownLine: barBreakdownLine,
+      calendarAuthoritative: true,
+    );
+  }
+
   /// Compact int key for a *local* day ([year]*10000 + month*100 + day).
   /// Roughly 4-byte SMI instead of the 8-byte millisecond epoch — reduces
   /// memory footprint of [_blockedDayKeys] when a chalet has many
@@ -1331,6 +1409,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
         _showSeedRejectedFeedback();
       });
     }
+    _scheduleSyncBookingController();
   }
 
   @override
@@ -1470,9 +1549,8 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       _selectionHintIsMinStay = false;
       _selectionHintIsUnavailableDateTap = false;
     }
-    // Rebuild blocked-day index if the parent passed a new list (identity
-    // change). Cheap no-op when the list reference is unchanged.
     _rebuildBookedIndexIfNeeded();
+    _scheduleSyncBookingController();
   }
 
   /// Rebuilds [_blockedDayKeys] and [_sortedBookedRanges] from
@@ -2055,6 +2133,7 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
       _rangeEnd = d;
     });
     if (scheduleHintFade) _scheduleHintAutoFade();
+    _scheduleSyncBookingController();
     if (perfSw != null) {
       perfSw.stop();
       debugPrint(
@@ -2120,21 +2199,6 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
             ? 'الإجمالي يُحسب على الخادم عند الحجز'
             : 'Total is calculated on the server when you book')
         : null;
-
-    final String? barBreakdownLine =
-        _liveNights > 0 && barTotal <= 0 ? '' : null;
-
-    widget.controller?._update(
-      startDate: boundsLive?.$1,
-      endDate: boundsLive?.$2,
-      nights: _nights,
-      totalPrice: barTotal,
-      canBook: canBook,
-      isProvisional: _isProvisionalPricing,
-      submitting: _submitting,
-      submit: canBook ? () => unawaited(_payNowFlow()) : null,
-      barBreakdownLine: barBreakdownLine,
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2295,8 +2359,10 @@ class _ChaletBookingBodyState extends State<_ChaletBookingBody> {
                             enabledDayPredicate: _isDayTappable,
                             onDaySelected: _onDaySelected,
                             onDisabledDayTapped: _onDisabledDayTapped,
-                            onPageChanged: (f) =>
-                                setState(() => _focusedDay = f),
+                            onPageChanged: (f) {
+                              setState(() => _focusedDay = f);
+                              _scheduleSyncBookingController();
+                            },
                             calendarStyle: CalendarStyle(
                               cellMargin: const EdgeInsets.symmetric(
                                 horizontal: 3,

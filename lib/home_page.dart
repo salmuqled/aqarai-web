@@ -310,10 +310,12 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(height: 14),
 
                       SmartAssistantCta(
-                        title: locale == 'ar' ? 'إيجار يومي' : 'Daily rental',
+                        title: locale == 'ar'
+                            ? 'شقق بالأحياء — إيجار يومي'
+                            : 'Area apartments — daily rent',
                         subtitle: locale == 'ar'
-                            ? 'عقارات للإيجار باليوم في الكويت'
-                            : 'Daily rental properties across Kuwait',
+                            ? 'شقق للإيجار اليومي أو الشهري في السالمية، الجابرية، وحول الكويت'
+                            : 'Daily or monthly apartment rentals across Kuwait neighborhoods.',
                         leadingIcon: Icons.calendar_today_outlined,
                         trailingIcon: Icons.chevron_right_rounded,
                         accentColor: const Color(0xFF0EA5E9),

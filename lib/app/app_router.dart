@@ -8,6 +8,7 @@ import 'package:aqarai_app/app/navigation_keys.dart';
 import 'package:aqarai_app/app/property_route.dart';
 import 'package:aqarai_app/app/safe_app_path.dart';
 import 'package:aqarai_app/auth/login_page.dart';
+import 'package:aqarai_app/home_page.dart';
 import 'package:aqarai_app/pages/assistant_page.dart';
 import 'package:aqarai_app/models/listing_enums.dart';
 import 'package:aqarai_app/widgets/banned_user_session_gate.dart';
@@ -99,6 +100,12 @@ final GoRouter appRouter = GoRouter(
       path: '/',
       builder: (context, state) => const BannedUserSessionGate(
         child: AssistantPage(),
+      ),
+    ),
+    GoRoute(
+      path: '/home',
+      builder: (context, state) => const BannedUserSessionGate(
+        child: HomePage(),
       ),
     ),
     GoRoute(
